@@ -1,0 +1,193 @@
+<div align="center">
+
+# 🐇 R4BB1T FHC
+
+**Ferramenta de Hardware para Cibersegurança baseada em ESP32**
+
+[![Platform](https://img.shields.io/badge/Platform-ESP32-blue?style=for-the-badge&logo=espressif)](https://www.espressif.com/)
+[![Language](https://img.shields.io/badge/Language-C%2B%2B%20%2F%20Arduino-orange?style=for-the-badge&logo=cplusplus)](https://www.arduino.cc/)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-yellow?style=for-the-badge)]()
+
+</div>
+
+---
+
+> ⚠️ **AVISO LEGAL:** Este projeto é desenvolvido **exclusivamente para fins educacionais e de pesquisa em cibersegurança**. Todas as funcionalidades devem ser utilizadas **somente em redes e dispositivos próprios ou com autorização explícita do proprietário**. O uso indevido desta ferramenta pode constituir crime conforme a [Lei 12.737/2012 (Lei Carolina Dieckmann)](https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2012/lei/l12737.htm) e outras legislações aplicáveis. **O autor não se responsabiliza por usos ilícitos.**
+
+---
+
+## 📖 Sobre o Projeto
+
+O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de segurança sem fio, construído sobre o microcontrolador **ESP32**. Com um display TFT compacto e navegação por 3 botões físicos, oferece um arsenal completo de ferramentas para auditoria de redes WiFi, Bluetooth e RF, tudo em um hardware minimalista e autônomo com monitoramento de bateria integrado.
+
+---
+
+## ✨ Funcionalidades
+
+### 📡 WiFi
+| Ferramenta | Descrição |
+|---|---|
+| **Scanner de Redes** | Escaneamento de APs com RSSI, BSSID e canal |
+| **Deauther** | Envio de frames 802.11 de desautenticação |
+| **Beacon Spam** | Criação de múltiplos SSIDs falsos simultâneos |
+| **Captive Portal** | Hotspot com página de phishing customizada |
+| **Captura de Handshake** | Monitoramento de handshakes WPA/WPA2 |
+| **Visualizar Credenciais** | Leitura das credenciais capturadas no SPIFFS |
+| **MAC Changer** | Alteração dinâmica do endereço MAC |
+
+### 🔵 Bluetooth
+| Ferramenta | Descrição |
+|---|---|
+| **Scan BT** | Varredura de dispositivos Bluetooth Classic e BLE |
+| **Ataques BT** | Técnicas de flood e spam sobre Bluetooth |
+
+### 📻 RF (Rádio Frequência — CC1101)
+| Ferramenta | Descrição |
+|---|---|
+| **Replay Attack** | Gravação e repetição de sinais RF |
+| **Raw Capture** | Captura de sinal bruto |
+| **RF Analyser** | Análise em tempo real do espectro |
+| **Random Transmit** | Transmissão de dados aleatórios |
+| **Saved Signals** | Gerenciamento de sinais gravados |
+
+### ⚙️ Sistema
+- **Monitoramento de bateria** com desligamento automático ao atingir nível crítico (≤5%)
+- **Screensaver** configurável
+- **Ajuste de brilho** do display
+- **Splash screen** com imagem BMP do SPIFFS
+- Navegação por máquina de estados com debounce
+
+---
+
+## 🔧 Hardware
+
+### Componentes Necessários
+
+| Componente | Modelo / Especificação |
+|---|---|
+| Microcontrolador | ESP32 (Wemos S2 Mini ou equivalente) |
+| Display | TFT ST7735 / ST7789 128×160 px |
+| Módulo RF | CC1101 |
+| Botões | 3× botões tácteis |
+| Bateria | LiPo com circuito de proteção |
+| Carregador | TP4056 |
+
+### Pinagem
+
+#### Display TFT
+| Pino ESP32 | Função TFT |
+|---|---|
+| GPIO 23 | MOSI |
+| GPIO 5 | SCLK |
+| GPIO 17 | DC |
+| GPIO 16 | RST |
+| GPIO 21 | Backlight (BL) |
+| — | CS (sem seleção / -1) |
+
+#### Botões
+| Pino ESP32 | Função |
+|---|---|
+| GPIO 14 | Botão ESQUERDA |
+| GPIO 27 | Botão DIREITA |
+| GPIO 26 | Botão SELECT |
+
+#### CC1101 (RF)
+> Consulte o arquivo [`ligacao cc1101.txt`](ligacao%20cc1101.txt) para o diagrama de pinagem completo.
+
+---
+
+## 🚀 Como Compilar e Gravar
+
+### Pré-requisitos
+- [Arduino IDE 2.x](https://www.arduino.cc/en/software) ou superior
+- Suporte à placa ESP32 instalado via Boards Manager:
+  ```
+  https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+  ```
+
+### Bibliotecas Necessárias
+Instale pelo **Library Manager** do Arduino IDE:
+
+| Biblioteca | Autor |
+|---|---|
+| `TFT_eSPI` | Bodmer |
+| `ESPAsyncWebServer` | Me-No-Dev |
+| `AsyncTCP` | Me-No-Dev |
+
+### Configuração do `TFT_eSPI`
+Edite o arquivo `User_Setup.h` da biblioteca `TFT_eSPI` para corresponder ao seu display. Consulte [`Config.h`](Config.h) para os pinos utilizados.
+
+### Gravação do SPIFFS
+O diretório `data/` contém os arquivos do sistema de arquivos (splash screen BMP e página HTML do captive portal). Para enviar ao ESP32:
+
+1. Instale o plugin [Arduino ESP32 LittleFS/SPIFFS Data Upload](https://github.com/me-no-dev/arduino-esp32fs-plugin)
+2. Vá em **Ferramentas → ESP32 Sketch Data Upload**
+
+### Compilar e Gravar
+1. Abra `r4bb1t_fhc.ino` no Arduino IDE
+2. Selecione a placa: `ESP32 Dev Module`
+3. Configure a velocidade de gravação: `921600`
+4. Clique em **Upload** (▶)
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+r4bb1t_fhc/
+├── r4bb1t_fhc.ino       # Sketch principal (setup + loop + máquina de estados)
+├── Config.h             # Definição de pinos e constantes globais
+├── Globals.h / .cpp     # Variáveis globais e objetos compartilhados
+│
+├── Attacks.h / .cpp     # Implementação dos ataques WiFi (deauth, beacon)
+├── Captive.h / .cpp     # Lógica do Captive Portal
+├── Scanner.h / .cpp     # Scanner de redes WiFi
+├── Radio.h / .cpp       # Interface com módulo CC1101 (RF)
+│
+├── Menu_Main.h / .cpp   # Menu inicial
+├── Menu_Attacks.h / .cpp# Submenus de ataques WiFi
+├── Menu_BT.h / .cpp     # Menu e ataques Bluetooth
+├── Menu_NRF24.h / .cpp  # Suporte NRF24L01 (reservado)
+├── Menu_RF.h / .cpp     # Menu de ferramentas RF (CC1101)
+├── Menu_Config.h / .cpp # Tela de configurações do sistema
+├── Menu_Networks.h / .cpp# Seleção de redes
+│
+├── Battery.h / .cpp     # Leitura ADC e monitoramento de bateria
+├── HWProbe.h / .cpp     # Diagnóstico de hardware
+├── Splash.h / .cpp      # Tela de inicialização (BMP do SPIFFS)
+├── UI.h / .cpp          # Utilitários de interface (desenho, backlight)
+│
+├── wsl_bypasser.h / .c  # Bypass de limitação de canal WSL (802.11)
+├── ligacao cc1101.txt   # Diagrama de pinagem do CC1101
+│
+└── data/
+    ├── index.html       # Página do Captive Portal (phishing page)
+    └── r4bb1t.bmp       # Imagem da splash screen
+```
+
+---
+
+## 🤝 Contribuindo
+
+Pull requests são bem-vindos! Para mudanças maiores, abra uma issue primeiro para discutir o que você gostaria de alterar.
+
+1. Faça um Fork do repositório
+2. Crie sua branch: `git checkout -b feature/nova-funcionalidade`
+3. Commit suas mudanças: `git commit -m 'feat: adiciona nova funcionalidade'`
+4. Push para a branch: `git push origin feature/nova-funcionalidade`
+5. Abra um Pull Request
+
+---
+
+## 📜 Licença
+
+Distribuído sob a licença MIT. Veja [`LICENSE`](LICENSE) para mais informações.
+
+---
+
+<div align="center">
+
+Feito com ❤️ por **Mr4bb1t** — para aprender, pesquisar e nunca parar de questionar.
+
+</div>
