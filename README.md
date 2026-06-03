@@ -115,7 +115,14 @@ Para que o ESP32 consiga ler a tensão da bateria LiPo com segurança (máx 4.2V
 | GPIO 26 | Botão SELECT |
 
 #### CC1101 (RF)
-> Consulte o arquivo [`ligacao cc1101.txt`](ligacao%20cc1101.txt) para o diagrama de pinagem completo.
+| Pino ESP32 | Função CC1101 |
+|---|---|
+| GPIO 33 | SCK |
+| GPIO 19 | MISO |
+| GPIO 13 | MOSI |
+| GPIO 25 | CS |
+| GPIO 2 | GDO0 |
+| GPIO 32 | GDO2 |
 
 ---
 
@@ -181,7 +188,6 @@ r4bb1t_fhc/
 ├── UI.h / .cpp          # Utilitários de interface (desenho, backlight)
 │
 ├── wsl_bypasser.h / .c  # Bypass de limitação de canal WSL (802.11)
-├── ligacao cc1101.txt   # Diagrama de pinagem do CC1101
 │
 └── data/
     ├── index.html       # Página do Captive Portal (phishing page)
