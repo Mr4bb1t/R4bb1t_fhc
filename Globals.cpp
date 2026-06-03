@@ -10,6 +10,7 @@ volatile bool systemInitialized = false;
 TFT_eSPI tft = TFT_eSPI();
 AsyncWebServer server(80);
 DNSServer dnsServer;
+Preferences prefs;
 
 // Dados de rede
 String ssidSelecionado = "";
@@ -24,6 +25,8 @@ int numRedes = 0;
 int redeSelecionada = 1;
 int opcaoAtaqueSelecionada = 0;
 int opcaoMenuInicial = 0;
+int menuStyle = 0; // 0 = Quadradinho (Grid), 1 = Lista
+
 
 // Controle de botões
 unsigned long lastDebounceTime = 0;

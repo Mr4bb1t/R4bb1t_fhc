@@ -52,9 +52,11 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 | **Saved Signals** | Gerenciamento de sinais gravados |
 
 ### ⚙️ Sistema
+- **Persistência de Configurações** via NVRAM (salva brilho, modo de menu e MAC falso)
+- **UI "Cyber Edition"**: Interface totalmente customizada com temas dourados/neon e modos de visualização (Grade ou Lista)
 - **Monitoramento de bateria** com desligamento automático ao atingir nível crítico (≤5%)
-- **Screensaver** configurável
-- **Ajuste de brilho** do display
+- **Screensaver** configurável e adaptável
+- **Ajuste de brilho** do display com PWM suave
 - **Splash screen** com imagem BMP do SPIFFS
 - Navegação por máquina de estados com debounce
 

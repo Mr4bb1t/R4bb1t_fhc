@@ -12,6 +12,7 @@
 #include <ESPAsyncWebServer.h>
 #include <TFT_eSPI.h>
 #include <WiFi.h>
+#include <Preferences.h>
 
 // Estados da máquina de estados
 enum EstadoTela {
@@ -31,6 +32,7 @@ enum EstadoTela {
   TELA_SOBRE,
   TELA_MAC_CHANGER,
   TELA_BRILHO,
+  TELA_MODO_MENU,
   TELA_SCREENSAVER,
   MENU_RF,
   TELA_RF_REPLAY,
@@ -50,6 +52,7 @@ extern volatile bool systemInitialized;
 extern TFT_eSPI tft;
 extern AsyncWebServer server;
 extern DNSServer dnsServer;
+extern Preferences prefs;
 
 // Dados de rede
 extern String ssidSelecionado;
@@ -64,6 +67,8 @@ extern int numRedes;
 extern int redeSelecionada;
 extern int opcaoAtaqueSelecionada;
 extern int opcaoMenuInicial;
+extern int menuStyle; // 0 = Quadradinho (Grid), 1 = Lista
+
 
 // Controle de botões
 extern unsigned long lastDebounceTime;

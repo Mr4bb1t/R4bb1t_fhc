@@ -5,29 +5,43 @@
 #include "Menu_Attacks.h"
 
 void displayNetworks() {
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(C_BG);
   tft.setTextSize(1);
 
+  // Header com back arrow
+  drawHeader("REDES WIFI", true);
+
+  // Lógica de scroll para as redes (mantém o cursor na tela antes de rolar)
+  static int scrollOffset = 0;
+  const int MAX_VISIBLE = 7;
+
   if (redeSelecionada == 0) {
-    tft.fillRect(0, 0, 128, 15, TFT_DARKGREY);
-    drawText(5, 5, "< VOLTAR", TFT_YELLOW);
+    scrollOffset = 0; // Se "Voltar" estiver selecionado, volta pro topo
   } else {
-    drawText(5, 5, "< Voltar", TFT_DARKGREY);
+    int listIndex = redeSelecionada - 1; // Índice na array de redes (0 a numRedes-1)
+    if (listIndex < scrollOffset) {
+      scrollOffset = listIndex;
+    } else if (listIndex >= scrollOffset + MAX_VISIBLE) {
+      scrollOffset = listIndex - MAX_VISIBLE + 1;
+    }
   }
 
-  int startIndex = redeSelecionada - 1;
-  if (startIndex < 0) startIndex = 0;
-  
-  for (int i = startIndex; i < numRedes && i < startIndex + 8; i++) {
-    String networkName = redes[i];
-    if (networkName.length() > 18) {
-      networkName = networkName.substring(0, 18) + "..";
+  // Item fixo "Voltar" no topo
+  bool voltarSel = (redeSelecionada == 0);
+  drawMenuItem(0, 16, 128, 18, "< VOLTAR", voltarSel, false);
+
+  // Desenha os itens visíveis
+  for (int i = 0; i < MAX_VISIBLE; i++) {
+    int netIdx = scrollOffset + i;
+    if (netIdx >= numRedes) break;
+    
+    String networkName = redes[netIdx];
+    if (networkName.length() > 17) {
+      networkName = networkName.substring(0, 17) + ".";
     }
-    drawText(5, 20 + (i - startIndex) * 16, networkName.c_str(), 
-             redeSelecionada == (i + 1) ? TFT_RED : TFT_WHITE);
-    if (redeSelecionada == (i + 1)) {
-      tft.drawRect(0, 18 + (i - startIndex) * 16, 128, 14, TFT_RED);
-    }
+    
+    bool sel = (redeSelecionada == (netIdx + 1));
+    drawMenuItem(0, 34 + i * 18, 128, 18, networkName.c_str(), sel, false);
   }
 }
 

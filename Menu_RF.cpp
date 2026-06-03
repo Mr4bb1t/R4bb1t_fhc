@@ -7,7 +7,9 @@
 #include "Menu_Main.h"
 
 #include "Battery.h"
+#include "Config.h"
 #include "HWProbe.h"
+#include "UI.h"
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <RCSwitch.h>
 #include <SPI.h>
@@ -45,31 +47,22 @@ static const uint16_t rfColors[] = {TFT_WHITE,  TFT_GREEN, TFT_CYAN,
 
 // ── Helpers de display ───────────────────────────
 static void rfHeader(const char *titulo) {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_CYAN);
-  char buf[24];
-  snprintf(buf, sizeof(buf), "[ %s ]", titulo);
-  tft.setCursor((SCR_W - (int)strlen(buf) * 6) / 2, 5);
-  tft.print(buf);
-  tft.drawFastHLine(0, 17, SCR_W, TFT_DARKGREY);
+  tft.fillScreen(C_BG);
+  drawHeader(titulo, true);
 }
 
 static void rfFooter(const char *hint = nullptr) {
-  tft.drawFastHLine(0, SCR_H - 16, SCR_W, TFT_DARKGREY);
+  drawSeparator(SCR_H - 18, C_GREY);
   tft.setTextSize(1);
   if (hint) {
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(2, SCR_H - 10);
+    tft.setTextColor(C_GREY);
+    tft.setCursor(2, SCR_H - 12);
     tft.print(hint);
   }
-  tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(5, SCR_H - 10);
-  tft.print("^");
-  tft.setCursor(SCR_W / 2 - 2, SCR_H - 10);
-  tft.print("o");
-  tft.setCursor(SCR_W - 11, SCR_H - 10);
-  tft.print("v");
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(5,          SCR_H - 12); tft.print("<");
+  tft.setCursor(61,         SCR_H - 12); tft.print("o");
+  tft.setCursor(SCR_W - 11, SCR_H - 12); tft.print(">");
 }
 
 // ── SPIFFS: salvar sinal ─────────────────────────
@@ -158,60 +151,31 @@ bool rfInit() {
 //   • primeiro item = Voltar
 // ════════════════════════════════════════════════
 void displayRF() {
-  // Init lazy: só inicializa CC1101 na primeira entrada
   static bool rfInitDone = false;
   if (!rfInitDone) {
     rfInitDone = true;
-    hwCC1101_ok = rfInit(); // tenta init; atualiza flag com resultado real
+    hwCC1101_ok = rfInit();
   }
 
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(C_BG);
   tft.setTextSize(1);
+  drawHeader("RF 433", true);
 
-  // Status CC1101 no topo
-  tft.setCursor(2, 2);
-  tft.setTextColor(rfReady ? TFT_GREEN : TFT_RED);
-  tft.print(rfReady ? "CC1101  433.92 MHz" : "CC1101: ERRO!");
+  // Status CC1101 logo abaixo do header
+  tft.setTextColor(rfReady ? C_GREEN : C_RED);
+  tft.setCursor(4, 17);
+  tft.print(rfReady ? "CC1101 433.92MHz OK" : "CC1101: ERRO!");
+  tft.drawFastHLine(0, 26, SCR_W, C_GREY);
 
-  // Título centralizado
-  tft.setCursor(40, 14);
-  tft.setTextColor(TFT_YELLOW);
-  tft.print("RF 433");
-  tft.drawFastHLine(0, 24, SCR_W, TFT_DARKGREY);
-
-  // Lista de itens
-  const int ITEM_H = 20;  // altura de cada linha
-  const int ITEM_Y0 = 28; // y do primeiro item
-
+  // Lista de itens com drawMenuItem
   for (int i = 0; i < RF_ITEMS; i++) {
-    int y = ITEM_Y0 + i * ITEM_H;
-    bool sel = (i == rfOpcao);
-
-    if (sel) {
-      // Fundo escuro + barra colorida à esquerda (igual Menu_Attacks)
-      tft.fillRect(0, y, 5, ITEM_H - 2, rfColors[i]);
-      tft.fillRect(5, y, SCR_W - 5, ITEM_H - 2, 0x1082);
-      tft.setTextColor(TFT_WHITE);
-    } else {
-      tft.setTextColor(rfColors[i]);
-    }
-
-    tft.setCursor(10, y + 5);
-    tft.print(rfLabels[i]);
+    drawMenuItem(0, 28 + i * 19, 128, 18, rfLabels[i], i == rfOpcao);
   }
 
-  // Rodapé
-  tft.drawFastHLine(0, SCR_H - 16, SCR_W, TFT_DARKGREY);
-  tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(5, SCR_H - 10);
-  tft.print("^");
-  tft.setCursor(SCR_W / 2 - 2, SCR_H - 10);
-  tft.print("o");
-  tft.setCursor(SCR_W - 11, SCR_H - 10);
-  tft.print("v");
-
+  drawFooter();
   batteryDraw();
 }
+
 
 void handleRF() {
   if ((millis() - lastDebounceTime) > debounceDelay) {

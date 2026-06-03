@@ -1,5 +1,6 @@
 #include "Battery.h"
 #include "Globals.h" // tft
+#include "Config.h"  // C_GOLD, paleta Cyber Edition
 
 // ─────────────────────────────────────────────────────────────
 //  Estado interno
@@ -45,11 +46,11 @@ static void drawBatteryIcon(int pct) {
   // Fundo limpo
   tft.fillRect(X - 1, Y - 1, W + PW + 2, H + 2, TFT_BLACK);
 
-  // Contorno do corpo
-  tft.drawRect(X, Y, W, H, TFT_WHITE);
+  // Contorno do corpo em dourado
+  tft.drawRect(X, Y, W, H, C_GOLD);
 
-  // Polo positivo (+)
-  tft.fillRect(X + W, Y + (H - PH) / 2, PW, PH, TFT_WHITE);
+  // Polo positivo (+) em dourado
+  tft.fillRect(X + W, Y + (H - PH) / 2, PW, PH, C_GOLD);
 
   // Cor da barra conforme nível
   uint16_t barColor;

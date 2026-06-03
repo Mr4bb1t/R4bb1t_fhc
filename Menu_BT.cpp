@@ -8,10 +8,11 @@
 
 #include "Menu_BT.h"
 #include "Battery.h"
+#include "Config.h"
 #include "Globals.h"
 #include "HWProbe.h"
 #include "Menu_Main.h"
-
+#include "UI.h"
 #include <BLEAdvertisedDevice.h>
 #include <BLEDevice.h>
 #include <BLEScan.h>
@@ -225,24 +226,14 @@ static uint8_t jamChIndex = 0;
 //  Helpers de tela
 // ─────────────────────────────────────────────────
 static void btHeader(const char *t) {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_CYAN);
-  tft.setCursor((SCR_W - (int)strlen(t) * 6) / 2, 5);
-  tft.print(t);
-  tft.drawFastHLine(0, 15, SCR_W, TFT_DARKGREY);
+  tft.fillScreen(C_BG);
+  drawHeader(t, true);
 }
 
 static void btFooter() {
-  tft.drawFastHLine(0, SCR_H - 16, SCR_W, TFT_DARKGREY);
-  tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(5, SCR_H - 10);
-  tft.print("<");
-  tft.setCursor(SCR_W / 2 - 2, SCR_H - 10);
-  tft.print("o");
-  tft.setCursor(SCR_W - 11, SCR_H - 10);
-  tft.print(">");
+  drawFooter();
 }
+
 
 // ─────────────────────────────────────────────────
 //  BLE init / scan
@@ -340,8 +331,6 @@ static bool nrfJamInit() {
                                           : "NAO (SPI falhou)");
     return false;
   }
-  return false;
-
   radio.setAutoAck(false);
   radio.stopListening();
   radio.setRetries(0, 0);
@@ -381,59 +370,36 @@ static int btMenuCursor = 0; // cursor unificado
 static inline int btMenuItems() { return 2 + btDevCount; }
 
 void displayMenuBT() {
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(C_BG);
   tft.setTextSize(1);
 
-  // ── Cabeçalho ─────────────────────────────────
-  tft.setTextColor(TFT_CYAN);
-  tft.setCursor((SCR_W - 8 * 6) / 2, 5);
-  tft.print("BLE SCAN");
-  tft.drawFastHLine(0, 15, SCR_W, TFT_DARKGREY);
+  // Header Cyber Edition
+  drawHeader("BLE SCAN", false);
 
-  // ── Mensagem de escaneando ────────────────────
   if (btScanning) {
-    tft.setTextColor(TFT_GREEN);
+    tft.setTextColor(C_GREEN);
     tft.setCursor(14, 74);
     tft.print("Escaneando (8s)...");
     batteryDraw();
     return;
   }
 
-  // ── Opções fixas: Voltar e Reescanear ─────────
   // Item 0: Voltar
-  bool selVoltar = (btMenuCursor == 0);
-  if (selVoltar) {
-    tft.fillRect(0, 18, SCR_W, 18, 0x180C);
-    tft.drawRect(0, 18, SCR_W, 18, TFT_DARKGREY);
-    tft.setTextColor(TFT_WHITE);
-  } else {
-    tft.setTextColor(TFT_DARKGREY);
-  }
-  tft.setCursor(6, 23);
-  tft.print("< Voltar");
+  drawMenuItem(0, 16, SCR_W, 18, "< VOLTAR", btMenuCursor == 0, false);
 
   // Item 1: Reescanear
-  bool selRescan = (btMenuCursor == 1);
-  if (selRescan) {
-    tft.fillRect(0, 37, SCR_W, 18, 0x0820);
-    tft.drawRect(0, 37, SCR_W, 18, TFT_GREEN);
-    tft.setTextColor(TFT_WHITE);
-  } else {
-    tft.setTextColor(TFT_DARKGREY);
-  }
-  tft.setCursor(6, 42);
-  tft.print("[o] Reescanear");
-  if (btDevCount > 0) {
-    char cntBuf[12];
-    snprintf(cntBuf, sizeof(cntBuf), " (%d)", btDevCount);
-    tft.print(cntBuf);
-  }
+  char rescanLabel[24];
+  if (btDevCount > 0)
+    snprintf(rescanLabel, sizeof(rescanLabel), "Reescanear (%d)", btDevCount);
+  else
+    snprintf(rescanLabel, sizeof(rescanLabel), "Reescanear");
+  drawMenuItem(0, 35, SCR_W, 18, rescanLabel, btMenuCursor == 1);
 
-  tft.drawFastHLine(0, 56, SCR_W, 0x2104);
+  tft.drawFastHLine(0, 54, SCR_W, C_GREY);
 
-  // ── Lista de dispositivos ─────────────────────
+  // Lista de dispositivos
   if (btDevCount == 0) {
-    tft.setTextColor(TFT_DARKGREY);
+    tft.setTextColor(C_GREY);
     tft.setCursor(6, 68);
     tft.print("Nenhum encontrado.");
     tft.setCursor(6, 82);
@@ -442,17 +408,13 @@ void displayMenuBT() {
     return;
   }
 
-  // Cada item de dispositivo ocupa 24px (nome + categoria)
   const int ITEM_H = 24;
-  const int Y0 = 58;                           // começa logo após o separador
-  int maxVisible = (SCR_H - Y0 - 16) / ITEM_H; // ~3 dispositivos visíveis
+  const int Y0 = 56;
+  int maxVisible = (SCR_H - Y0 - 18) / ITEM_H;
 
-  // Scroll: garante que o dispositivo selecionado fique visível
-  int devIdx =
-      btMenuCursor - 2; // índice no btDevs (-1 se cursor em Voltar/Rescan)
+  int devIdx = btMenuCursor - 2;
   static int devScroll = 0;
   if (devIdx >= 0) {
-    if (devIdx < devScroll)
       devScroll = devIdx;
     if (devIdx >= devScroll + maxVisible)
       devScroll = devIdx - maxVisible + 1;
@@ -626,14 +588,14 @@ static void drawSpamIcon(int cx, int cy, uint16_t col) {
 static int btSubSel = 0; // 0=Jammer, 1=Spam
 
 void displayBT_SubMenu() {
-  btHeader("ATAQUE BT");
+  tft.fillScreen(C_BG);
+  drawHeader("ATAQUE BT", true);
 
-  // Nome do alvo
   tft.setTextSize(1);
-  tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(4, 20);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 18);
   tft.print("Alvo: ");
-  tft.setTextColor(TFT_WHITE);
+  tft.setTextColor(C_WHITE);
   if (btDevTarget >= 0) {
     char buf[18];
     strncpy(buf, btDevs[btDevTarget].name, 17);
@@ -642,32 +604,29 @@ void displayBT_SubMenu() {
   }
 
   static const char *names[2] = {"JAMMER", "SPAM"};
-  static const uint16_t acols[2] = {TFT_RED, TFT_YELLOW};
+  static const uint16_t acols[2] = {C_RED, C_GOLD};
 
   for (int i = 0; i < 2; i++) {
     const BtCell &c = btCells[i];
     bool sel = (i == btSubSel);
     uint16_t col = acols[i];
 
-    tft.fillRect(c.x, c.y, c.w, c.h, sel ? 0x2104 : 0x0821);
-    tft.drawRect(c.x, c.y, c.w, c.h, sel ? col : TFT_DARKGREY);
-    if (sel)
-      tft.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, 0x39E7);
+    tft.fillRect(c.x, c.y, c.w, c.h, sel ? C_GOLD_SEL : C_BG);
+    tft.drawRect(c.x, c.y, c.w, c.h, sel ? col : C_GREY);
+    if (sel) tft.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, C_GOLD_SEL);
 
     int icx = c.x + c.w / 2;
     int icy = c.y + c.h / 2 - 6;
-    if (i == 0)
-      drawJammerIcon(icx, icy, col);
-    else
-      drawSpamIcon(icx, icy, col);
+    if (i == 0) drawJammerIcon(icx, icy, col);
+    else        drawSpamIcon(icx, icy, col);
 
-    tft.setTextColor(sel ? col : TFT_DARKGREY);
+    tft.setTextColor(sel ? col : C_GREY);
     int lx = c.x + (c.w - (int)strlen(names[i]) * 6) / 2;
     tft.setCursor(lx, c.y + c.h - 12);
     tft.print(names[i]);
   }
 
-  btFooter();
+  drawFooter();
   batteryDraw();
 }
 

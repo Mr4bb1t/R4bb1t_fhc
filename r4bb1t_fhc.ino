@@ -199,6 +199,9 @@ void setup() {
   delay(100);
   Serial.println("✓ WiFi em modo STA");
 
+  // Inicia as preferências salvas e aplica (Brilho, MAC, Modo Menu)
+  initConfig();
+
   systemInitialized = true;
 
   // Exibe splash screen com a imagem do SPIFFS
@@ -279,6 +282,10 @@ void loop() {
 
   case TELA_BRILHO:
     handleBrilho();
+    break;
+
+  case TELA_MODO_MENU:
+    handleModoMenu();
     break;
 
   case TELA_SCREENSAVER:
