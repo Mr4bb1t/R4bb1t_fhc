@@ -62,6 +62,19 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 
 ---
 
+## 📸 Galeria
+<div align="center">
+  <img src="fotos-fhc/foto1.jpg" width="45%" />
+  <img src="fotos-fhc/foto2.jpg" width="45%" />
+  <br>
+  <img src="fotos-fhc/foto3.jpg" width="45%" />
+  <img src="fotos-fhc/foto4.jpg" width="45%" />
+  <br>
+  <img src="fotos-fhc/foto5.jpg" width="45%" />
+</div>
+
+---
+
 ## 🔧 Hardware
 
 ### Componentes Necessários
@@ -74,6 +87,13 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 | Botões | 3× botões tácteis |
 | Bateria | LiPo com circuito de proteção |
 | Carregador | TP4056 |
+
+### Circuito Divisor de Tensão (Bateria)
+Para que o ESP32 consiga ler a tensão da bateria LiPo com segurança (máx 4.2V), é necessário utilizar um divisor de tensão, já que o pino ADC suporta no máximo ~3.3V.
+
+<div align="center">
+  <img src="circuito-divisor-de-tensao.png" width="60%" alt="Circuito Divisor de Tensão">
+</div>
 
 ### Pinagem
 
