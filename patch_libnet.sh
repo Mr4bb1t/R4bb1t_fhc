@@ -38,33 +38,47 @@ find_libnet() {
 
     if [ "$OS" = "linux" ]; then
         search_dirs=(
-            "$HOME/.arduino15/packages/esp32/hardware/esp32"
-            "$HOME/snap/arduino/current/.arduino15/packages/esp32/hardware/esp32"
+            "$HOME/.arduino15/packages/esp32/tools/esp32-libs"
+            "$HOME/snap/arduino/current/.arduino15/packages/esp32/tools/esp32-libs"
         )
     elif [ "$OS" = "macos" ]; then
         search_dirs=(
-            "$HOME/Library/Arduino15/packages/esp32/hardware/esp32"
+            "$HOME/Library/Arduino15/packages/esp32/tools/esp32-libs"
         )
     elif [ "$OS" = "windows" ]; then
         search_dirs=(
-            "$LOCALAPPDATA/Arduino15/packages/esp32/hardware/esp32"
-            "$HOME/AppData/Local/Arduino15/packages/esp32/hardware/esp32"
+            "$LOCALAPPDATA/Arduino15/packages/esp32/tools/esp32-libs"
+            "$HOME/AppData/Local/Arduino15/packages/esp32/tools/esp32-libs"
         )
     fi
 
     for dir in "${search_dirs[@]}"; do
         if [ -d "$dir" ]; then
-            # Pega a versão mais recente instalada
-            local latest=$(ls -v "$dir" 2>/dev/null | tail -1)
-            if [ -n "$latest" ]; then
-                local libpath="$dir/$latest/tools/sdk/esp32/lib/libnet80211.a"
-                if [ -f "$libpath" ]; then
-                    echo "$libpath"
-                    return 0
-                fi
+            # Procura em todos os subdiretórios por libnet80211.a
+            local libpath=$(find "$dir" -name "libnet80211.a" 2>/dev/null | head -1)
+            if [ -n "$libpath" ]; then
+                echo "$libpath"
+                return 0
             fi
         fi
     done
+
+    # Fallback genérico em packages/esp32
+    if [ "$OS" = "linux" ]; then
+        local fallback_dir="$HOME/.arduino15/packages/esp32"
+    elif [ "$OS" = "macos" ]; then
+        local fallback_dir="$HOME/Library/Arduino15/packages/esp32"
+    elif [ "$OS" = "windows" ]; then
+        local fallback_dir="$LOCALAPPDATA/Arduino15/packages/esp32"
+    fi
+    
+    if [ -d "$fallback_dir" ]; then
+        local libpath=$(find "$fallback_dir" -name "libnet80211.a" 2>/dev/null | head -1)
+        if [ -n "$libpath" ]; then
+            echo "$libpath"
+            return 0
+        fi
+    fi
 
     return 1
 }
@@ -75,34 +89,42 @@ find_objcopy() {
 
     if [ "$OS" = "linux" ]; then
         search_dirs=(
-            "$HOME/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc"
-            "$HOME/snap/arduino/current/.arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc"
+            "$HOME/.arduino15/packages/esp32/tools"
+            "$HOME/snap/arduino/current/.arduino15/packages/esp32/tools"
         )
     elif [ "$OS" = "macos" ]; then
         search_dirs=(
-            "$HOME/Library/Arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc"
+            "$HOME/Library/Arduino15/packages/esp32/tools"
         )
     elif [ "$OS" = "windows" ]; then
         search_dirs=(
-            "$LOCALAPPDATA/Arduino15/packages/esp32/tools/xtensa-esp32-elf-gcc"
+            "$LOCALAPPDATA/Arduino15/packages/esp32/tools"
         )
     fi
 
     for dir in "${search_dirs[@]}"; do
         if [ -d "$dir" ]; then
-            local latest=$(ls -v "$dir" 2>/dev/null | tail -1)
-            if [ -n "$latest" ]; then
-                local objcopy_path=$(find "$dir/$latest" -name "xtensa-esp32-elf-objcopy" 2>/dev/null | head -1)
-                if [ -n "$objcopy_path" ]; then
-                    echo "$objcopy_path"
-                    return 0
-                fi
+            # IDF 5.x / arduino-esp32 3.x: toolchain chama-se esp-x32, binario = xtensa-esp-elf-objcopy
+            local objcopy_path=$(find "$dir/esp-x32" -name "xtensa-esp-elf-objcopy*" 2>/dev/null | head -1)
+            if [ -n "$objcopy_path" ]; then
+                echo "$objcopy_path"
+                return 0
+            fi
+            
+            # Fallback geral
+            local objcopy_path=$(find "$dir" -name "*objcopy" -o -name "*objcopy.exe" 2>/dev/null | grep -i "xtensa" | head -1)
+            if [ -n "$objcopy_path" ]; then
+                echo "$objcopy_path"
+                return 0
             fi
         fi
     done
 
     # Tentar PATH direto
-    if command -v xtensa-esp32-elf-objcopy &> /dev/null; then
+    if command -v xtensa-esp-elf-objcopy &> /dev/null; then
+        echo "xtensa-esp-elf-objcopy"
+        return 0
+    elif command -v xtensa-esp32-elf-objcopy &> /dev/null; then
         echo "xtensa-esp32-elf-objcopy"
         return 0
     fi
