@@ -143,6 +143,8 @@ Instale pelo **Library Manager** do Arduino IDE:
 | `TFT_eSPI` | Bodmer |
 | `ESPAsyncWebServer` | Me-No-Dev |
 | `AsyncTCP` | Me-No-Dev |
+| `SmartRC-CC1101-Driver-Lib` | lsatan |
+| `rc-switch` | sui77 |
 
 ### Configuração do `TFT_eSPI`
 Edite o arquivo `User_Setup.h` da biblioteca `TFT_eSPI` para corresponder ao seu display. Consulte [`Config.h`](Config.h) para os pinos utilizados.
