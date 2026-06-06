@@ -2,7 +2,7 @@
 //
 // Estética Cyber Edition:
 //  1. Exibe BMP centralizado (lógica original preservada)
-//  2. Após imagem: texto "R4BB1T" em dourado + barra de loading pixelada
+//  2. Após imagem: logo "R4BB1T" pixel art estilizado + barra de loading pixelada
 
 #include "Splash.h"
 #include "Globals.h"
@@ -35,6 +35,93 @@ static void drawLoadingBar(int progress, int total) {
   // Blocos pixelados
   for (int bx = BX; bx < BX + fill - BLOCK; bx += BLOCK + 1) {
     tft.fillRect(bx, BY, BLOCK, BH, C_GOLD);
+  }
+}
+
+// ── Logo R4BB1T pixel art (5×7 px por letra, escala 2) ─────────
+//
+//  Cada letra: array de 7 bytes, bit 4 = coluna 0 (esquerda), bit 0 = coluna 4.
+//  Pixéis 2×2 dourados com sombra de offset (+1,+1) em dourado escuro.
+//
+static const uint8_t PROGMEM glyph_R[7] = {
+  0b11110, // ████░
+  0b10001, // █░░░█
+  0b10001, // █░░░█
+  0b11110, // ████░
+  0b10100, // █░█░░
+  0b10010, // █░░█░
+  0b10001, // █░░░█
+};
+static const uint8_t PROGMEM glyph_4[7] = {
+  0b10001, // █░░░█
+  0b10001, // █░░░█
+  0b10001, // █░░░█
+  0b11111, // █████
+  0b00001, // ░░░░█
+  0b00001, // ░░░░█
+  0b00001, // ░░░░█
+};
+static const uint8_t PROGMEM glyph_B[7] = {
+  0b11110, // ████░
+  0b10001, // █░░░█
+  0b10001, // █░░░█
+  0b11110, // ████░
+  0b10001, // █░░░█
+  0b10001, // █░░░█
+  0b11110, // ████░
+};
+static const uint8_t PROGMEM glyph_1[7] = {
+  0b00100, // ░░█░░
+  0b01100, // ░██░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b01110, // ░███░
+};
+static const uint8_t PROGMEM glyph_T[7] = {
+  0b11111, // █████
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+  0b00100, // ░░█░░
+};
+
+// Ponteiros para os 6 glifos na ordem R-4-B-B-1-T
+static const uint8_t * const PROGMEM glyphs[6] = {
+  glyph_R, glyph_4, glyph_B, glyph_B, glyph_1, glyph_T
+};
+
+// Espaçamento: 5 colunas × escala 2 = 10 px/letra + 2 px gap → passo 12 px
+// Total: 6×12 - 2 = 70 px → centrado em 128 px → x0 = (128-70)/2 = 29
+static void drawR4BB1T_Logo(int screenW, int y) {
+  const int SCALE   = 2;  // tamanho de cada pixel em tela
+  const int COLS    = 5;  // colunas do glifo
+  const int ROWS    = 7;  // linhas do glifo
+  const int GAP     = 2;  // espaço entre letras (px de tela)
+  const int letterW = COLS * SCALE;
+  const int totalW  = 6 * letterW + 5 * GAP;
+  const int SW = (screenW > 0) ? screenW : 128;
+  int x0 = (SW - totalW) / 2;
+
+  for (int li = 0; li < 6; li++) {
+    int lx = x0 + li * (letterW + GAP);
+    const uint8_t *g = (const uint8_t *)pgm_read_ptr(&glyphs[li]);
+    for (int row = 0; row < ROWS; row++) {
+      uint8_t bits = pgm_read_byte(&g[row]);
+      for (int col = 0; col < COLS; col++) {
+        bool on = (bits >> (4 - col)) & 1;
+        if (!on) continue;
+        int px = lx + col * SCALE;
+        int py = y  + row * SCALE;
+        // Sombra (offset +1,+1)
+        tft.fillRect(px + 1, py + 1, SCALE, SCALE, C_GOLD_DIM);
+        // Pixel principal
+        tft.fillRect(px, py, SCALE, SCALE, C_GOLD);
+      }
+    }
   }
 }
 
@@ -151,12 +238,8 @@ void displaySplash(unsigned long delayMs) {
   tft.setSwapBytes(false);
   free(fb);
 
-  // ── Rodapé Cyber Edition ──────────────────────
-  // Texto "R4BB1T" em dourado, centralizado
-  tft.setTextSize(1);
-  tft.setTextColor(C_GOLD);
-  tft.setCursor(43, 134);
-  tft.print("R4BB1T");
+  // ── Rodapé Cyber Edition — logo pixel art ────
+  drawR4BB1T_Logo(0, 124);
 
   // Barra de loading animada (blocos pixelados)
   if (delayMs > 0) {

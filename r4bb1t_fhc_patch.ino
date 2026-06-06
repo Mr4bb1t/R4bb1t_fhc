@@ -57,6 +57,7 @@ void cleanup() {
 
   deautherAtivo = false;
   beaconAtivo = false;
+  ctsAtivo = false;
 
   Serial.println("Limpeza concluída");
 }
@@ -245,8 +246,20 @@ void loop() {
     handleAtaqueDeauther();
     break;
 
-  case ATAQUE_HANDSHAKE:
-    handleAtaqueHandshake();
+  case ATAQUE_DEAUTHER_SCAN:
+    handleAtaqueDeautherScan();
+    break;
+
+  case ATAQUE_CTS_JAMMER:
+    handleAtaqueCtsJammer();
+    break;
+
+  case ATAQUE_BEACON_MODO:
+    handleAtaqueBeaconModo();
+    break;
+
+  case ATAQUE_BEACON_CUSTOM:
+    handleAtaqueBeaconCustom();
     break;
 
   case ATAQUE_BEACON:

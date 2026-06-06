@@ -58,6 +58,12 @@ void wsl_bypasser_send_deauth_frame_unicast(const wifi_ap_record_t *ap_record,
 void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record);
 
 /**
+ * @brief Envia frame CTS (Clear To Send) com duration máximo para travar o canal
+ * @param target_mac  MAC de destino (ou Broadcast FF:FF:FF:FF:FF:FF)
+ */
+void wsl_bypasser_send_cts_frame(const uint8_t *target_mac);
+
+/**
  * @brief Verifica se o bypass está ativo e funcionando
  * @return true se inicializado
  */

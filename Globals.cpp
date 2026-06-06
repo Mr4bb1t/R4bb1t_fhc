@@ -42,8 +42,22 @@ int opcaoSubMenuAtaque = 0;
 bool deautherAtivo = false;
 unsigned long deauthCounter = 0;
 int deauthTipo = 0; // 0 = Broadcast, 1 = Targeted
+int clientScanBtnSel = 0;     // definição
+
+// Clientes descobertos (Deauther Targeted)
+ClientInfo clientList[MAX_CLIENTS];
+int clientCount = 0;
+int clientSelected = 0;
+bool clientScanRunning = false;
+uint8_t targetClientMac[6] = {0};
+
+// CTS Jammer
+bool ctsAtivo = false;
+unsigned long ctsCounter = 0;
 
 // Beacon Spam
+int beaconModo = 0;
+String beaconCustomSSID = "";
 int beaconQuantidade = 50;
 bool beaconAtivo = false;
 unsigned long beaconCounter = 0;

@@ -19,6 +19,8 @@ static String truncSSID(const String &s, int maxLen = 18) {
 // Seleção de item da lista do menu Deauther (0=VOLTAR, 1=Broadcast, 2=Targeted)
 static int deauthMenuSel = 1;
 
+// Forward declaration
+static void IRAM_ATTR clientSnifferCb(void *buf, wifi_promiscuous_pkt_type_t type);
 // ═══════════════════════════════════════════════
 //  MENU ATAQUES
 // ═══════════════════════════════════════════════
@@ -26,19 +28,16 @@ void displayMenuAtaques() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
 
-  // Header com SSID truncado como subtítulo
   drawHeader("WIFI ATTACKS", true);
 
-  // SSID alvo em dourado escuro — linha abaixo do header
   tft.setTextColor(C_GOLD_DIM);
   String ssid = truncSSID(ssidSelecionado, 21);
   tft.setCursor(4, 17);
   tft.print(ssid);
   tft.drawFastHLine(0, 25, 128, C_GREY);
 
-  // Lista de opções
-  const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther",
-                         "Cap Handshake", "Beacon Spam"};
+  const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "CTS Jammer",
+                         "Beacon Spam"};
   for (int i = 0; i < 5; i++) {
     drawMenuItem(0, 27 + i * 20, 128, 19, items[i],
                  opcaoAtaqueSelecionada == i);
@@ -77,12 +76,12 @@ void handleMenuAtaques() {
         displayAtaqueDeauther();
         break;
       case 3:
-        estadoAtual = ATAQUE_HANDSHAKE;
-        displayAtaqueHandshake();
+        estadoAtual = ATAQUE_CTS_JAMMER;
+        displayAtaqueCtsJammer();
         break;
       case 4:
-        estadoAtual = ATAQUE_BEACON;
-        displayAtaqueBeacon();
+        estadoAtual = ATAQUE_BEACON_MODO;
+        displayAtaqueBeaconModo();
         break;
       }
       lastDebounceTime = millis();
@@ -97,19 +96,16 @@ void displayAtaqueCaptivePortal() {
   tft.fillScreen(C_BG);
   drawHeader("CAPTIVE PORTAL", true);
 
-  // Status ATIVO
   tft.setTextSize(1);
   tft.setTextColor(C_RED);
   tft.setCursor(40, 20);
   tft.print("[ ATIVO ]");
 
-  // Mensagem
   tft.setTextColor(C_GOLD);
   tft.setCursor(4, 33);
   tft.print("Portal: 192.168.4.1");
   drawSeparator(43, C_GREY);
 
-  // SSID e Aviso
   tft.setTextColor(C_GOLD);
   tft.setCursor(4, 50);
   tft.print(truncSSID(ssidSelecionado, 21));
@@ -120,7 +116,6 @@ void displayAtaqueCaptivePortal() {
 
   drawSeparator(78, C_GREY);
 
-  // Opções
   drawMenuItem(0, 80, 128, 19, "< VOLTAR", opcaoSubMenuAtaque == 0);
   drawMenuItem(0, 100, 128, 19, "Apagar dados", opcaoSubMenuAtaque == 1);
   drawMenuItem(0, 120, 128, 19, "Credenciais", opcaoSubMenuAtaque == 2);
@@ -207,11 +202,9 @@ void handleConfirmaApagar() {
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       if (confirmaApagarSel == 0) {
-        // Cancelar
         estadoAtual = ATAQUE_CAPTIVE_PORTAL;
         displayAtaqueCaptivePortal();
       } else {
-        // Apagar
         EraseData();
         tft.fillScreen(C_BG);
         drawHeader("APAGAR DADOS", true);
@@ -219,7 +212,7 @@ void handleConfirmaApagar() {
         tft.setCursor(5, 80);
         tft.print("Credenciais apagadas!");
         delay(1500);
-        confirmaApagarSel = 0; // resetar selecao
+        confirmaApagarSel = 0;
         estadoAtual = ATAQUE_CAPTIVE_PORTAL;
         displayAtaqueCaptivePortal();
       }
@@ -232,40 +225,31 @@ void handleConfirmaApagar() {
 //  DEAUTHER
 // ═══════════════════════════════════════════════
 
-// Helper: desenha o indicador de pulso animado centralizado
 static void drawDeautherPulse() {
-  // Centro do indicador
   int cx = 64;
   int cy = 70;
 
-  // Fase da animação baseada no tempo
-  uint8_t phase = (millis() / 120) & 0x1F; // 0-31
+  uint8_t phase = (millis() / 120) & 0x1F;
 
-  // Anel externo pulsante — raio oscila entre 22 e 28
   int outerR = 22 + (phase < 16 ? phase / 3 : (31 - phase) / 3);
   uint16_t ringColor = (phase < 16) ? C_RED : C_GOLD;
   tft.drawCircle(cx, cy, outerR, ringColor);
   tft.drawCircle(cx, cy, outerR - 1, ringColor);
 
-  // Círculo médio fixo
   tft.fillCircle(cx, cy, 14, C_GOLD_SEL);
   tft.drawCircle(cx, cy, 14, C_GOLD);
   tft.drawCircle(cx, cy, 15, C_GOLD);
 
-  // Ícone central: sinal "X" pulsante
   tft.setTextSize(1);
   tft.setTextColor((phase & 0x08) ? C_RED : C_GOLD);
-  // ERA (cx - 11, cy - 4)
   tft.setCursor(cx - 2, cy - 4);
   tft.print("X");
 
-  // Contador de pacotes abaixo do anel
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 104);
   tft.print("PKT:");
   tft.setTextColor(C_WHITE);
-  // Limpa área do número antes de imprimir
   tft.fillRect(30, 104, 60, 8, C_BG);
   tft.setCursor(30, 104);
   tft.printf("%lu", deauthCounter);
@@ -282,15 +266,12 @@ void displayAtaqueDeauther() {
   drawSeparator(26, C_GREY);
 
   if (!deautherAtivo) {
-    // ── Tela de standby — lista navegável ────────────
-    // items: 0 = VOLTAR, 1 = Broadcast, 2 = Targeted
     const char *ditems[] = {"< VOLTAR", "Broadcast", "Targeted"};
     for (int i = 0; i < 3; i++) {
       drawMenuItem(0, 29 + i * 20, 128, 19, ditems[i], deauthMenuSel == i);
     }
     drawSeparator(89, C_GREY);
 
-    // Botão INICIAR — só aparece quando modo selecionado (itens 1 ou 2)
     if (deauthMenuSel > 0) {
       tft.fillRect(14, 118, 100, 22, C_GOLD_SEL);
       tft.drawRect(14, 118, 100, 22, C_GOLD);
@@ -299,28 +280,21 @@ void displayAtaqueDeauther() {
       tft.setCursor(29, 125);
       tft.print("[  INICIAR  ]");
     } else {
-      // Limpa área do botão quando VOLTAR está selecionado
       tft.fillRect(14, 118, 100, 22, C_BG);
     }
 
-    // Barra inferior
     drawSeparator(145, C_GREY);
     tft.setTextColor(C_GREY);
     tft.setCursor(3, 150);
     tft.print("<         o         >");
 
   } else {
-    // ── Tela de ataque ativo ─────────────────────────
-
-    // Indicador de pulso animado
     drawDeautherPulse();
 
-    // Modo do ataque
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(93, 104);
     tft.print(deauthTipo == 0 ? "BCAST" : "TRGD");
 
-    // Botão PARAR
     drawSeparator(116, C_GREY);
     tft.fillRect(14, 120, 100, 20, C_GOLD_SEL);
     tft.drawRect(14, 120, 100, 20, C_RED);
@@ -338,7 +312,6 @@ void handleAtaqueDeauther() {
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (!deautherAtivo) {
-      // ── Standby: lista navegável
       if (digitalRead(BUTTON_LEFT) == LOW) {
         deauthMenuSel = (deauthMenuSel > 0) ? deauthMenuSel - 1 : 2;
         lastDebounceTime = millis();
@@ -358,13 +331,34 @@ void handleAtaqueDeauther() {
         holdingSelect = false;
         lastDebounceTime = millis();
         if (deauthMenuSel == 0) {
-          // VOLTAR
           estadoAtual = MENU_ATAQUES;
           displayMenuAtaques();
           return;
         }
-        // Broadcast = item 1, Targeted = item 2
         deauthTipo = deauthMenuSel - 1;
+        if (deauthTipo == 1) {
+          // Targeted: inicia scan automaticamente
+          clientCount = 0;
+          clientSelected = 0;
+          clientScanRunning = false;
+          estadoAtual = ATAQUE_DEAUTHER_SCAN;
+          // Inicia o scan imediatamente
+          uint8_t ch = (apRecordSelecionado.primary >= 1)
+                           ? apRecordSelecionado.primary
+                           : 1;
+          WiFi.mode(WIFI_MODE_NULL);
+          delay(100);
+          wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+          esp_wifi_init(&cfg);
+          esp_wifi_set_mode(WIFI_MODE_STA);
+          esp_wifi_start();
+          esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+          esp_wifi_set_promiscuous(true);
+          esp_wifi_set_promiscuous_rx_cb(clientSnifferCb);
+          clientScanRunning = true;
+          displayAtaqueDeautherScan();
+          return;
+        }
         if (initRadioForAttack(apRecordSelecionado.primary)) {
           deautherAtivo = true;
           deauthCounter = 0;
@@ -385,7 +379,6 @@ void handleAtaqueDeauther() {
         }
       }
     } else {
-      // ── Ataque ativo: SELECT = parar, atualiza animação
       if (selectPressed && !holdingSelect) {
         holdingSelect = true;
       }
@@ -416,19 +409,15 @@ void handleAtaqueDeauther() {
     }
   }
 
-  // Atualiza animação de pulso continuamente enquanto ativo
   if (deautherAtivo) {
     static unsigned long lastAnim = 0;
     if (millis() - lastAnim > 80) {
       lastAnim = millis();
-      // Limpa área do indicador e redesenha só o pulso (evita full redraw)
       tft.fillRect(0, 29, 128, 88, C_BG);
-      // Badge ATIVO
       tft.setTextColor(C_RED);
       tft.setCursor(41, 33);
       tft.print("[ ATIVO ]");
       drawDeautherPulse();
-      // Modo
       tft.setTextColor(C_GOLD_DIM);
       tft.setCursor(93, 104);
       tft.print(deauthTipo == 0 ? "BCAST" : "TRGD");
@@ -438,11 +427,275 @@ void handleAtaqueDeauther() {
 }
 
 // ═══════════════════════════════════════════════
-//  HANDSHAKE
+//  DEAUTHER - SCAN DE CLIENTES
 // ═══════════════════════════════════════════════
-void displayAtaqueHandshake() {
+
+static void IRAM_ATTR clientSnifferCb(void *buf,
+                                      wifi_promiscuous_pkt_type_t type) {
+  if (type != WIFI_PKT_DATA && type != WIFI_PKT_MGMT)
+    return;
+
+  auto *pkt = (wifi_promiscuous_pkt_t *)buf;
+  const uint8_t *payload = pkt->payload;
+  int len = pkt->rx_ctrl.sig_len;
+  if (len < 24)
+    return;
+
+  const uint8_t *addr2 = payload + 10;
+  const uint8_t *addr3 = payload + 16;
+
+  bool toBSSID = memcmp(addr3, apRecordSelecionado.bssid, 6) == 0;
+  if (!toBSSID)
+    return;
+
+  if (addr2[0] & 0x01)
+    return;
+  if (memcmp(addr2, apRecordSelecionado.bssid, 6) == 0)
+    return;
+
+  for (int i = 0; i < clientCount; i++) {
+    if (memcmp(clientList[i].mac, addr2, 6) == 0)
+      return;
+  }
+
+  if (clientCount < MAX_CLIENTS) {
+    memcpy(clientList[clientCount].mac, addr2, 6);
+    clientList[clientCount].rssi = pkt->rx_ctrl.rssi;
+    clientCount++;
+  }
+}
+
+static String macShort(const uint8_t *m) {
+  char buf[18];
+  snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", m[0], m[1], m[2],
+           m[3], m[4], m[5]);
+  return String(buf);
+}
+
+// ─────────────────────────────────────────────────────────
+//  SCAN DE CLIENTES — layout redesenhado
+//
+//  Topo (fixo):
+//    [ PARAR SCAN ]   ou   [ ESCANEAR ]     — botão topo
+//    [ VOLTAR ]                              — botão abaixo
+//    ─────────────────────────────────────
+//  Meio: lista de MACs encontrados (scroll)
+//  Rodapé: contador e dica de seleção
+// ─────────────────────────────────────────────────────────
+void displayAtaqueDeautherScan() {
   tft.fillScreen(C_BG);
-  drawHeader("CAP HANDSHAKE", true);
+  drawHeader("CLIENTES", true);
+
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 17);
+  tft.print(truncSSID(ssidSelecionado, 21));
+  drawSeparator(26, C_GREY);
+
+  // ── Botões no topo ──────────────────────────────────────
+  // Botão 1: PARAR SCAN / ESCANEAR (selecionável com scanBtnSel == 0)
+  bool scanBtnActive = (clientScanBtnSel == 0);
+  if (clientScanRunning) {
+    tft.fillRect(4, 29, 120, 16, scanBtnActive ? C_RED : C_BG);
+    tft.drawRect(4, 29, 120, 16, C_RED);
+    tft.setTextColor(scanBtnActive ? C_WHITE : C_RED);
+    tft.setCursor(22, 34);
+    tft.print("[ PARAR SCAN ]");
+  } else {
+    tft.fillRect(4, 29, 120, 16, scanBtnActive ? C_GOLD_SEL : C_BG);
+    tft.drawRect(4, 29, 120, 16, C_GOLD);
+    tft.setTextColor(scanBtnActive ? C_GOLD : C_GOLD_DIM);
+    tft.setCursor(22, 34);
+    tft.print("[ ESCANEAR ]");
+  }
+
+  // Botão 2: VOLTAR (selecionável com scanBtnSel == 1)
+  bool voltarBtnActive = (clientScanBtnSel == 1);
+  tft.fillRect(4, 47, 120, 16, voltarBtnActive ? C_GOLD_SEL : C_BG);
+  tft.drawRect(4, 47, 120, 16, C_GREY);
+  tft.setTextColor(voltarBtnActive ? C_GOLD : C_GREY);
+  tft.setCursor(34, 52);
+  tft.print("< VOLTAR");
+
+  drawSeparator(65, C_GREY);
+
+  // ── Animação de scan ativo ──────────────────────────────
+  if (clientScanRunning) {
+    int dotPos = (millis() / 400) % 4;
+    tft.setTextColor(C_GREEN);
+    tft.setCursor(4, 68);
+    tft.print("Scan");
+    for (int i = 0; i < dotPos; i++)
+      tft.print(".");
+  }
+
+// ── Lista de clientes ───────────────────────────────────
+  if (clientCount == 0) {
+    tft.setTextColor(C_GREY);
+    tft.setCursor(16, 80);
+    tft.print("Nenhum cliente");
+    tft.setCursor(24, 92);
+    tft.print("encontrado...");
+  } else {
+    const int MAX_VIS = 4;
+    int start = 0;
+    int listSel = clientScanBtnSel - 2;
+    if (listSel >= MAX_VIS)
+      start = listSel - MAX_VIS + 1;
+    if (start < 0)
+      start = 0;
+
+    for (int i = 0; i < MAX_VIS; i++) {
+      int idx = start + i;
+      if (idx >= clientCount)
+        break;
+
+      String mac = macShort(clientList[idx].mac);
+
+      bool selected = (idx == listSel);
+      drawMenuItem(0, 68 + i * 18, 128, 17, mac.c_str(), selected);
+    }
+  }
+
+  // ── Rodapé ─────────────────────────────────────────────
+  drawSeparator(140, C_GREY);
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 145);
+  if (clientCount > 0) {
+    int listSel = clientScanBtnSel - 2;
+    if (listSel >= 0) {
+      tft.printf("MAC %d/%d  SEL=Atacar", listSel + 1, clientCount);
+    } else {
+      tft.printf("%d cliente(s)", clientCount);
+    }
+  } else {
+    tft.print("<> navegar  SEL=acao");
+  }
+
+  batteryDraw();
+}
+
+void handleAtaqueDeautherScan() {
+  static unsigned long lastScanDraw = 0;
+  bool selectPressed = (digitalRead(BUTTON_SELECT) == LOW);
+
+  // Redesenha periodicamente enquanto escaneia (animação + novos MACs)
+  if (clientScanRunning && millis() - lastScanDraw > 500) {
+    lastScanDraw = millis();
+    displayAtaqueDeautherScan();
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+
+    // ── Navegação esquerda ────────────────────────────────
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      // Sobe na lista: botões (0,1) depois itens da lista
+      int total = 2 + clientCount; // 2 botões + N clientes
+      clientScanBtnSel =
+          (clientScanBtnSel > 0) ? clientScanBtnSel - 1 : total - 1;
+      lastDebounceTime = millis();
+      displayAtaqueDeautherScan();
+      return;
+    }
+
+    // ── Navegação direita ─────────────────────────────────
+    if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int total = 2 + clientCount;
+      clientScanBtnSel =
+          (clientScanBtnSel < total - 1) ? clientScanBtnSel + 1 : 0;
+      lastDebounceTime = millis();
+      displayAtaqueDeautherScan();
+      return;
+    }
+
+    // ── Seleção ───────────────────────────────────────────
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+
+      if (clientScanBtnSel == 0) {
+        // Botão PARAR SCAN / ESCANEAR
+        if (clientScanRunning) {
+          // Para o scan
+          clientScanRunning = false;
+          esp_wifi_set_promiscuous(false);
+          esp_wifi_set_promiscuous_rx_cb(nullptr);
+          wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+          esp_wifi_set_mode(WIFI_MODE_APSTA);
+        } else {
+          // Inicia novo scan
+          clientCount = 0;
+          clientScanBtnSel = 0;
+          uint8_t ch = (apRecordSelecionado.primary >= 1)
+                           ? apRecordSelecionado.primary
+                           : 1;
+          WiFi.mode(WIFI_MODE_NULL);
+          delay(100);
+          wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+          esp_wifi_init(&cfg);
+          esp_wifi_set_mode(WIFI_MODE_STA);
+          esp_wifi_start();
+          esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
+          esp_wifi_set_promiscuous(true);
+          esp_wifi_set_promiscuous_rx_cb(clientSnifferCb);
+          clientScanRunning = true;
+        }
+        displayAtaqueDeautherScan();
+
+      } else if (clientScanBtnSel == 1) {
+        // Botão VOLTAR
+        if (clientScanRunning) {
+          clientScanRunning = false;
+          esp_wifi_set_promiscuous(false);
+          esp_wifi_set_promiscuous_rx_cb(nullptr);
+          esp_wifi_set_mode(WIFI_MODE_APSTA);
+        }
+        clientScanBtnSel = 0;
+        estadoAtual = ATAQUE_DEAUTHER;
+        displayAtaqueDeauther();
+
+      } else {
+        // Selecionou um cliente da lista → atacar
+        int listSel = clientScanBtnSel - 2;
+        if (listSel >= 0 && listSel < clientCount) {
+          if (clientScanRunning) {
+            clientScanRunning = false;
+            esp_wifi_set_promiscuous(false);
+            esp_wifi_set_promiscuous_rx_cb(nullptr);
+          }
+          if (initRadioForAttack(apRecordSelecionado.primary)) {
+            deautherAtivo = true;
+            deauthTipo = 1; // Targeted
+            deauthCounter = 0;
+            memcpy(targetClientMac, clientList[listSel].mac, 6);
+            if (attackTaskHandle == NULL) {
+              attackTaskRunning = true;
+              xTaskCreatePinnedToCore(attackTask, "AttackTask", 4096, NULL, 1,
+                                      &attackTaskHandle, 1);
+            }
+            estadoAtual = ATAQUE_DEAUTHER;
+            displayAtaqueDeauther();
+          } else {
+            tft.fillScreen(C_BG);
+            drawHeader("DEAUTHER", true);
+            tft.setTextColor(C_RED);
+            tft.setCursor(20, 80);
+            tft.println("ERRO: Radio!");
+            delay(1500);
+            displayAtaqueDeautherScan();
+          }
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  CTS JAMMER
+// ═══════════════════════════════════════════════
+void displayAtaqueCtsJammer() {
+  tft.fillScreen(C_BG);
+  drawHeader("CTS JAMMER", true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
@@ -450,27 +703,287 @@ void displayAtaqueHandshake() {
   tft.print(truncSSID(ssidSelecionado, 21));
   drawSeparator(27, C_GREY);
 
-  tft.setTextColor(C_GOLD);
-  tft.setCursor(20, 60);
-  tft.print("Em desenvolvimento");
-  tft.setTextColor(C_GREY);
-  tft.setCursor(4, 80);
-  tft.print("WPA2 handshake capture");
+  if (!ctsAtivo) {
+    tft.setTextColor(C_WHITE);
+    tft.setCursor(4, 35);
+    tft.print("Oculto & Poderoso");
 
-  drawSeparator(130, C_GREY);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(28, 135);
-  tft.print("SEL = Voltar");
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(4, 50);
+    tft.print("Envia 'Clear-To-Send'");
+    tft.setCursor(4, 62);
+    tft.print("Congela o canal (DoS)");
+    tft.setCursor(4, 74);
+    tft.print("Ignora WPA3/802.11w");
+
+    drawSeparator(95, C_GREY);
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(4, 105);
+    tft.print("SEL = Iniciar");
+    tft.setCursor(4, 117);
+    tft.print("HOLD SEL = Voltar");
+  } else {
+    tft.setTextColor(C_RED);
+    tft.setCursor(38, 40);
+    tft.print("[ ATIVO ]");
+
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(4, 60);
+    tft.print("Canal travado:");
+    tft.setTextColor(C_WHITE);
+    tft.setCursor(90, 60);
+    tft.print(apRecordSelecionado.primary);
+
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(4, 75);
+    tft.print("Frames CTS:");
+    tft.setTextColor(C_WHITE);
+    tft.setCursor(76, 75);
+    tft.printf("%lu", ctsCounter);
+
+    drawSeparator(95, C_GREY);
+    tft.setTextColor(C_RED);
+    tft.setCursor(34, 105);
+    tft.print("SEL = PARAR");
+  }
 
   batteryDraw();
 }
 
-void handleAtaqueHandshake() {
+void handleAtaqueCtsJammer() {
+  static unsigned long holdStart = 0;
+  static bool holdingSelect = false;
+  bool selectPressed = (digitalRead(BUTTON_SELECT) == LOW);
+
   if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (digitalRead(BUTTON_SELECT) == LOW) {
-      estadoAtual = MENU_ATAQUES;
-      displayMenuAtaques();
+    if (!ctsAtivo) {
+      if (selectPressed && !holdingSelect) {
+        holdStart = millis();
+        holdingSelect = true;
+      }
+      if (!selectPressed && holdingSelect) {
+        unsigned long holdTime = millis() - holdStart;
+        if (holdTime > 1000) {
+          estadoAtual = MENU_ATAQUES;
+          displayMenuAtaques();
+        } else {
+          uint8_t canal = (apRecordSelecionado.primary >= 1)
+                              ? apRecordSelecionado.primary
+                              : 1;
+          if (initRadioForAttack(canal)) {
+            ctsAtivo = true;
+            ctsCounter = 0;
+            if (attackTaskHandle == NULL) {
+              attackTaskRunning = true;
+              xTaskCreatePinnedToCore(attackTask, "AttackTask", 4096, NULL, 1,
+                                      &attackTaskHandle, 1);
+            }
+            displayAtaqueCtsJammer();
+          } else {
+            tft.fillScreen(C_BG);
+            drawHeader("CTS JAMMER", true);
+            tft.setTextColor(C_RED);
+            tft.setCursor(20, 80);
+            tft.println("ERRO: Radio!");
+            delay(1500);
+            displayAtaqueCtsJammer();
+          }
+        }
+        holdingSelect = false;
+        lastDebounceTime = millis();
+      }
+    } else {
+      if (selectPressed && !holdingSelect) {
+        ctsAtivo = false;
+        deinitRadio();
+        if (attackTaskHandle != NULL) {
+          attackTaskRunning = false;
+          vTaskDelay(pdMS_TO_TICKS(300));
+          attackTaskHandle = NULL;
+        }
+        tft.fillScreen(C_BG);
+        drawHeader("CTS JAMMER", true);
+        tft.setTextColor(C_GOLD);
+        tft.setCursor(28, 80);
+        tft.println("ATAQUE PARADO");
+        delay(1500);
+        displayAtaqueCtsJammer();
+        lastDebounceTime = millis();
+        holdingSelect = true;
+      }
+      if (!selectPressed)
+        holdingSelect = false;
+    }
+  }
+
+  if (ctsAtivo) {
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate > 200) {
+      lastUpdate = millis();
+      tft.setTextSize(1);
+      tft.fillRect(76, 75, 50, 8, C_BG);
+      tft.setTextColor(C_WHITE);
+      tft.setCursor(76, 75);
+      tft.printf("%lu", ctsCounter);
+      batteryDraw();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  BEACON SPAM - MODO
+// ═══════════════════════════════════════════════
+static int beaconModoSel = 1;
+
+void displayAtaqueBeaconModo() {
+  tft.fillScreen(C_BG);
+  drawHeader("BEACON MODO", true);
+
+  tft.setTextSize(1);
+  const char *itens[] = {"< VOLTAR", "Copia", "Aleatorio", "Personalizado"};
+
+  for (int i = 0; i < 4; i++) {
+    drawMenuItem(0, 27 + i * 20, 128, 19, itens[i], beaconModoSel == i);
+  }
+
+  batteryDraw();
+}
+
+void handleAtaqueBeaconModo() {
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      beaconModoSel = (beaconModoSel > 0) ? beaconModoSel - 1 : 3;
       lastDebounceTime = millis();
+      displayAtaqueBeaconModo();
+    }
+    if (digitalRead(BUTTON_RIGHT) == LOW) {
+      beaconModoSel = (beaconModoSel < 3) ? beaconModoSel + 1 : 0;
+      lastDebounceTime = millis();
+      displayAtaqueBeaconModo();
+    }
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      if (beaconModoSel == 0) {
+        estadoAtual = MENU_ATAQUES;
+        displayMenuAtaques();
+      } else {
+        beaconModo = beaconModoSel - 1;
+        if (beaconModo == 2) {
+          estadoAtual = ATAQUE_BEACON_CUSTOM;
+          displayAtaqueBeaconCustom();
+        } else {
+          estadoAtual = ATAQUE_BEACON;
+          displayAtaqueBeacon();
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  BEACON SPAM - CUSTOM (TECLADO)
+// ═══════════════════════════════════════════════
+static const char *kbdLower =
+    "abcdefghijklmnopqrstuvwxyz0123456789_-@!?*.#%&+ ";
+static const char *kbdUpper =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-@!?*.#%&+ ";
+static int kbdSel = 0;
+static bool kbdCaps = true;
+
+void displayAtaqueBeaconCustom() {
+  tft.fillScreen(C_BG);
+  drawHeader("NOME CUSTOM", true);
+
+  tft.drawRect(4, 18, 120, 18, C_GOLD);
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(8, 23);
+  tft.print(beaconCustomSSID);
+
+  tft.setTextSize(1);
+  const char *chars = kbdCaps ? kbdUpper : kbdLower;
+  for (int i = 0; i < 48; i++) {
+    int r = i / 8;
+    int c = i % 8;
+    int x = 6 + c * 15;
+    int y = 40 + r * 14;
+
+    if (i == kbdSel) {
+      tft.fillRect(x - 2, y - 1, 11, 11, C_GOLD_SEL);
+      tft.setTextColor(C_GOLD);
+    } else {
+      tft.setTextColor(C_WHITE);
+    }
+    tft.setCursor(x, y + 1);
+    tft.print(chars[i]);
+  }
+
+  int yBtn = 138;
+
+  if (kbdSel == 48) {
+    tft.fillRect(4, yBtn - 2, 35, 12, C_GOLD_SEL);
+    tft.setTextColor(C_GOLD);
+  } else {
+    tft.setTextColor(kbdCaps ? C_GREEN : C_WHITE);
+  }
+  tft.setCursor(6, yBtn);
+  tft.print("SHIFT");
+
+  if (kbdSel == 49) {
+    tft.fillRect(45, yBtn - 2, 25, 12, C_GOLD_SEL);
+    tft.setTextColor(C_GOLD);
+  } else {
+    tft.setTextColor(C_RED);
+  }
+  tft.setCursor(48, yBtn);
+  tft.print("DEL");
+
+  if (kbdSel == 50) {
+    tft.fillRect(75, yBtn - 2, 45, 12, C_GOLD_SEL);
+    tft.setTextColor(C_GOLD);
+  } else {
+    tft.setTextColor(C_GREEN);
+  }
+  tft.setCursor(82, yBtn);
+  tft.print("ENTER");
+
+  batteryDraw();
+}
+
+void handleAtaqueBeaconCustom() {
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      kbdSel--;
+      if (kbdSel < 0)
+        kbdSel = 50;
+      lastDebounceTime = millis();
+      displayAtaqueBeaconCustom();
+    }
+    if (digitalRead(BUTTON_RIGHT) == LOW) {
+      kbdSel++;
+      if (kbdSel > 50)
+        kbdSel = 0;
+      lastDebounceTime = millis();
+      displayAtaqueBeaconCustom();
+    }
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      if (kbdSel < 48) {
+        if (beaconCustomSSID.length() < 32) {
+          const char *chars = kbdCaps ? kbdUpper : kbdLower;
+          beaconCustomSSID += chars[kbdSel];
+        }
+      } else if (kbdSel == 48) {
+        kbdCaps = !kbdCaps;
+      } else if (kbdSel == 49) {
+        if (beaconCustomSSID.length() > 0) {
+          beaconCustomSSID.remove(beaconCustomSSID.length() - 1);
+        }
+      } else if (kbdSel == 50) {
+        estadoAtual = ATAQUE_BEACON;
+        displayAtaqueBeacon();
+        return;
+      }
+      displayAtaqueBeaconCustom();
     }
   }
 }
@@ -485,15 +998,22 @@ void displayAtaqueBeacon() {
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 17);
-  tft.print(truncSSID(ssidSelecionado, 21));
+
+  if (beaconModo == 0) {
+    tft.print(truncSSID(ssidSelecionado, 21));
+  } else if (beaconModo == 1) {
+    tft.print("[ Aleatorio ]");
+  } else {
+    tft.print(truncSSID(beaconCustomSSID, 21));
+  }
+
   drawSeparator(26, C_GREY);
 
   if (!beaconAtivo) {
     tft.setTextColor(C_WHITE);
     tft.setCursor(8, 34);
-    tft.print("Redes clones:");
+    tft.print("Pool de redes:");
 
-    // Caixa do contador
     tft.drawRect(38, 46, 52, 26, C_GOLD);
     tft.drawRect(39, 47, 50, 24, C_GOLD_SEL);
     tft.setTextSize(2);
@@ -506,9 +1026,9 @@ void displayAtaqueBeacon() {
     drawSeparator(78, C_GREY);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(8, 84);
-    tft.print("< > Quantidade");
+    tft.print("< > Tamanho pool");
     tft.setCursor(8, 96);
-    tft.print("SEL = Iniciar ");
+    tft.print("SEL = Iniciar");
     tft.setCursor(8, 108);
     tft.print("HOLD SEL = Voltar");
   } else {
@@ -518,7 +1038,7 @@ void displayAtaqueBeacon() {
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
-    tft.print("Clones:");
+    tft.print("Pool:");
     tft.setTextColor(C_GOLD);
     tft.setCursor(50, 50);
     tft.print(beaconQuantidade);
@@ -555,7 +1075,9 @@ void handleAtaqueBeacon() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (!beaconAtivo) {
       if (digitalRead(BUTTON_LEFT) == LOW) {
-        if (beaconQuantidade > 10)
+        if (beaconQuantidade > 100)
+          beaconQuantidade -= 25;
+        else if (beaconQuantidade > 10)
           beaconQuantidade -= 5;
         else if (beaconQuantidade > 1)
           beaconQuantidade -= 1;
@@ -565,10 +1087,12 @@ void handleAtaqueBeacon() {
       if (digitalRead(BUTTON_RIGHT) == LOW) {
         if (beaconQuantidade < 10)
           beaconQuantidade += 1;
-        else
+        else if (beaconQuantidade < 100)
           beaconQuantidade += 5;
-        if (beaconQuantidade > 200)
-          beaconQuantidade = 200;
+        else
+          beaconQuantidade += 25;
+        if (beaconQuantidade > 600)
+          beaconQuantidade = 600;
         lastDebounceTime = millis();
         displayAtaqueBeacon();
       }
@@ -579,12 +1103,15 @@ void handleAtaqueBeacon() {
       if (!selectPressed && holdingSelect) {
         unsigned long holdTime = millis() - holdStart;
         if (holdTime > 1000) {
-          estadoAtual = MENU_ATAQUES;
+          estadoAtual = ATAQUE_BEACON_MODO;
           beaconAtivo = false;
           beaconCounter = 0;
-          displayMenuAtaques();
+          displayAtaqueBeaconModo();
         } else {
-          if (initRadioForAttack(apRecordSelecionado.primary)) {
+          uint8_t canal = (apRecordSelecionado.primary >= 1)
+                              ? apRecordSelecionado.primary
+                              : 1;
+          if (initRadioForAttack(canal)) {
             beaconAtivo = true;
             beaconCounter = 0;
             if (attackTaskHandle == NULL) {
@@ -629,6 +1156,34 @@ void handleAtaqueBeacon() {
       if (!selectPressed)
         holdingSelect = false;
     }
+  }
+
+  if (beaconAtivo) {
+    static unsigned long lastBeaconUpdate = 0;
+    if (millis() - lastBeaconUpdate > 200) {
+      lastBeaconUpdate = millis();
+      tft.setTextSize(1);
+      tft.fillRect(56, 65, 70, 8, C_BG);
+      tft.setTextColor(C_WHITE);
+      tft.setCursor(56, 65);
+      tft.printf("%lu", beaconCounter);
+      int dotPos = (millis() / 300) % 4;
+      tft.fillRect(4, 80, 30, 8, C_BG);
+      tft.setTextColor(C_GREEN);
+      tft.setCursor(4, 80);
+      for (int i = 0; i < 4; i++) {
+        if (i <= dotPos)
+          tft.print(".");
+      }
+      batteryDraw();
+    }
+  } else if (!beaconAtivo && attackTaskHandle != NULL && attackTaskRunning) {
+    attackTaskRunning = false;
+    deinitRadio();
+    attackTaskHandle = NULL;
+    beaconCounter = 0;
+    displayAtaqueBeacon();
+    lastDebounceTime = millis();
   }
 }
 

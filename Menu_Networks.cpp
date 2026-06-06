@@ -4,6 +4,21 @@
 #include "Menu_Main.h"
 #include "Menu_Attacks.h"
 
+static String getAuthShort(wifi_auth_mode_t auth) {
+  switch (auth) {
+    case WIFI_AUTH_OPEN: return "OPN";
+    case WIFI_AUTH_WEP: return "WEP";
+    case WIFI_AUTH_WPA_PSK: return "WPA";
+    case WIFI_AUTH_WPA2_PSK: return "WP2";
+    case WIFI_AUTH_WPA_WPA2_PSK: return "WP2";
+    case WIFI_AUTH_WPA2_ENTERPRISE: return "ENT";
+    case WIFI_AUTH_WPA3_PSK: return "WP3";
+    case WIFI_AUTH_WPA2_WPA3_PSK: return "WP3";
+    case WIFI_AUTH_OWE: return "OWE";
+    default: return "UNK";
+  }
+}
+
 void displayNetworks() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
@@ -35,13 +50,15 @@ void displayNetworks() {
     int netIdx = scrollOffset + i;
     if (netIdx >= numRedes) break;
     
-    String networkName = redes[netIdx];
-    if (networkName.length() > 17) {
-      networkName = networkName.substring(0, 17) + ".";
+    String sec = getAuthShort(ap_records[netIdx].authmode);
+    String displayName = "[" + sec + "] " + redes[netIdx];
+    
+    if (displayName.length() > 21) {
+      displayName = displayName.substring(0, 20) + ".";
     }
     
     bool sel = (redeSelecionada == (netIdx + 1));
-    drawMenuItem(0, 34 + i * 18, 128, 18, networkName.c_str(), sel, false);
+    drawMenuItem(0, 34 + i * 18, 128, 18, displayName.c_str(), sel, false);
   }
 }
 

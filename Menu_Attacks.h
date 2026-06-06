@@ -12,8 +12,17 @@ void handleAtaqueCaptivePortal();
 void displayAtaqueDeauther();
 void handleAtaqueDeauther();
 
-void displayAtaqueHandshake();
-void handleAtaqueHandshake();
+void displayAtaqueDeautherScan();
+void handleAtaqueDeautherScan();
+
+void displayAtaqueCtsJammer();
+void handleAtaqueCtsJammer();
+
+void displayAtaqueBeaconModo();
+void handleAtaqueBeaconModo();
+
+void displayAtaqueBeaconCustom();
+void handleAtaqueBeaconCustom();
 
 void displayAtaqueBeacon();
 void handleAtaqueBeacon();

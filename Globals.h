@@ -21,7 +21,10 @@ enum EstadoTela {
   MENU_ATAQUES,
   ATAQUE_CAPTIVE_PORTAL,
   ATAQUE_DEAUTHER,
-  ATAQUE_HANDSHAKE,
+  ATAQUE_DEAUTHER_SCAN,
+  ATAQUE_CTS_JAMMER,
+  ATAQUE_BEACON_MODO,
+  ATAQUE_BEACON_CUSTOM,
   ATAQUE_BEACON,
   VISUALIZAR_CREDENCIAIS,
   MODO_BLUETOOTH,
@@ -85,8 +88,27 @@ extern int opcaoSubMenuAtaque;
 extern bool deautherAtivo;
 extern unsigned long deauthCounter;
 extern int deauthTipo;
+extern int clientScanBtnSel;  // declaração
+
+// Clientes descobertos (Deauther Targeted)
+#define MAX_CLIENTS 16
+struct ClientInfo {
+  uint8_t mac[6];
+  int8_t  rssi;
+};
+extern ClientInfo clientList[MAX_CLIENTS];
+extern int clientCount;
+extern int clientSelected;
+extern bool clientScanRunning;
+extern uint8_t targetClientMac[6]; // MAC do cliente alvo para deauth unicast
+
+// CTS Jammer
+extern bool ctsAtivo;
+extern unsigned long ctsCounter;
 
 // Beacon Spam
+extern int beaconModo;
+extern String beaconCustomSSID;
 extern int beaconQuantidade;
 extern bool beaconAtivo;
 extern unsigned long beaconCounter;
