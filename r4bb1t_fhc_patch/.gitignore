@@ -1,0 +1,31 @@
+# Arduino build artifacts
+build/
+*.elf
+*.bin
+*.hex
+*.map
+*.sym
+
+# ESP-IDF / PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+sdkconfig
+sdkconfig.old
+
+# Credenciais capturadas (dados sensíveis do SPIFFS)
+data/credenciais.txt
+
+# OS generated
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+*.code-workspace
+*.suo
+*.user
+
+# Logs
+*.log

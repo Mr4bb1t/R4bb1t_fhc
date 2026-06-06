@@ -1,0 +1,170 @@
+// Splash.cpp — exibe /r4bb1t.bmp do SPIFFS como splash screen.
+//
+// Estética Cyber Edition:
+//  1. Exibe BMP centralizado (lógica original preservada)
+//  2. Após imagem: texto "R4BB1T" em dourado + barra de loading pixelada
+
+#include "Splash.h"
+#include "Globals.h"
+#include "Config.h"
+#include <SPIFFS.h>
+
+// ── Helpers para ler little-endian do SPIFFS ──────
+static uint16_t r16(File &f) {
+  return (uint16_t)f.read() | ((uint16_t)f.read() << 8);
+}
+static uint32_t r32(File &f) {
+  uint32_t lo = r16(f);
+  return lo | ((uint32_t)r16(f) << 16);
+}
+
+// ── Barra de loading pixelada estilo Cyber Edition ──
+static void drawLoadingBar(int progress, int total) {
+  const int BX = 8;
+  const int BY = 148;
+  const int BW = 112;
+  const int BH = 5;
+  const int BLOCK = 4; // largura de cada bloco
+
+  // Fundo da barra
+  tft.fillRect(BX, BY, BW, BH, C_GREY_DARK);
+  // Borda
+  tft.drawRect(BX - 1, BY - 1, BW + 2, BH + 2, C_GOLD_DIM);
+
+  int fill = (BW * progress) / total;
+  // Blocos pixelados
+  for (int bx = BX; bx < BX + fill - BLOCK; bx += BLOCK + 1) {
+    tft.fillRect(bx, BY, BLOCK, BH, C_GOLD);
+  }
+}
+
+void displaySplash(unsigned long delayMs) {
+  tft.fillScreen(TFT_BLACK);
+
+  File f = SPIFFS.open("/r4bb1t.bmp", "r");
+  if (!f) {
+    tft.setTextColor(C_RED);
+    tft.setTextSize(1);
+    tft.setCursor(4, 72);
+    tft.print("SPIFFS: r4bb1t.bmp");
+    tft.setCursor(4, 84);
+    tft.print("nao encontrado");
+    delay(delayMs);
+    return;
+  }
+
+  // ── Cabeçalho BMP ─────────────────────────────
+  if (r16(f) != 0x4D42) {
+    f.close();
+    delay(delayMs);
+    return;
+  }                             // "BM"
+  r32(f);                       // filesize
+  r32(f);                       // reservado
+  uint32_t dataOffset = r32(f); // offset dos pixels
+  r32(f);                       // tamanho DIB header
+  int32_t bmpW = (int32_t)r32(f);
+  int32_t bmpH = (int32_t)r32(f);
+  r16(f); // planes
+  uint16_t bpp = r16(f);
+  uint32_t comp = r32(f);
+
+  if (bpp != 24 || comp != 0) {
+    tft.setTextColor(C_GOLD);
+    tft.setTextSize(1);
+    tft.setCursor(4, 72);
+    tft.print("BMP: must be 24-bit");
+    tft.setCursor(4, 84);
+    tft.print("uncompressed");
+    f.close();
+    delay(delayMs);
+    return;
+  }
+
+  bool flipY = (bmpH > 0);
+  if (bmpH < 0) bmpH = -bmpH;
+
+  // ── Escala proporcional — imagem ocupa y=0..139 (deixa rodapé para texto) ──
+  const int16_t scrW = (int16_t)tft.width();
+  const int16_t scrH = 140; // reserva 20px no rodapé
+
+  uint32_t sx = (uint32_t)scrW * 256 / (uint32_t)bmpW;
+  uint32_t sy = (uint32_t)scrH * 256 / (uint32_t)bmpH;
+  uint32_t sc = (sx < sy) ? sx : sy;
+  if (sc > 256) sc = 256;
+
+  int16_t dW = (int16_t)((uint32_t)bmpW * sc / 256);
+  int16_t dH = (int16_t)((uint32_t)bmpH * sc / 256);
+  if (dW < 1) dW = 1;
+  if (dH < 1) dH = 1;
+
+  int16_t ox = (scrW - dW) / 2;
+  int16_t oy = (scrH - dH) / 2;
+
+  // ── Aloca framebuffer ─────────────────────────
+  size_t fbSize = (size_t)dW * (size_t)dH;
+  uint16_t *fb = (uint16_t *)malloc(fbSize * sizeof(uint16_t));
+
+  uint32_t rowBytes = ((uint32_t)(bmpW * 3 + 3) / 4) * 4;
+  uint8_t  *row = (uint8_t *)malloc(rowBytes);
+
+  if (!fb || !row) {
+    if (fb)  free(fb);
+    if (row) free(row);
+    f.close();
+    tft.setTextColor(C_RED);
+    tft.setTextSize(1);
+    tft.setCursor(4, 72);
+    tft.print("Splash: sem memoria");
+    delay(delayMs);
+    return;
+  }
+
+  // ── Leitura sequencial ─────────────────────────
+  f.seek(dataOffset);
+
+  for (int32_t fileRow = 0; fileRow < bmpH; fileRow++) {
+    if (f.read(row, rowBytes) != (int)rowBytes) break;
+
+    int32_t imgY = flipY ? (bmpH - 1 - fileRow) : fileRow;
+    int16_t sY   = (int16_t)((int32_t)imgY * dH / bmpH);
+    if (sY < 0 || sY >= dH) continue;
+
+    uint16_t *fbRow = &fb[(size_t)sY * (size_t)dW];
+    for (int16_t x = 0; x < dW; x++) {
+      int32_t sX = (int32_t)x * bmpW / dW;
+      uint8_t b  = row[sX * 3 + 0];
+      uint8_t g  = row[sX * 3 + 1];
+      uint8_t r2 = row[sX * 3 + 2];
+      fbRow[x] = ((uint16_t)(r2 & 0xF8) << 8) |
+                 ((uint16_t)(g  & 0xFC) << 3) |
+                 (b >> 3);
+    }
+  }
+
+  free(row);
+  f.close();
+
+  // ── Envia framebuffer ─────────────────────────
+  tft.setSwapBytes(true);
+  tft.pushImage(ox, oy, dW, dH, fb);
+  tft.setSwapBytes(false);
+  free(fb);
+
+  // ── Rodapé Cyber Edition ──────────────────────
+  // Texto "R4BB1T" em dourado, centralizado
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD);
+  tft.setCursor(43, 134);
+  tft.print("R4BB1T");
+
+  // Barra de loading animada (blocos pixelados)
+  if (delayMs > 0) {
+    const int STEPS = 20;
+    unsigned long stepMs = delayMs / STEPS;
+    for (int i = 1; i <= STEPS; i++) {
+      drawLoadingBar(i, STEPS);
+      delay(stepMs);
+    }
+  }
+}

@@ -153,12 +153,6 @@ O diretório `data/` contém os arquivos do sistema de arquivos (splash screen B
 1. Instale o plugin [Arduino ESP32 LittleFS/SPIFFS Data Upload](https://github.com/me-no-dev/arduino-esp32fs-plugin)
 2. Vá em **Ferramentas → ESP32 Sketch Data Upload**
 
-### Patch de Injeção de Pacotes WiFi (Bypass) ⚠️
-Para que os ataques WiFi (Deauther, Beacon Spam) funcionem corretamente sem serem bloqueados pelos filtros do driver nativo da Espressif, é **obrigatório** aplicar um patch na biblioteca pré-compilada. 
-1. Feche o Arduino IDE.
-2. Execute o arquivo `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS) que acompanha o repositório. (Dê permissão de execução no Linux/macOS: `chmod +x patch_libnet.sh`).
-3. Aguarde a mensagem de sucesso. Este procedimento contorna o bloqueio de envio de pacotes de gerenciamento forjados.
-
 ### Compilar e Gravar
 1. Abra `r4bb1t_fhc.ino` no Arduino IDE
 2. Selecione a placa: `ESP32 Dev Module`
