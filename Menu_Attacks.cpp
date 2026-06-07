@@ -49,16 +49,20 @@ void displayMenuAtaques() {
 void handleMenuAtaques() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
-      opcaoAtaqueSelecionada =
-          (opcaoAtaqueSelecionada > 0) ? opcaoAtaqueSelecionada - 1 : 4;
+      int old = opcaoAtaqueSelecionada;
+      opcaoAtaqueSelecionada = (opcaoAtaqueSelecionada > 0) ? opcaoAtaqueSelecionada - 1 : 4;
       lastDebounceTime = millis();
-      displayMenuAtaques();
+      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "CTS Jammer", "Beacon Spam"};
+      drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
-      opcaoAtaqueSelecionada =
-          (opcaoAtaqueSelecionada < 4) ? opcaoAtaqueSelecionada + 1 : 0;
+      int old = opcaoAtaqueSelecionada;
+      opcaoAtaqueSelecionada = (opcaoAtaqueSelecionada < 4) ? opcaoAtaqueSelecionada + 1 : 0;
       lastDebounceTime = millis();
-      displayMenuAtaques();
+      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "CTS Jammer", "Beacon Spam"};
+      drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       switch (opcaoAtaqueSelecionada) {
@@ -127,16 +131,20 @@ void handleAtaqueCaptivePortal() {
   dnsServer.processNextRequest();
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
-      opcaoSubMenuAtaque =
-          (opcaoSubMenuAtaque > 0) ? opcaoSubMenuAtaque - 1 : 2;
+      int old = opcaoSubMenuAtaque;
+      opcaoSubMenuAtaque = (opcaoSubMenuAtaque > 0) ? opcaoSubMenuAtaque - 1 : 2;
       lastDebounceTime = millis();
-      displayAtaqueCaptivePortal();
+      const char *items[] = {"< VOLTAR", "Apagar dados", "Credenciais"};
+      drawMenuItem(0, 80 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 80 + opcaoSubMenuAtaque * 20, 128, 19, items[opcaoSubMenuAtaque], true);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
-      opcaoSubMenuAtaque =
-          (opcaoSubMenuAtaque < 2) ? opcaoSubMenuAtaque + 1 : 0;
+      int old = opcaoSubMenuAtaque;
+      opcaoSubMenuAtaque = (opcaoSubMenuAtaque < 2) ? opcaoSubMenuAtaque + 1 : 0;
       lastDebounceTime = millis();
-      displayAtaqueCaptivePortal();
+      const char *items[] = {"< VOLTAR", "Apagar dados", "Credenciais"};
+      drawMenuItem(0, 80 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 80 + opcaoSubMenuAtaque * 20, 128, 19, items[opcaoSubMenuAtaque], true);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       switch (opcaoSubMenuAtaque) {
@@ -191,14 +199,20 @@ void handleConfirmaApagar() {
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
+      int old = confirmaApagarSel;
       confirmaApagarSel = (confirmaApagarSel > 0) ? confirmaApagarSel - 1 : 1;
       lastDebounceTime = millis();
-      displayConfirmaApagar();
+      const char *items[] = {"< CANCELAR", "[ APAGAR ]"};
+      drawMenuItem(0, 70 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 70 + confirmaApagarSel * 20, 128, 19, items[confirmaApagarSel], true);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = confirmaApagarSel;
       confirmaApagarSel = (confirmaApagarSel < 1) ? confirmaApagarSel + 1 : 0;
       lastDebounceTime = millis();
-      displayConfirmaApagar();
+      const char *items[] = {"< CANCELAR", "[ APAGAR ]"};
+      drawMenuItem(0, 70 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 70 + confirmaApagarSel * 20, 128, 19, items[confirmaApagarSel], true);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       if (confirmaApagarSel == 0) {
@@ -233,6 +247,14 @@ static void drawDeautherPulse() {
 
   int outerR = 22 + (phase < 16 ? phase / 3 : (31 - phase) / 3);
   uint16_t ringColor = (phase < 16) ? C_RED : C_GOLD;
+
+  static int lastOuterR = 0;
+  if (lastOuterR > 0 && lastOuterR != outerR) {
+    tft.drawCircle(cx, cy, lastOuterR, C_BG);
+    tft.drawCircle(cx, cy, lastOuterR - 1, C_BG);
+  }
+  lastOuterR = outerR;
+
   tft.drawCircle(cx, cy, outerR, ringColor);
   tft.drawCircle(cx, cy, outerR - 1, ringColor);
 
@@ -289,6 +311,10 @@ void displayAtaqueDeauther() {
     tft.print("<         o         >");
 
   } else {
+    tft.setTextColor(C_RED);
+    tft.setCursor(41, 33);
+    tft.print("[ ATIVO ]");
+
     drawDeautherPulse();
 
     tft.setTextColor(C_GOLD_DIM);
@@ -313,15 +339,21 @@ void handleAtaqueDeauther() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (!deautherAtivo) {
       if (digitalRead(BUTTON_LEFT) == LOW) {
+        int old = deauthMenuSel;
         deauthMenuSel = (deauthMenuSel > 0) ? deauthMenuSel - 1 : 2;
         lastDebounceTime = millis();
-        displayAtaqueDeauther();
+        const char *items[] = {"< VOLTAR", "Broadcast", "Targeted"};
+        drawMenuItem(0, 29 + old * 20, 128, 19, items[old], false);
+        drawMenuItem(0, 29 + deauthMenuSel * 20, 128, 19, items[deauthMenuSel], true);
         return;
       }
       if (digitalRead(BUTTON_RIGHT) == LOW) {
+        int old = deauthMenuSel;
         deauthMenuSel = (deauthMenuSel < 2) ? deauthMenuSel + 1 : 0;
         lastDebounceTime = millis();
-        displayAtaqueDeauther();
+        const char *items[] = {"< VOLTAR", "Broadcast", "Targeted"};
+        drawMenuItem(0, 29 + old * 20, 128, 19, items[old], false);
+        drawMenuItem(0, 29 + deauthMenuSel * 20, 128, 19, items[deauthMenuSel], true);
         return;
       }
       if (selectPressed && !holdingSelect) {
@@ -413,14 +445,7 @@ void handleAtaqueDeauther() {
     static unsigned long lastAnim = 0;
     if (millis() - lastAnim > 80) {
       lastAnim = millis();
-      tft.fillRect(0, 29, 128, 88, C_BG);
-      tft.setTextColor(C_RED);
-      tft.setCursor(41, 33);
-      tft.print("[ ATIVO ]");
       drawDeautherPulse();
-      tft.setTextColor(C_GOLD_DIM);
-      tft.setCursor(93, 104);
-      tft.print(deauthTipo == 0 ? "BCAST" : "TRGD");
       batteryDraw();
     }
   }
@@ -761,15 +786,21 @@ void handleAtaqueCtsJammer() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (!ctsAtivo) {
       if (digitalRead(BUTTON_LEFT) == LOW) {
+        int old = ctsMenuSel;
         ctsMenuSel = (ctsMenuSel > 0) ? ctsMenuSel - 1 : 1;
         lastDebounceTime = millis();
-        displayAtaqueCtsJammer();
+        const char *items[] = {"< VOLTAR", "Iniciar Ataque"};
+        drawMenuItem(0, 102 + old * 20, 128, 19, items[old], false);
+        drawMenuItem(0, 102 + ctsMenuSel * 20, 128, 19, items[ctsMenuSel], true);
         return;
       }
       if (digitalRead(BUTTON_RIGHT) == LOW) {
+        int old = ctsMenuSel;
         ctsMenuSel = (ctsMenuSel < 1) ? ctsMenuSel + 1 : 0;
         lastDebounceTime = millis();
-        displayAtaqueCtsJammer();
+        const char *items[] = {"< VOLTAR", "Iniciar Ataque"};
+        drawMenuItem(0, 102 + old * 20, 128, 19, items[old], false);
+        drawMenuItem(0, 102 + ctsMenuSel * 20, 128, 19, items[ctsMenuSel], true);
         return;
       }
 
@@ -867,14 +898,20 @@ void displayAtaqueBeaconModo() {
 void handleAtaqueBeaconModo() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
+      int old = beaconModoSel;
       beaconModoSel = (beaconModoSel > 0) ? beaconModoSel - 1 : 3;
       lastDebounceTime = millis();
-      displayAtaqueBeaconModo();
+      const char *items[] = {"< VOLTAR", "Copia", "Aleatorio", "Personalizado"};
+      drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 27 + beaconModoSel * 20, 128, 19, items[beaconModoSel], true);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = beaconModoSel;
       beaconModoSel = (beaconModoSel < 3) ? beaconModoSel + 1 : 0;
       lastDebounceTime = millis();
-      displayAtaqueBeaconModo();
+      const char *items[] = {"< VOLTAR", "Copia", "Aleatorio", "Personalizado"};
+      drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
+      drawMenuItem(0, 27 + beaconModoSel * 20, 128, 19, items[beaconModoSel], true);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();

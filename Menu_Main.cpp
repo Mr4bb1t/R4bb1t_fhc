@@ -48,74 +48,65 @@ static const char *labels[4] = {"WiFi", "BT", "RF 433", "Config"};
 static unsigned long lastActivityTime = 0;
 
 // ──────────────────────────────────────────────
-static void updateMenuInicialItems() {
+static void drawMenuInicialItem(int i, bool sel) {
   if (menuStyle == 1) {
-    // Modo Lista
-    for (int i = 0; i < 4; i++) {
-      int y = 22 + i * 28;
-      int h = 26;
-      bool sel = (opcaoMenuInicial == i);
-      uint16_t iconColor = sel ? C_GOLD : C_GOLD_DIM;
+    int y = 22 + i * 28;
+    int h = 26;
+    uint16_t iconColor = sel ? C_GOLD : C_GOLD_DIM;
 
-      if (sel) {
-        tft.fillRect(0, y, 128, h, C_GOLD_SEL);
-        tft.fillRect(0, y, 3, h, C_GOLD);
-        tft.setTextColor(C_GOLD);
-      } else {
-        tft.fillRect(0, y, 128, h, C_BG);
-        tft.fillRect(0, y, 1, h, C_GREY);
-        tft.setTextColor(C_WHITE);
-      }
-
-      // Alinhamento centralizado para todos os ícones pequenos (X base = 4)
-      if (i == 0)      drawWiFiIconSmall(4, y, iconColor);
-      else if (i == 1) drawBluetoothIconSmall(4, y, iconColor);
-      else if (i == 2) drawRFIconSmall(4, y, iconColor);
-      else             drawSettingsIconSmall(4, y, iconColor, sel ? C_GOLD_SEL : C_BG);
-
-      tft.setCursor(34, y + (h - 8) / 2 + 1);
-      tft.print(labels[i]);
-
-      tft.setTextColor(sel ? C_GOLD : C_GREY);
-      tft.setCursor(128 - 9, y + (h - 8) / 2 + 1);
-      tft.print(">");
-
-      tft.drawFastHLine(0, y + h - 1, 128, C_GREY);
+    if (sel) {
+      tft.fillRect(0, y, 128, h, C_GOLD_SEL);
+      tft.fillRect(0, y, 3, h, C_GOLD);
+      tft.setTextColor(C_GOLD);
+    } else {
+      tft.fillRect(0, y, 128, h, C_BG);
+      tft.fillRect(0, y, 1, h, C_GREY);
+      tft.setTextColor(C_WHITE);
     }
+
+    if (i == 0)      drawWiFiIconSmall(4, y, iconColor);
+    else if (i == 1) drawBluetoothIconSmall(4, y, iconColor);
+    else if (i == 2) drawRFIconSmall(4, y, iconColor);
+    else             drawSettingsIconSmall(4, y, iconColor, sel ? C_GOLD_SEL : C_BG);
+
+    tft.setCursor(34, y + (h - 8) / 2 + 1);
+    tft.print(labels[i]);
+
+    tft.setTextColor(sel ? C_GOLD : C_GREY);
+    tft.setCursor(128 - 9, y + (h - 8) / 2 + 1);
+    tft.print(">");
+
+    tft.drawFastHLine(0, y + h - 1, 128, C_GREY);
   } else {
-    // Modo Grade (Quadradinho)
-    for (int i = 0; i < 4; i++) {
-      const Cell &c = cells[i];
-      bool sel = (opcaoMenuInicial == i);
+    const Cell &c = cells[i];
 
-      uint16_t borderColor = sel ? C_GOLD : C_GREY;
-      uint16_t iconColor   = sel ? C_GOLD : C_GOLD_DIM;
-      uint16_t textColor   = sel ? C_GOLD : C_WHITE;
+    uint16_t borderColor = sel ? C_GOLD : C_GREY;
+    uint16_t iconColor   = sel ? C_GOLD : C_GOLD_DIM;
+    uint16_t textColor   = sel ? C_GOLD : C_WHITE;
 
-      // Fundo da célula
-      tft.fillRect(c.x, c.y, c.w, c.h, C_BG);
+    tft.fillRect(c.x, c.y, c.w, c.h, C_BG);
+    tft.drawRect(c.x, c.y, c.w, c.h, borderColor);
 
-      // Borda da célula
-      tft.drawRect(c.x, c.y, c.w, c.h, borderColor);
-
-      // Borda interna extra para item selecionado
-      if (sel) {
-        tft.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, C_GOLD_SEL);
-      }
-
-      // Ícones
-      if (i == 0) drawWiFiIcon(iconX[i], iconY[i], iconColor);
-      else if (i == 1) drawBluetoothIcon(iconX[i], iconY[i], iconColor);
-      else if (i == 2) drawRFIcon(iconX[i], iconY[i], iconColor);
-      else drawSettingsIcon(iconX[i], iconY[i], iconColor, C_BG);
-
-      // Label
-      int lx = c.x + (c.w - (int)strlen(labels[i]) * 6) / 2;
-      tft.setTextSize(1);
-      tft.setTextColor(textColor);
-      tft.setCursor(lx, labelY[i]);
-      tft.print(labels[i]);
+    if (sel) {
+      tft.drawRect(c.x + 1, c.y + 1, c.w - 2, c.h - 2, C_GOLD_SEL);
     }
+
+    if (i == 0) drawWiFiIcon(iconX[i], iconY[i], iconColor);
+    else if (i == 1) drawBluetoothIcon(iconX[i], iconY[i], iconColor);
+    else if (i == 2) drawRFIcon(iconX[i], iconY[i], iconColor);
+    else drawSettingsIcon(iconX[i], iconY[i], iconColor, C_BG);
+
+    int lx = c.x + (c.w - (int)strlen(labels[i]) * 6) / 2;
+    tft.setTextSize(1);
+    tft.setTextColor(textColor);
+    tft.setCursor(lx, labelY[i]);
+    tft.print(labels[i]);
+  }
+}
+
+static void updateMenuInicialItems() {
+  for (int i = 0; i < 4; i++) {
+    drawMenuInicialItem(i, opcaoMenuInicial == i);
   }
 }
 
@@ -147,15 +138,19 @@ void handleMenuInicial() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
 
     if (digitalRead(BUTTON_LEFT) == LOW) {
+      int old = opcaoMenuInicial;
       opcaoMenuInicial = (opcaoMenuInicial + 3) % 4;
       lastDebounceTime = millis();
-      updateMenuInicialItems();
+      drawMenuInicialItem(old, false);
+      drawMenuInicialItem(opcaoMenuInicial, true);
     }
 
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = opcaoMenuInicial;
       opcaoMenuInicial = (opcaoMenuInicial + 1) % 4;
       lastDebounceTime = millis();
-      updateMenuInicialItems();
+      drawMenuInicialItem(old, false);
+      drawMenuInicialItem(opcaoMenuInicial, true);
     }
 
     if (digitalRead(BUTTON_SELECT) == LOW) {

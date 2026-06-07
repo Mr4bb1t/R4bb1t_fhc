@@ -184,9 +184,11 @@ void handleRF() {
 
     // RIGHT → próximo item
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = rfOpcao;
       rfOpcao = (rfOpcao + 1) % RF_ITEMS;
       lastDebounceTime = millis();
-      displayRF();
+      drawMenuItem(0, 28 + old * 19, 128, 18, rfLabels[old], false);
+      drawMenuItem(0, 28 + rfOpcao * 19, 128, 18, rfLabels[rfOpcao], true);
     }
 
     // LEFT → item anterior (ou atalho direto para voltar ao menu principal
@@ -199,8 +201,10 @@ void handleRF() {
         estadoAtual = MENU_INICIAL;
         displayMenuInicial();
       } else {
+        int old = rfOpcao;
         rfOpcao = (rfOpcao - 1 + RF_ITEMS) % RF_ITEMS;
-        displayRF();
+        drawMenuItem(0, 28 + old * 19, 128, 18, rfLabels[old], false);
+        drawMenuItem(0, 28 + rfOpcao * 19, 128, 18, rfLabels[rfOpcao], true);
       }
     }
 
@@ -365,7 +369,13 @@ void handleRF_Raw() {
     int proto = rcSwitch.getReceivedProtocol();
     rcSwitch.resetAvailable();
 
-    tft.fillRect(0, 38, SCR_W, SCR_H - 60, TFT_BLACK);
+    // Lê o RSSI do CC1101 logo após receber o pacote
+    int dbm = (int)ELECHOUSE_cc1101.getRssi();
+
+    // Partial redraw: limpa apenas as áreas de texto e das barras
+    tft.fillRect(0, 40, SCR_W, 34, TFT_BLACK);
+    tft.fillRect(50, 78, 75, 8, TFT_BLACK);
+
     tft.setTextSize(1);
     tft.setTextColor(TFT_GREEN);
     char buf[32];
@@ -382,7 +392,9 @@ void handleRF_Raw() {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, 82);
     tft.print("Sinal:");
-    int bars = constrain(map(proto, 1, 6, 2, 10), 2, 10);
+    
+    // Mapeia o RSSI real para 1 a 10 barras (mesma sensibilidade do Analyser)
+    int bars = constrain(map(dbm, -45, -20, 1, 10), 1, 10);
     for (int b = 0; b < bars; b++) {
       tft.fillRect(50 + b * 7, 78, 5, 8, TFT_CYAN);
     }
@@ -776,6 +788,24 @@ static int savedIndex = 0; // sinal selecionado atualmente
 #define SAVED_VISIBLE 6
 static int savedScroll = 0; // primeiro índice visível
 
+static void drawSavedItem(int idx, bool sel) {
+  if (idx < savedScroll || idx >= savedScroll + SAVED_VISIBLE || idx >= savedCount) return;
+
+  int i = idx - savedScroll;
+  int y = 22 + i * 16;
+  
+  tft.fillRect(0, y - 2, SCR_W - 12, 16, TFT_BLACK);
+  
+  tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
+  tft.setCursor(4, y);
+
+  char buf[28];
+  snprintf(buf, sizeof(buf), "#%02d %lu B:%d", idx + 1,
+           savedSignals[idx].value, savedSignals[idx].bits);
+  tft.print(sel ? ">" : " ");
+  tft.print(buf);
+}
+
 static void drawSavedList() {
   // Limpa área da lista
   tft.fillRect(0, 20, SCR_W, SCR_H - 38, TFT_BLACK);
@@ -796,17 +826,8 @@ static void drawSavedList() {
     int idx = savedScroll + i;
     if (idx >= savedCount)
       break;
-
-    bool sel = (idx == savedIndex);
-    tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
-    tft.setCursor(4, 22 + i * 16);
-
-    char buf[28];
-    // "#01 Val:12345 B:24"
-    snprintf(buf, sizeof(buf), "#%02d %lu B:%d", idx + 1,
-             savedSignals[idx].value, savedSignals[idx].bits);
-    tft.print(sel ? ">" : " ");
-    tft.print(buf);
+    
+    drawSavedItem(idx, idx == savedIndex);
   }
 
   // Indicador de scroll (se há mais itens)
@@ -853,14 +874,22 @@ void handleRF_Saved() {
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       lastDebounceTime = millis();
       if (savedCount > 0) {
+        int oldIndex = savedIndex;
+        int oldScroll = savedScroll;
         savedIndex = (savedIndex + 1) % savedCount;
+        
         // Ajusta scroll
         if (savedIndex < savedScroll)
           savedScroll = savedIndex;
         if (savedIndex >= savedScroll + SAVED_VISIBLE)
           savedScroll = savedIndex - SAVED_VISIBLE + 1;
-        drawSavedList();
-        batteryDraw();
+          
+        if (savedScroll != oldScroll) {
+          drawSavedList();
+        } else {
+          drawSavedItem(oldIndex, false);
+          drawSavedItem(savedIndex, true);
+        }
       }
     }
 

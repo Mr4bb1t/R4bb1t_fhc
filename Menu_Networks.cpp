@@ -19,21 +19,35 @@ static String getAuthShort(wifi_auth_mode_t auth) {
   }
 }
 
+static int scrollOffset = 0;
+const int MAX_VISIBLE = 7;
+
+static void drawNetworkItem(int i, bool sel) {
+  if (i == 0) {
+    drawMenuItem(0, 16, 128, 18, "< VOLTAR", sel, false);
+  } else {
+    int listIndex = i - 1;
+    if (listIndex >= scrollOffset && listIndex < scrollOffset + MAX_VISIBLE && listIndex < numRedes) {
+      int screenRow = listIndex - scrollOffset;
+      String sec = getAuthShort(ap_records[listIndex].authmode);
+      String displayName = "[" + sec + "] " + redes[listIndex];
+      if (displayName.length() > 21) {
+        displayName = displayName.substring(0, 20) + ".";
+      }
+      drawMenuItem(0, 34 + screenRow * 18, 128, 18, displayName.c_str(), sel, false);
+    }
+  }
+}
+
 void displayNetworks() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
-
-  // Header com back arrow
   drawHeader("REDES WIFI", true);
 
-  // Lógica de scroll para as redes (mantém o cursor na tela antes de rolar)
-  static int scrollOffset = 0;
-  const int MAX_VISIBLE = 7;
-
   if (redeSelecionada == 0) {
-    scrollOffset = 0; // Se "Voltar" estiver selecionado, volta pro topo
+    scrollOffset = 0;
   } else {
-    int listIndex = redeSelecionada - 1; // Índice na array de redes (0 a numRedes-1)
+    int listIndex = redeSelecionada - 1;
     if (listIndex < scrollOffset) {
       scrollOffset = listIndex;
     } else if (listIndex >= scrollOffset + MAX_VISIBLE) {
@@ -41,47 +55,67 @@ void displayNetworks() {
     }
   }
 
-  // Item fixo "Voltar" no topo
-  bool voltarSel = (redeSelecionada == 0);
-  drawMenuItem(0, 16, 128, 18, "< VOLTAR", voltarSel, false);
+  drawNetworkItem(0, redeSelecionada == 0);
 
-  // Desenha os itens visíveis
   for (int i = 0; i < MAX_VISIBLE; i++) {
     int netIdx = scrollOffset + i;
     if (netIdx >= numRedes) break;
-    
-    String sec = getAuthShort(ap_records[netIdx].authmode);
-    String displayName = "[" + sec + "] " + redes[netIdx];
-    
-    if (displayName.length() > 21) {
-      displayName = displayName.substring(0, 20) + ".";
-    }
-    
-    bool sel = (redeSelecionada == (netIdx + 1));
-    drawMenuItem(0, 34 + i * 18, 128, 18, displayName.c_str(), sel, false);
+    drawNetworkItem(netIdx + 1, redeSelecionada == (netIdx + 1));
   }
 }
 
 void handleSelecaoRedes() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
+      int oldSel = redeSelecionada;
       if (redeSelecionada > 0) {
         redeSelecionada--;
       } else {
         redeSelecionada = numRedes;
       }
       lastDebounceTime = millis();
-      displayNetworks();
+      
+      int newScrollOffset = scrollOffset;
+      if (redeSelecionada == 0) {
+        newScrollOffset = 0;
+      } else {
+        int listIndex = redeSelecionada - 1;
+        if (listIndex < scrollOffset) newScrollOffset = listIndex;
+        else if (listIndex >= scrollOffset + MAX_VISIBLE) newScrollOffset = listIndex - MAX_VISIBLE + 1;
+      }
+      
+      if (newScrollOffset != scrollOffset) {
+        displayNetworks();
+      } else {
+        drawNetworkItem(oldSel, false);
+        drawNetworkItem(redeSelecionada, true);
+      }
     }
 
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int oldSel = redeSelecionada;
       if (redeSelecionada < numRedes) {
         redeSelecionada++;
       } else {
         redeSelecionada = 0;
       }
       lastDebounceTime = millis();
-      displayNetworks();
+      
+      int newScrollOffset = scrollOffset;
+      if (redeSelecionada == 0) {
+        newScrollOffset = 0;
+      } else {
+        int listIndex = redeSelecionada - 1;
+        if (listIndex < scrollOffset) newScrollOffset = listIndex;
+        else if (listIndex >= scrollOffset + MAX_VISIBLE) newScrollOffset = listIndex - MAX_VISIBLE + 1;
+      }
+      
+      if (newScrollOffset != scrollOffset) {
+        displayNetworks();
+      } else {
+        drawNetworkItem(oldSel, false);
+        drawNetworkItem(redeSelecionada, true);
+      }
     }
 
     if (digitalRead(BUTTON_SELECT) == LOW) {

@@ -39,14 +39,18 @@ void displayConfiguracoes() {
 void handleConfiguracoes() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
+      int old = opcaoConfig;
       opcaoConfig = (opcaoConfig - 1 + NUM_CONFIG_ITEMS) % NUM_CONFIG_ITEMS;
       lastDebounceTime = millis();
-      displayConfiguracoes();
+      drawMenuItem(0, 16 + old * 20, 128, 19, configItems[old], false);
+      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig], true);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = opcaoConfig;
       opcaoConfig = (opcaoConfig + 1) % NUM_CONFIG_ITEMS;
       lastDebounceTime = millis();
-      displayConfiguracoes();
+      drawMenuItem(0, 16 + old * 20, 128, 19, configItems[old], false);
+      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig], true);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
@@ -79,55 +83,50 @@ void handleConfiguracoes() {
 // ═══════════════════════════════════════════════
 static int modoMenuTemp = 0; // Para navegação temporária na tela
 
-void displayModoMenu() {
-  tft.fillScreen(C_BG);
-  drawHeader("MODO MENU", true);
-
-  // Layout dos dois blocos
+static void drawModoMenuBlock(int i, bool hover, bool active) {
   const int bw = 116;
   const int bh = 48;
   const int bx = (SCR_W - bw) / 2;
   const int by1 = 30;
   const int by2 = 86;
+  int y = (i == 0) ? by1 : by2;
+
+  tft.fillRect(bx, y, bw, bh, hover ? C_GOLD_SEL : C_BG);
+  tft.drawRoundRect(bx, y, bw, bh, 4, hover ? C_GOLD : C_GREY);
+
+  uint16_t iconColor = hover ? C_GOLD : C_WHITE;
+  if (i == 0) {
+    tft.drawRect(bx + 12, y + 12, 10, 10, iconColor);
+    tft.drawRect(bx + 24, y + 12, 10, 10, iconColor);
+    tft.drawRect(bx + 12, y + 26, 10, 10, iconColor);
+    tft.drawRect(bx + 24, y + 26, 10, 10, iconColor);
+  } else {
+    tft.drawRoundRect(bx + 12, y + 14, 22, 6, 2, iconColor);
+    tft.drawRoundRect(bx + 12, y + 22, 22, 6, 2, iconColor);
+    tft.drawRoundRect(bx + 12, y + 30, 22, 6, 2, iconColor);
+  }
+
+  tft.setTextSize(1);
+  tft.setTextColor(hover ? C_GOLD : C_WHITE);
+  tft.setCursor(bx + 46, y + 20);
+  tft.print(i == 0 ? "BLOCO" : "LISTA");
+
+  int rx = bx + bw - 16;
+  int ry = y + bh / 2;
+  tft.drawCircle(rx, ry, 6, hover ? C_GOLD : C_GREY);
+  if (active) {
+    tft.fillCircle(rx, ry, 3, hover ? C_GOLD : C_WHITE);
+  } else {
+    tft.fillCircle(rx, ry, 3, hover ? C_GOLD_SEL : C_BG);
+  }
+}
+
+void displayModoMenu() {
+  tft.fillScreen(C_BG);
+  drawHeader("MODO MENU", true);
 
   for (int i = 0; i < 2; i++) {
-    int y = (i == 0) ? by1 : by2;
-    bool hover = (modoMenuTemp == i);
-    bool active = (menuStyle == i);
-
-    // Fundo do bloco
-    tft.fillRect(bx, y, bw, bh, hover ? C_GOLD_SEL : C_BG);
-    // Borda (dourada se sob o cursor, senão cinza)
-    tft.drawRoundRect(bx, y, bw, bh, 4, hover ? C_GOLD : C_GREY);
-
-    // Ícone da esquerda
-    uint16_t iconColor = hover ? C_GOLD : C_WHITE;
-    if (i == 0) {
-      // Ícone Grade (4 quadradinhos)
-      tft.drawRect(bx + 12, y + 12, 10, 10, iconColor);
-      tft.drawRect(bx + 24, y + 12, 10, 10, iconColor);
-      tft.drawRect(bx + 12, y + 26, 10, 10, iconColor);
-      tft.drawRect(bx + 24, y + 26, 10, 10, iconColor);
-    } else {
-      // Ícone Lista (3 linhas com rounded corners)
-      tft.drawRoundRect(bx + 12, y + 14, 22, 6, 2, iconColor);
-      tft.drawRoundRect(bx + 12, y + 22, 22, 6, 2, iconColor);
-      tft.drawRoundRect(bx + 12, y + 30, 22, 6, 2, iconColor);
-    }
-
-    // Texto Central
-    tft.setTextSize(1);
-    tft.setTextColor(hover ? C_GOLD : C_WHITE);
-    tft.setCursor(bx + 46, y + 20);
-    tft.print(i == 0 ? "BLOCO" : "LISTA");
-
-    // Radio button na direita
-    int rx = bx + bw - 16;
-    int ry = y + bh / 2;
-    tft.drawCircle(rx, ry, 6, hover ? C_GOLD : C_GREY);
-    if (active) {
-      tft.fillCircle(rx, ry, 3, hover ? C_GOLD : C_WHITE);
-    }
+    drawModoMenuBlock(i, modoMenuTemp == i, menuStyle == i);
   }
 
   drawFooter();
@@ -136,15 +135,11 @@ void displayModoMenu() {
 
 void handleModoMenu() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (digitalRead(BUTTON_LEFT) == LOW) {
+    if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
       modoMenuTemp = (modoMenuTemp == 0) ? 1 : 0;
       lastDebounceTime = millis();
-      displayModoMenu();
-    }
-    if (digitalRead(BUTTON_RIGHT) == LOW) {
-      modoMenuTemp = (modoMenuTemp == 0) ? 1 : 0;
-      lastDebounceTime = millis();
-      displayModoMenu();
+      drawModoMenuBlock(0, modoMenuTemp == 0, menuStyle == 0);
+      drawModoMenuBlock(1, modoMenuTemp == 1, menuStyle == 1);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       menuStyle = modoMenuTemp;
@@ -563,17 +558,13 @@ void blOff() {
   ledcWrite(TFT_BL, 0);
 }
 
-void displayBrilho() {
-  tft.fillScreen(C_BG);
-  drawHeader("BRILHO", true);
-
+static void drawBrilhoSlider() {
   int pct = (int)((long)(brilhoAtual - BL_MIN) * 100 / (BL_MAX - BL_MIN));
-  if (pct < 0)
-    pct = 0;
-  if (pct > 100)
-    pct = 100;
+  if (pct < 0) pct = 0;
+  if (pct > 100) pct = 100;
 
-  // Percentual em dourado grande
+  tft.fillRect(0, 40, SCR_W, 24, C_BG);
+
   tft.setTextSize(3);
   char pctBuf[6];
   snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
@@ -582,20 +573,31 @@ void displayBrilho() {
   tft.setCursor(pctX, 40);
   tft.print(pctBuf);
 
-  // Slider
   const int slX0 = 10;
   const int slX1 = SCR_W - 10;
   const int slY = 88;
   const int slW = slX1 - slX0;
 
+  tft.fillRect(slX0 - 6, slY - 6, slW + 12, 12, C_BG);
+
   tft.drawFastHLine(slX0, slY, slW, C_GREY);
   int fillW = (int)((long)slW * (brilhoAtual - BL_MIN) / (BL_MAX - BL_MIN));
-  if (fillW > 0)
-    tft.drawFastHLine(slX0, slY, fillW, C_GOLD);
+  if (fillW > 0) tft.drawFastHLine(slX0, slY, fillW, C_GOLD);
+  
   int dotX = slX0 + fillW;
   tft.fillCircle(dotX, slY, 5, C_GOLD);
   tft.drawCircle(dotX, slY, 5, C_WHITE);
+}
 
+void displayBrilho() {
+  tft.fillScreen(C_BG);
+  drawHeader("BRILHO", true);
+
+  drawBrilhoSlider();
+
+  const int slX0 = 10;
+  const int slX1 = SCR_W - 10;
+  const int slY = 88;
   tft.setTextSize(1);
   tft.setTextColor(C_GREY);
   tft.setCursor(slX0, slY + 10);
@@ -620,18 +622,16 @@ void handleBrilho() {
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       lastDebounceTime = millis();
       brilhoAtual += step;
-      if (brilhoAtual > BL_MAX)
-        brilhoAtual = BL_MAX;
+      if (brilhoAtual > BL_MAX) brilhoAtual = BL_MAX;
       blSet(brilhoAtual);
-      displayBrilho();
+      drawBrilhoSlider();
     }
     if (digitalRead(BUTTON_LEFT) == LOW) {
       lastDebounceTime = millis();
       brilhoAtual -= step;
-      if (brilhoAtual < BL_MIN)
-        brilhoAtual = BL_MIN;
+      if (brilhoAtual < BL_MIN) brilhoAtual = BL_MIN;
       blSet(brilhoAtual);
-      displayBrilho();
+      drawBrilhoSlider();
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
@@ -847,6 +847,45 @@ static void spiffsCollect() {
 }
 
 // ── Tela 1: Lista de Arquivos com Cursor ──
+static void drawArquivosRow(int i, bool sel) {
+  int pageStart = (fileCursor / FILES_PER_PAGE) * FILES_PER_PAGE;
+  int y = 17 + (i - pageStart) * 15;
+  const int ROW_H = 14;
+
+  if (sel) {
+    tft.fillRect(0, y - 1, SCR_W, ROW_H + 1, C_GOLD_SEL);
+    tft.drawFastHLine(0, y - 1, SCR_W, C_GOLD);
+    tft.drawFastHLine(0, y + ROW_H, SCR_W, C_GOLD);
+  } else {
+    tft.fillRect(0, y - 1, SCR_W, ROW_H + 1, C_BG);
+    tft.drawFastHLine(4, y + ROW_H, SCR_W - 8, C_GREY_DARK);
+  }
+
+  if (i == 0) {
+    tft.setTextSize(1);
+    tft.setTextColor(sel ? C_GOLD : C_GREY);
+    tft.setCursor(4, y + 3);
+    tft.print("< VOLTAR");
+  } else {
+    int fi = i - 1;
+    char sname[17];
+    strncpy(sname, fileNames[fi], 16);
+    sname[16] = '\0';
+    tft.setTextSize(1);
+    tft.setTextColor(sel ? C_GOLD : C_WHITE);
+    tft.setCursor(4, y + 3);
+    tft.print(sname);
+    
+    char sbuf[9];
+    if (fileSizes[fi] < 1024) snprintf(sbuf, sizeof(sbuf), "%uB", (unsigned)fileSizes[fi]);
+    else snprintf(sbuf, sizeof(sbuf), "%uKB", (unsigned)(fileSizes[fi] / 1024));
+    int sw = (int)strlen(sbuf) * 6;
+    tft.setTextColor(sel ? C_GOLD : C_GOLD_DIM);
+    tft.setCursor(SCR_W - sw - 3, y + 3);
+    tft.print(sbuf);
+  }
+}
+
 static void displayArquivosSPIFFS() {
   tft.fillScreen(C_BG);
   char htitle[18];
@@ -855,41 +894,9 @@ static void displayArquivosSPIFFS() {
 
   int totalItems = 1 + fileCount;
   int pageStart = (fileCursor / FILES_PER_PAGE) * FILES_PER_PAGE;
-  int y = 17;
-  const int ROW_H = 14;
 
   for (int i = pageStart; i < totalItems && (i - pageStart) < FILES_PER_PAGE; i++) {
-    bool sel = (i == fileCursor);
-    if (sel) {
-      tft.fillRect(0, y - 1, SCR_W, ROW_H + 1, C_GOLD_SEL);
-      tft.drawFastHLine(0, y - 1, SCR_W, C_GOLD);
-      tft.drawFastHLine(0, y + ROW_H, SCR_W, C_GOLD);
-    }
-    if (i == 0) {
-      tft.setTextSize(1);
-      tft.setTextColor(sel ? C_GOLD : C_GREY);
-      tft.setCursor(4, y + 3);
-      tft.print("< VOLTAR");
-    } else {
-      int fi = i - 1;
-      char sname[17];
-      strncpy(sname, fileNames[fi], 16);
-      sname[16] = '\0';
-      tft.setTextSize(1);
-      tft.setTextColor(sel ? C_GOLD : C_WHITE);
-      tft.setCursor(4, y + 3);
-      tft.print(sname);
-      
-      char sbuf[9];
-      if (fileSizes[fi] < 1024) snprintf(sbuf, sizeof(sbuf), "%uB", (unsigned)fileSizes[fi]);
-      else snprintf(sbuf, sizeof(sbuf), "%uKB", (unsigned)(fileSizes[fi] / 1024));
-      int sw = (int)strlen(sbuf) * 6;
-      tft.setTextColor(sel ? C_GOLD : C_GOLD_DIM);
-      tft.setCursor(SCR_W - sw - 3, y + 3);
-      tft.print(sbuf);
-    }
-    if (!sel) tft.drawFastHLine(4, y + ROW_H, SCR_W - 8, C_GREY_DARK);
-    y += ROW_H + 1;
+    drawArquivosRow(i, i == fileCursor);
   }
 
   if (pageStart > 0) {
@@ -898,8 +905,9 @@ static void displayArquivosSPIFFS() {
     tft.print("^");
   }
   if (pageStart + FILES_PER_PAGE < totalItems) {
+    int arrowY = 17 + FILES_PER_PAGE * 15;
     tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(SCR_W / 2 - 3, y);
+    tft.setCursor(SCR_W / 2 - 3, arrowY);
     tft.print("v");
   }
 
@@ -1113,14 +1121,26 @@ void handleArmazenamento() {
     } else if (storageState == 1) {
       int totalItems = 1 + fileCount;
       if (digitalRead(BUTTON_RIGHT) == LOW) {
+        int oldCursor = fileCursor;
         fileCursor = (fileCursor + 1) % totalItems;
         lastDebounceTime = millis();
-        displayArquivosSPIFFS();
+        if ((oldCursor / FILES_PER_PAGE) != (fileCursor / FILES_PER_PAGE)) {
+          displayArquivosSPIFFS();
+        } else {
+          drawArquivosRow(oldCursor, false);
+          drawArquivosRow(fileCursor, true);
+        }
       }
       if (digitalRead(BUTTON_LEFT) == LOW) {
+        int oldCursor = fileCursor;
         fileCursor = (fileCursor - 1 + totalItems) % totalItems;
         lastDebounceTime = millis();
-        displayArquivosSPIFFS();
+        if ((oldCursor / FILES_PER_PAGE) != (fileCursor / FILES_PER_PAGE)) {
+          displayArquivosSPIFFS();
+        } else {
+          drawArquivosRow(oldCursor, false);
+          drawArquivosRow(fileCursor, true);
+        }
       }
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
