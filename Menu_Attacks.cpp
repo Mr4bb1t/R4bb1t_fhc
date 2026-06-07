@@ -693,6 +693,8 @@ void handleAtaqueDeautherScan() {
 // ═══════════════════════════════════════════════
 //  CTS JAMMER
 // ═══════════════════════════════════════════════
+static int ctsMenuSel = 1;
+
 void displayAtaqueCtsJammer() {
   tft.fillScreen(C_BG);
   drawHeader("CTS JAMMER", true);
@@ -706,7 +708,7 @@ void displayAtaqueCtsJammer() {
   if (!ctsAtivo) {
     tft.setTextColor(C_WHITE);
     tft.setCursor(4, 35);
-    tft.print("Oculto & Poderoso");
+    tft.print("Eficaz contra WPA3");
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
@@ -714,14 +716,14 @@ void displayAtaqueCtsJammer() {
     tft.setCursor(4, 62);
     tft.print("Congela o canal (DoS)");
     tft.setCursor(4, 74);
-    tft.print("Ignora WPA3/802.11w");
+    tft.print("Ignora 802.11w / WPA3");
 
     drawSeparator(95, C_GREY);
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(4, 105);
-    tft.print("SEL = Iniciar");
-    tft.setCursor(4, 117);
-    tft.print("HOLD SEL = Voltar");
+    
+    const char *items[] = {"< VOLTAR", "Iniciar Ataque"};
+    for (int i = 0; i < 2; i++) {
+      drawMenuItem(0, 102 + i * 20, 128, 19, items[i], ctsMenuSel == i);
+    }
   } else {
     tft.setTextColor(C_RED);
     tft.setCursor(38, 40);
@@ -741,35 +743,48 @@ void displayAtaqueCtsJammer() {
     tft.setCursor(76, 75);
     tft.printf("%lu", ctsCounter);
 
-    drawSeparator(95, C_GREY);
+    drawSeparator(116, C_GREY);
+    tft.fillRect(14, 120, 100, 20, C_GOLD_SEL);
+    tft.drawRect(14, 120, 100, 20, C_RED);
     tft.setTextColor(C_RED);
-    tft.setCursor(34, 105);
-    tft.print("SEL = PARAR");
+    tft.setCursor(34, 127);
+    tft.print("[  PARAR  ]");
   }
 
   batteryDraw();
 }
 
 void handleAtaqueCtsJammer() {
-  static unsigned long holdStart = 0;
   static bool holdingSelect = false;
   bool selectPressed = (digitalRead(BUTTON_SELECT) == LOW);
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (!ctsAtivo) {
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        ctsMenuSel = (ctsMenuSel > 0) ? ctsMenuSel - 1 : 1;
+        lastDebounceTime = millis();
+        displayAtaqueCtsJammer();
+        return;
+      }
+      if (digitalRead(BUTTON_RIGHT) == LOW) {
+        ctsMenuSel = (ctsMenuSel < 1) ? ctsMenuSel + 1 : 0;
+        lastDebounceTime = millis();
+        displayAtaqueCtsJammer();
+        return;
+      }
+
       if (selectPressed && !holdingSelect) {
-        holdStart = millis();
         holdingSelect = true;
       }
       if (!selectPressed && holdingSelect) {
-        unsigned long holdTime = millis() - holdStart;
-        if (holdTime > 1000) {
+        holdingSelect = false;
+        lastDebounceTime = millis();
+        
+        if (ctsMenuSel == 0) {
           estadoAtual = MENU_ATAQUES;
           displayMenuAtaques();
         } else {
-          uint8_t canal = (apRecordSelecionado.primary >= 1)
-                              ? apRecordSelecionado.primary
-                              : 1;
+          uint8_t canal = (apRecordSelecionado.primary >= 1) ? apRecordSelecionado.primary : 1;
           if (initRadioForAttack(canal)) {
             ctsAtivo = true;
             ctsCounter = 0;
@@ -789,11 +804,15 @@ void handleAtaqueCtsJammer() {
             displayAtaqueCtsJammer();
           }
         }
-        holdingSelect = false;
-        lastDebounceTime = millis();
       }
     } else {
       if (selectPressed && !holdingSelect) {
+        holdingSelect = true;
+      }
+      if (!selectPressed && holdingSelect) {
+        holdingSelect = false;
+        lastDebounceTime = millis();
+        
         ctsAtivo = false;
         deinitRadio();
         if (attackTaskHandle != NULL) {
@@ -808,11 +827,7 @@ void handleAtaqueCtsJammer() {
         tft.println("ATAQUE PARADO");
         delay(1500);
         displayAtaqueCtsJammer();
-        lastDebounceTime = millis();
-        holdingSelect = true;
       }
-      if (!selectPressed)
-        holdingSelect = false;
     }
   }
 

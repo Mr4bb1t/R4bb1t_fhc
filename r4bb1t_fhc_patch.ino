@@ -290,6 +290,10 @@ void loop() {
     handleConfiguracoes();
     break;
 
+  case TELA_ARMAZENAMENTO:
+    handleArmazenamento();
+    break;
+
   case TELA_SOBRE:
     handleSobre();
     break;

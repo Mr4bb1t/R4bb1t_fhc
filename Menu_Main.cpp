@@ -48,14 +48,7 @@ static const char *labels[4] = {"WiFi", "BT", "RF 433", "Config"};
 static unsigned long lastActivityTime = 0;
 
 // ──────────────────────────────────────────────
-void displayMenuInicial() {
-  lastActivityTime = millis();
-  tft.fillScreen(C_BG);
-
-  // ── Header ─────────────────────────────────
-  drawHeader("R4BB1T");
-
-  // ── Conteúdo (Grade ou Lista) ────────────────
+static void updateMenuInicialItems() {
   if (menuStyle == 1) {
     // Modo Lista
     for (int i = 0; i < 4; i++) {
@@ -124,6 +117,16 @@ void displayMenuInicial() {
       tft.print(labels[i]);
     }
   }
+}
+
+void displayMenuInicial() {
+  lastActivityTime = millis();
+  tft.fillScreen(C_BG);
+
+  // ── Header ─────────────────────────────────
+  drawHeader("R4BB1T");
+
+  updateMenuInicialItems();
 
   // ── Rodapé ─────────────────────────────────
   drawFooter();
@@ -146,13 +149,13 @@ void handleMenuInicial() {
     if (digitalRead(BUTTON_LEFT) == LOW) {
       opcaoMenuInicial = (opcaoMenuInicial + 3) % 4;
       lastDebounceTime = millis();
-      displayMenuInicial();
+      updateMenuInicialItems();
     }
 
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       opcaoMenuInicial = (opcaoMenuInicial + 1) % 4;
       lastDebounceTime = millis();
-      displayMenuInicial();
+      updateMenuInicialItems();
     }
 
     if (digitalRead(BUTTON_SELECT) == LOW) {

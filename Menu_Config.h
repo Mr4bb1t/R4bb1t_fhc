@@ -16,4 +16,7 @@ void displayModoMenu();
 void handleModoMenu();
 void blOff(); // apaga o backlight (LEDC → duty 0)
 
+void displayArmazenamento();
+void handleArmazenamento();
+
 #endif

