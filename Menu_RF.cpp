@@ -363,18 +363,28 @@ void displayRF_Raw() {
 }
 
 void handleRF_Raw() {
+  static int peakRSSI = -100;
+
+  if (rfReady) {
+    int currentRssi = (int)ELECHOUSE_cc1101.getRssi();
+    if (currentRssi > peakRSSI) {
+      peakRSSI = currentRssi;
+    }
+  }
+
   if (rfReady && rcSwitch.available()) {
     unsigned long val = rcSwitch.getReceivedValue();
     int bits = rcSwitch.getReceivedBitlength();
     int proto = rcSwitch.getReceivedProtocol();
     rcSwitch.resetAvailable();
 
-    // Lê o RSSI do CC1101 logo após receber o pacote
-    int dbm = (int)ELECHOUSE_cc1101.getRssi();
+    // Pega o maior sinal detectado antes e durante a recepção do pacote
+    int dbm = peakRSSI;
+    peakRSSI = -100; // Reseta para a próxima captura
 
     // Partial redraw: limpa apenas as áreas de texto e das barras
     tft.fillRect(0, 40, SCR_W, 34, TFT_BLACK);
-    tft.fillRect(50, 78, 75, 8, TFT_BLACK);
+    tft.fillRect(50, 82, 75, 8, TFT_BLACK);
 
     tft.setTextSize(1);
     tft.setTextColor(TFT_GREEN);
@@ -393,10 +403,14 @@ void handleRF_Raw() {
     tft.setCursor(4, 82);
     tft.print("Sinal:");
     
-    // Mapeia o RSSI real para 1 a 10 barras (mesma sensibilidade do Analyser)
-    int bars = constrain(map(dbm, -45, -20, 1, 10), 1, 10);
-    for (int b = 0; b < bars; b++) {
-      tft.fillRect(50 + b * 7, 78, 5, 8, TFT_CYAN);
+    // Mapeia o RSSI real para 1 a 10 barras
+    int bars = constrain(map(dbm, -70, -20, 1, 10), 1, 10);
+    for (int b = 0; b < 10; b++) {
+      if (b < bars) {
+        tft.fillRect(50 + b * 7, 82, 5, 8, TFT_CYAN); // Quadrado preenchido
+      } else {
+        tft.drawRect(50 + b * 7, 82, 5, 8, TFT_DARKGREY); // Quadrado vazio
+      }
     }
   }
 
