@@ -12,7 +12,7 @@ void handleAtaqueCaptivePortal();
 void displayAtaqueDeauther();
 void handleAtaqueDeauther();
 
-void displayAtaqueDeautherScan();
+void displayAtaqueDeautherScan(bool init = false);
 void handleAtaqueDeautherScan();
 
 void displayAtaqueCtsJammer();

@@ -388,7 +388,7 @@ void handleAtaqueDeauther() {
           esp_wifi_set_promiscuous(true);
           esp_wifi_set_promiscuous_rx_cb(clientSnifferCb);
           clientScanRunning = true;
-          displayAtaqueDeautherScan();
+          displayAtaqueDeautherScan(true);
           return;
         }
         if (initRadioForAttack(apRecordSelecionado.primary)) {
@@ -507,15 +507,19 @@ static String macShort(const uint8_t *m) {
 //  Meio: lista de MACs encontrados (scroll)
 //  Rodapé: contador e dica de seleção
 // ─────────────────────────────────────────────────────────
-void displayAtaqueDeautherScan() {
-  tft.fillScreen(C_BG);
-  drawHeader("CLIENTES", true);
+void displayAtaqueDeautherScan(bool init) {
+  if (init) {
+    tft.fillScreen(C_BG);
+    drawHeader("CLIENTES", true);
 
-  tft.setTextSize(1);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, 17);
-  tft.print(truncSSID(ssidSelecionado, 21));
-  drawSeparator(26, C_GREY);
+    tft.setTextSize(1);
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(4, 17);
+    tft.print(truncSSID(ssidSelecionado, 21));
+    drawSeparator(26, C_GREY);
+    drawSeparator(65, C_GREY);
+    drawSeparator(140, C_GREY);
+  }
 
   // ── Botões no topo ──────────────────────────────────────
   // Botão 1: PARAR SCAN / ESCANEAR (selecionável com scanBtnSel == 0)
@@ -544,23 +548,23 @@ void displayAtaqueDeautherScan() {
 
   drawSeparator(65, C_GREY);
 
-  // ── Animação de scan ativo ──────────────────────────────
-  if (clientScanRunning) {
-    int dotPos = (millis() / 400) % 4;
-    tft.setTextColor(C_GREEN);
-    tft.setCursor(4, 68);
-    tft.print("Scan");
-    for (int i = 0; i < dotPos; i++)
-      tft.print(".");
-  }
-
-// ── Lista de clientes ───────────────────────────────────
+  // ── Lista de clientes ───────────────────────────────────
   if (clientCount == 0) {
-    tft.setTextColor(C_GREY);
-    tft.setCursor(16, 80);
-    tft.print("Nenhum cliente");
-    tft.setCursor(24, 92);
-    tft.print("encontrado...");
+    tft.fillRect(0, 68, 128, 70, C_BG);
+    if (clientScanRunning) {
+      int dotPos = (millis() / 400) % 4;
+      tft.setTextColor(C_GREEN);
+      tft.setCursor(4, 68);
+      tft.print("Scan");
+      for (int i = 0; i < dotPos; i++)
+        tft.print(".");
+    } else {
+      tft.setTextColor(C_GREY);
+      tft.setCursor(16, 80);
+      tft.print("Nenhum cliente");
+      tft.setCursor(24, 92);
+      tft.print("encontrado...");
+    }
   } else {
     const int MAX_VIS = 4;
     int start = 0;
@@ -572,8 +576,10 @@ void displayAtaqueDeautherScan() {
 
     for (int i = 0; i < MAX_VIS; i++) {
       int idx = start + i;
-      if (idx >= clientCount)
-        break;
+      if (idx >= clientCount) {
+        tft.fillRect(0, 68 + i * 18, 128, 17, C_BG);
+        continue;
+      }
 
       String mac = macShort(clientList[idx].mac);
 
@@ -583,6 +589,7 @@ void displayAtaqueDeautherScan() {
   }
 
   // ── Rodapé ─────────────────────────────────────────────
+  tft.fillRect(0, 145, 128, 10, C_BG);
   drawSeparator(140, C_GREY);
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);

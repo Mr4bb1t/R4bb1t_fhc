@@ -364,8 +364,12 @@ void displayRF_Raw() {
 
 void handleRF_Raw() {
   static int peakRSSI = -100;
+  static unsigned long lastRssiPoll = 0;
 
-  if (rfReady) {
+  // Realiza polling do RSSI a cada 5ms para não travar o barramento SPI
+  // mas rápido o suficiente para não cair nos "gaps" de silêncio do RF
+  if (rfReady && (millis() - lastRssiPoll > 5)) {
+    lastRssiPoll = millis();
     int currentRssi = (int)ELECHOUSE_cc1101.getRssi();
     if (currentRssi > peakRSSI) {
       peakRSSI = currentRssi;
@@ -378,13 +382,14 @@ void handleRF_Raw() {
     int proto = rcSwitch.getReceivedProtocol();
     rcSwitch.resetAvailable();
 
-    // Pega o maior sinal detectado antes e durante a recepção do pacote
+    // Pega o maior sinal detectado
     int dbm = peakRSSI;
+    if (dbm == -100) dbm = (int)ELECHOUSE_cc1101.getRssi(); // Fallback
     peakRSSI = -100; // Reseta para a próxima captura
 
-    // Partial redraw: limpa apenas as áreas de texto e das barras
+    // Partial redraw: limpa as 3 linhas de texto (Y=40 até 74) e a linha do Sinal/Barras (Y=82 até 90)
     tft.fillRect(0, 40, SCR_W, 34, TFT_BLACK);
-    tft.fillRect(50, 82, 75, 8, TFT_BLACK);
+    tft.fillRect(0, 82, SCR_W, 8, TFT_BLACK);
 
     tft.setTextSize(1);
     tft.setTextColor(TFT_GREEN);
@@ -401,15 +406,18 @@ void handleRF_Raw() {
 
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, 82);
-    tft.print("Sinal:");
+    // Agora mostramos também o valor real do RSSI
+    char sbuf[16];
+    snprintf(sbuf, sizeof(sbuf), "dBm:%d", dbm);
+    tft.print(sbuf);
     
-    // Mapeia o RSSI real para 1 a 10 barras
-    int bars = constrain(map(dbm, -70, -20, 1, 10), 1, 10);
+    // Mapeia o RSSI real para 1 a 10 barras usando a exata mesma métrica do Analyser (-45 a -20)
+    int bars = constrain(map(dbm, -45, -20, 1, 10), 1, 10);
     for (int b = 0; b < 10; b++) {
       if (b < bars) {
-        tft.fillRect(50 + b * 7, 82, 5, 8, TFT_CYAN); // Quadrado preenchido
+        tft.fillRect(60 + b * 6, 82, 5, 8, TFT_CYAN); // Quadrado preenchido
       } else {
-        tft.drawRect(50 + b * 7, 82, 5, 8, TFT_DARKGREY); // Quadrado vazio
+        tft.drawRect(60 + b * 6, 82, 5, 8, TFT_DARKGREY); // Quadrado vazio
       }
     }
   }
