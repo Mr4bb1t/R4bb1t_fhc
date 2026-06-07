@@ -36,7 +36,7 @@ void displayMenuAtaques() {
   tft.print(ssid);
   tft.drawFastHLine(0, 25, 128, C_GREY);
 
-  const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "CTS Jammer",
+  const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "NAV Jammer",
                          "Beacon Spam"};
   for (int i = 0; i < 5; i++) {
     drawMenuItem(0, 27 + i * 20, 128, 19, items[i],
@@ -52,7 +52,7 @@ void handleMenuAtaques() {
       int old = opcaoAtaqueSelecionada;
       opcaoAtaqueSelecionada = (opcaoAtaqueSelecionada > 0) ? opcaoAtaqueSelecionada - 1 : 4;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "CTS Jammer", "Beacon Spam"};
+      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "NAV Jammer", "Beacon Spam"};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
@@ -60,7 +60,7 @@ void handleMenuAtaques() {
       int old = opcaoAtaqueSelecionada;
       opcaoAtaqueSelecionada = (opcaoAtaqueSelecionada < 4) ? opcaoAtaqueSelecionada + 1 : 0;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "CTS Jammer", "Beacon Spam"};
+      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "NAV Jammer", "Beacon Spam"};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
@@ -729,7 +729,7 @@ static int ctsMenuSel = 1;
 
 void displayAtaqueCtsJammer() {
   tft.fillScreen(C_BG);
-  drawHeader("CTS JAMMER", true);
+  drawHeader("NAV JAMMER", true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
@@ -744,9 +744,9 @@ void displayAtaqueCtsJammer() {
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
-    tft.print("Envia 'Clear-To-Send'");
+    tft.print("Envia 'QoS Null Data'");
     tft.setCursor(4, 62);
-    tft.print("Congela o canal (DoS)");
+    tft.print("Congela o canal (NAV)");
     tft.setCursor(4, 74);
     tft.print("Ignora 802.11w / WPA3");
 
@@ -770,7 +770,7 @@ void displayAtaqueCtsJammer() {
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 75);
-    tft.print("Frames CTS:");
+    tft.print("Frames QoS:");
     tft.setTextColor(C_WHITE);
     tft.setCursor(76, 75);
     tft.printf("%lu", ctsCounter);

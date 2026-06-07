@@ -29,10 +29,11 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 | Ferramenta | Descrição |
 |---|---|
 | **Scanner de Redes** | Escaneamento de APs com RSSI, BSSID e canal |
-| **Deauther** | Envio de frames 802.11 de desautenticação |
-| **Beacon Spam** | Criação de múltiplos SSIDs falsos simultâneos |
-| **Captive Portal** | Hotspot com página de phishing customizada |
-| **Captura de Handshake** | Monitoramento de handshakes WPA/WPA2 |
+| **Deauther** | Ataques de desautenticação em modo *Broadcast* e *Targeted* (com Scanner de Clientes em modo promíscuo) |
+| **CTS Jammer** | NAV Jamming avançado na camada MAC que bloqueia o espectro do canal inteiro (Efetivo contra WPA3) |
+| **Beacon Spam** | Criação de múltiplos SSIDs falsos simultâneos (com caracteres zero-width para clonagem invisível) |
+| **Captive Portal** | Hotspot com página de phishing customizada para extração de credenciais |
+| **Captura de Handshake** | Monitoramento e captura de handshakes WPA/WPA2 |
 | **Visualizar Credenciais** | Leitura das credenciais capturadas no SPIFFS |
 | **MAC Changer** | Alteração dinâmica do endereço MAC |
 
@@ -52,13 +53,15 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 | **Saved Signals** | Gerenciamento de sinais gravados |
 
 ### ⚙️ Sistema
-- **Persistência de Configurações** via NVRAM (salva brilho, modo de menu e MAC falso)
-- **UI "Cyber Edition"**: Interface totalmente customizada com temas dourados/neon e modos de visualização (Grade ou Lista)
-- **Monitoramento de bateria** com desligamento automático ao atingir nível crítico (≤5%)
-- **Screensaver** configurável e adaptável
-- **Ajuste de brilho** do display com PWM suave
-- **Splash screen** com imagem BMP do SPIFFS
-- Navegação por máquina de estados com debounce
+- **Storage UI**: Interface gráfica de gerenciamento do armazenamento interno com gráfico de disco em "Donut" e navegação nativa de pastas.
+- **File Viewer**: Leitor nativo diretamente na tela para arquivos de texto (`.txt`, `.csv`) e renderizador de imagens (`.bmp`) com suporte a *scroll*.
+- **Persistência de Configurações** via NVRAM (salva nível de brilho, modo de menu e MAC falso selecionado).
+- **UI "Cyber Edition"**: Interface totalmente customizada com temas dourados/neon, animações de micro-interações, redraws parciais otimizados (zero *flickering* / tela piscando) e modos de grade/lista.
+- **Monitoramento de bateria** com barra gráfica de precisão, divisor de tensão e desligamento automático em nível crítico (≤5%).
+- **Screensaver** adaptável contra burn-in no display.
+- **Ajuste de brilho** do display dinâmico via PWM suave.
+- **Splash screen** de inicialização lendo imagem BMP colorida direto do SPIFFS.
+- **Navegação universal**: Máquina de estados unificada com sistema robusto de botão "Voltar" (Back) em todas as telas.
 
 ---
 
