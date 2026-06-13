@@ -157,7 +157,9 @@ void displayRF() {
   static bool rfInitDone = false;
   if (!rfInitDone) {
     rfInitDone = true;
-    hwCC1101_ok = rfInit();
+    if (!hwCC1101_ok) {
+      hwCC1101_ok = rfInit();
+    }
   }
 
   tft.fillScreen(C_BG);

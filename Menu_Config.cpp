@@ -43,14 +43,16 @@ void handleConfiguracoes() {
       opcaoConfig = (opcaoConfig - 1 + NUM_CONFIG_ITEMS) % NUM_CONFIG_ITEMS;
       lastDebounceTime = millis();
       drawMenuItem(0, 16 + old * 20, 128, 19, configItems[old], false);
-      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig], true);
+      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig],
+                   true);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       int old = opcaoConfig;
       opcaoConfig = (opcaoConfig + 1) % NUM_CONFIG_ITEMS;
       lastDebounceTime = millis();
       drawMenuItem(0, 16 + old * 20, 128, 19, configItems[old], false);
-      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig], true);
+      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig],
+                   true);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
@@ -374,9 +376,6 @@ static void displaySobre_p1() {
   row("MISO:", "GPIO 19");
   row("MOSI:", "GPIO 13");
 
-  tft.setTextColor(C_GREY);
-  tft.setCursor(4, y);
-  tft.print("VCC: 3.3V");
   sobreFooter(1);
 }
 
@@ -404,9 +403,6 @@ static void displaySobre_p2() {
   row("GDO2:", "GPIO 32");
   row("Bus:", "HSPI", C_GOLD_DIM);
 
-  tft.setTextColor(C_GREY);
-  tft.setCursor(4, y);
-  tft.print("SCK:33 MISO:19 MOSI:13");
   sobreFooter(2);
 }
 
@@ -560,8 +556,10 @@ void blOff() {
 
 static void drawBrilhoSlider() {
   int pct = (int)((long)(brilhoAtual - BL_MIN) * 100 / (BL_MAX - BL_MIN));
-  if (pct < 0) pct = 0;
-  if (pct > 100) pct = 100;
+  if (pct < 0)
+    pct = 0;
+  if (pct > 100)
+    pct = 100;
 
   tft.fillRect(0, 40, SCR_W, 24, C_BG);
 
@@ -582,8 +580,9 @@ static void drawBrilhoSlider() {
 
   tft.drawFastHLine(slX0, slY, slW, C_GREY);
   int fillW = (int)((long)slW * (brilhoAtual - BL_MIN) / (BL_MAX - BL_MIN));
-  if (fillW > 0) tft.drawFastHLine(slX0, slY, fillW, C_GOLD);
-  
+  if (fillW > 0)
+    tft.drawFastHLine(slX0, slY, fillW, C_GOLD);
+
   int dotX = slX0 + fillW;
   tft.fillCircle(dotX, slY, 5, C_GOLD);
   tft.drawCircle(dotX, slY, 5, C_WHITE);
@@ -622,14 +621,16 @@ void handleBrilho() {
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       lastDebounceTime = millis();
       brilhoAtual += step;
-      if (brilhoAtual > BL_MAX) brilhoAtual = BL_MAX;
+      if (brilhoAtual > BL_MAX)
+        brilhoAtual = BL_MAX;
       blSet(brilhoAtual);
       drawBrilhoSlider();
     }
     if (digitalRead(BUTTON_LEFT) == LOW) {
       lastDebounceTime = millis();
       brilhoAtual -= step;
-      if (brilhoAtual < BL_MIN) brilhoAtual = BL_MIN;
+      if (brilhoAtual < BL_MIN)
+        brilhoAtual = BL_MIN;
       blSet(brilhoAtual);
       drawBrilhoSlider();
     }
@@ -657,7 +658,7 @@ static int storageOpcao = 0; // 0=ARQUIVOS, 1=VOLTAR
 // ── Estado: lista de arquivos ──
 #define FILES_MAX 24
 #define FILES_PER_PAGE 6
-static int fileCursor = 0; 
+static int fileCursor = 0;
 static int fileCount = 0;
 static char fileNames[FILES_MAX][26];
 static size_t fileSizes[FILES_MAX];
@@ -691,8 +692,10 @@ static void drawArcSeg(int cx, int cy, int r_out, int r_in, float a0, float a1,
       int dy = y - cy;
       int r2 = dx * dx + dy * dy;
       if (r2 >= r_in2 && r2 <= r_out2) {
-        float angle = atan2f((float)dy, (float)dx) * 180.0f / (float)M_PI + 90.0f;
-        if (angle < 0.0f) angle += 360.0f;
+        float angle =
+            atan2f((float)dy, (float)dx) * 180.0f / (float)M_PI + 90.0f;
+        if (angle < 0.0f)
+          angle += 360.0f;
         if (angle >= a0 && angle <= a1) {
           tft.drawPixel(x, y, color);
         }
@@ -833,7 +836,8 @@ void displayArmazenamento() {
 static void spiffsCollect() {
   fileCount = 0;
   File root = SPIFFS.open("/");
-  if (!root || !root.isDirectory()) return;
+  if (!root || !root.isDirectory())
+    return;
   File f = root.openNextFile();
   while (f && fileCount < FILES_MAX) {
     if (!f.isDirectory()) {
@@ -875,10 +879,12 @@ static void drawArquivosRow(int i, bool sel) {
     tft.setTextColor(sel ? C_GOLD : C_WHITE);
     tft.setCursor(4, y + 3);
     tft.print(sname);
-    
+
     char sbuf[9];
-    if (fileSizes[fi] < 1024) snprintf(sbuf, sizeof(sbuf), "%uB", (unsigned)fileSizes[fi]);
-    else snprintf(sbuf, sizeof(sbuf), "%uKB", (unsigned)(fileSizes[fi] / 1024));
+    if (fileSizes[fi] < 1024)
+      snprintf(sbuf, sizeof(sbuf), "%uB", (unsigned)fileSizes[fi]);
+    else
+      snprintf(sbuf, sizeof(sbuf), "%uKB", (unsigned)(fileSizes[fi] / 1024));
     int sw = (int)strlen(sbuf) * 6;
     tft.setTextColor(sel ? C_GOLD : C_GOLD_DIM);
     tft.setCursor(SCR_W - sw - 3, y + 3);
@@ -895,7 +901,8 @@ static void displayArquivosSPIFFS() {
   int totalItems = 1 + fileCount;
   int pageStart = (fileCursor / FILES_PER_PAGE) * FILES_PER_PAGE;
 
-  for (int i = pageStart; i < totalItems && (i - pageStart) < FILES_PER_PAGE; i++) {
+  for (int i = pageStart; i < totalItems && (i - pageStart) < FILES_PER_PAGE;
+       i++) {
     drawArquivosRow(i, i == fileCursor);
   }
 
@@ -920,18 +927,29 @@ static void displayArquivosSPIFFS() {
 }
 
 // ── Tela 2: Viewer Text e Tela 3: Viewer BMP ──
-static uint16_t bmp_r16(File &f) { return (uint16_t)f.read() | ((uint16_t)f.read() << 8); }
-static uint32_t bmp_r32(File &f) { uint32_t lo = bmp_r16(f); return lo | ((uint32_t)bmp_r16(f) << 16); }
+static uint16_t bmp_r16(File &f) {
+  return (uint16_t)f.read() | ((uint16_t)f.read() << 8);
+}
+static uint32_t bmp_r32(File &f) {
+  uint32_t lo = bmp_r16(f);
+  return lo | ((uint32_t)bmp_r16(f) << 16);
+}
 
 static void displayFileViewerBMP() {
   tft.fillScreen(C_BG);
   int fi = fileCursor - 1;
   String path = fileNames[fi];
-  if (!path.startsWith("/")) path = "/" + path;
+  if (!path.startsWith("/"))
+    path = "/" + path;
   File f = SPIFFS.open(path.c_str(), FILE_READ);
-  if (!f) return;
-  if (bmp_r16(f) != 0x4D42) { f.close(); return; }
-  bmp_r32(f); bmp_r32(f);
+  if (!f)
+    return;
+  if (bmp_r16(f) != 0x4D42) {
+    f.close();
+    return;
+  }
+  bmp_r32(f);
+  bmp_r32(f);
   uint32_t dataOffset = bmp_r32(f);
   bmp_r32(f);
   int32_t bmpW = (int32_t)bmp_r32(f);
@@ -939,46 +957,59 @@ static void displayFileViewerBMP() {
   bmp_r16(f);
   uint16_t bpp = bmp_r16(f);
   uint32_t comp = bmp_r32(f);
-  if (bpp != 24 || comp != 0) { f.close(); return; }
-  
-  bool flipY = (bmpH > 0);
-  if (bmpH < 0) bmpH = -bmpH;
-  int16_t scrW = 128;
-  int16_t scrH = 140;
-  
-  uint32_t sx = (uint32_t)scrW * 256 / (uint32_t)bmpW;
-  uint32_t sy = (uint32_t)scrH * 256 / (uint32_t)bmpH;
-  uint32_t sc = (sx < sy) ? sx : sy;
-  if (sc > 256) sc = 256;
-  
-  int16_t dW = (int16_t)((uint32_t)bmpW * sc / 256);
-  int16_t dH = (int16_t)((uint32_t)bmpH * sc / 256);
-  if (dW < 1) dW = 1;
-  if (dH < 1) dH = 1;
-  int16_t ox = (scrW - dW) / 2;
-  int16_t oy = (scrH - dH) / 2;
-  
-  size_t fbSize = (size_t)dW * (size_t)dH;
-  uint16_t *fb = (uint16_t *)malloc(fbSize * sizeof(uint16_t));
-  uint32_t rowBytes = ((uint32_t)(bmpW * 3 + 3) / 4) * 4;
-  uint8_t  *row = (uint8_t *)malloc(rowBytes);
-  if (!fb || !row) {
-    if (fb) free(fb);
-    if (row) free(row);
+  if (bpp != 24 || comp != 0) {
     f.close();
     return;
   }
-  
+
+  bool flipY = (bmpH > 0);
+  if (bmpH < 0)
+    bmpH = -bmpH;
+  int16_t scrW = 128;
+  int16_t scrH = 140;
+
+  uint32_t sx = (uint32_t)scrW * 256 / (uint32_t)bmpW;
+  uint32_t sy = (uint32_t)scrH * 256 / (uint32_t)bmpH;
+  uint32_t sc = (sx < sy) ? sx : sy;
+  if (sc > 256)
+    sc = 256;
+
+  int16_t dW = (int16_t)((uint32_t)bmpW * sc / 256);
+  int16_t dH = (int16_t)((uint32_t)bmpH * sc / 256);
+  if (dW < 1)
+    dW = 1;
+  if (dH < 1)
+    dH = 1;
+  int16_t ox = (scrW - dW) / 2;
+  int16_t oy = (scrH - dH) / 2;
+
+  size_t fbSize = (size_t)dW * (size_t)dH;
+  uint16_t *fb = (uint16_t *)malloc(fbSize * sizeof(uint16_t));
+  uint32_t rowBytes = ((uint32_t)(bmpW * 3 + 3) / 4) * 4;
+  uint8_t *row = (uint8_t *)malloc(rowBytes);
+  if (!fb || !row) {
+    if (fb)
+      free(fb);
+    if (row)
+      free(row);
+    f.close();
+    return;
+  }
+
   f.seek(dataOffset);
   for (int32_t fileRow = 0; fileRow < bmpH; fileRow++) {
-    if (f.read(row, rowBytes) != (int)rowBytes) break;
+    if (f.read(row, rowBytes) != (int)rowBytes)
+      break;
     int32_t imgY = flipY ? (bmpH - 1 - fileRow) : fileRow;
     int16_t sY = (int16_t)((int32_t)imgY * dH / bmpH);
-    if (sY < 0 || sY >= dH) continue;
+    if (sY < 0 || sY >= dH)
+      continue;
     uint16_t *fbRow = &fb[(size_t)sY * (size_t)dW];
     for (int16_t x = 0; x < dW; x++) {
       int32_t sX = (int32_t)x * bmpW / dW;
-      fbRow[x] = ((uint16_t)(row[sX * 3 + 2] & 0xF8) << 8) | ((uint16_t)(row[sX * 3 + 1] & 0xFC) << 3) | (row[sX * 3 + 0] >> 3);
+      fbRow[x] = ((uint16_t)(row[sX * 3 + 2] & 0xF8) << 8) |
+                 ((uint16_t)(row[sX * 3 + 1] & 0xFC) << 3) |
+                 (row[sX * 3 + 0] >> 3);
     }
   }
   free(row);
@@ -987,7 +1018,7 @@ static void displayFileViewerBMP() {
   tft.pushImage(ox, oy, dW, dH, fb);
   tft.setSwapBytes(false);
   free(fb);
-  
+
   drawSeparator(SCR_H - 14, C_GREY);
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
@@ -1003,10 +1034,14 @@ static void viewerBuildLines() {
     viewLineOff[viewTotalLines] = i;
     int end = i;
     int col = 0;
-    while (end < viewLen && viewBuf[end] != '\n' && col < VIEWER_LINE_W) { end++; col++; }
+    while (end < viewLen && viewBuf[end] != '\n' && col < VIEWER_LINE_W) {
+      end++;
+      col++;
+    }
     viewLineLen[viewTotalLines] = end - i;
     viewTotalLines++;
-    if (end < viewLen && viewBuf[end] == '\n') end++;
+    if (end < viewLen && viewBuf[end] == '\n')
+      end++;
     i = end;
   }
 }
@@ -1016,7 +1051,8 @@ static void displayFileViewerText() {
   int fi = fileCursor - 1;
   char htitle[14];
   const char *fname = fileNames[fi];
-  if (fname[0] == '/') fname++;
+  if (fname[0] == '/')
+    fname++;
   strncpy(htitle, fname, 13);
   htitle[13] = '\0';
   drawHeader(htitle, true);
@@ -1025,16 +1061,19 @@ static void displayFileViewerText() {
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 17);
   char info[28];
-  snprintf(info, sizeof(info), "%uB  %d linhas", (unsigned)fileSizes[fi], viewTotalLines);
+  snprintf(info, sizeof(info), "%uB  %d linhas", (unsigned)fileSizes[fi],
+           viewTotalLines);
   tft.print(info);
   drawSeparator(26, C_GREY_DARK);
 
   int y = 29;
   const int LH = 12;
-  for (int l = viewScroll; l < viewTotalLines && (l - viewScroll) < VIEWER_LINES; l++) {
+  for (int l = viewScroll;
+       l < viewTotalLines && (l - viewScroll) < VIEWER_LINES; l++) {
     char line[VIEWER_LINE_W + 1];
     int ll = viewLineLen[l];
-    if (ll > VIEWER_LINE_W) ll = VIEWER_LINE_W;
+    if (ll > VIEWER_LINE_W)
+      ll = VIEWER_LINE_W;
     memcpy(line, viewBuf + viewLineOff[l], ll);
     line[ll] = '\0';
     tft.setTextColor(C_WHITE);
@@ -1049,8 +1088,10 @@ static void displayFileViewerText() {
     const int SBH = VIEWER_LINES * LH;
     tft.drawFastVLine(SBX, SBY0, SBH, C_GREY_DARK);
     int thumbH = SBH * VIEWER_LINES / viewTotalLines;
-    if (thumbH < 4) thumbH = 4;
-    int thumbY = SBY0 + (SBH - thumbH) * viewScroll / (viewTotalLines - VIEWER_LINES);
+    if (thumbH < 4)
+      thumbH = 4;
+    int thumbY =
+        SBY0 + (SBH - thumbH) * viewScroll / (viewTotalLines - VIEWER_LINES);
     tft.drawFastVLine(SBX, thumbY, thumbH, C_GOLD);
   }
 
@@ -1067,22 +1108,25 @@ static void displayFileViewerText() {
 }
 
 static void openFileForView(int fi) {
-  const char* fname = fileNames[fi];
+  const char *fname = fileNames[fi];
   int len = strlen(fname);
   if (len > 4 && strcasecmp(fname + len - 4, ".bmp") == 0) {
     storageState = 3;
     displayFileViewerBMP();
     return;
   }
-  
+
   viewLen = 0;
   viewScroll = 0;
   String path = fname;
-  if (!path.startsWith("/")) path = "/" + path;
+  if (!path.startsWith("/"))
+    path = "/" + path;
   File f = SPIFFS.open(path.c_str(), FILE_READ);
-  if (!f) return;
+  if (!f)
+    return;
   viewLen = f.read((uint8_t *)viewBuf, sizeof(viewBuf) - 1);
-  if (viewLen < 0) viewLen = 0;
+  if (viewLen < 0)
+    viewLen = 0;
   viewBuf[viewLen] = '\0';
   f.close();
   for (int i = 0; i < viewLen; i++) {
@@ -1154,12 +1198,14 @@ void handleArmazenamento() {
     } else if (storageState == 2) {
       if (digitalRead(BUTTON_RIGHT) == LOW) {
         lastDebounceTime = millis();
-        if (viewScroll < viewTotalLines - VIEWER_LINES) viewScroll++;
+        if (viewScroll < viewTotalLines - VIEWER_LINES)
+          viewScroll++;
         displayFileViewerText();
       }
       if (digitalRead(BUTTON_LEFT) == LOW) {
         lastDebounceTime = millis();
-        if (viewScroll > 0) viewScroll--;
+        if (viewScroll > 0)
+          viewScroll--;
         displayFileViewerText();
       }
       if (digitalRead(BUTTON_SELECT) == LOW) {

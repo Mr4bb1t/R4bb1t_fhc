@@ -210,6 +210,9 @@ void setup() {
 
   systemInitialized = true;
 
+  // Inicializa o CC1101 no boot para aparecer conectado no Menu Config
+  hwCC1101_ok = rfInit();
+
   // Exibe splash screen com a imagem do SPIFFS
   displaySplash(2500); // 2,5 segundos
 
