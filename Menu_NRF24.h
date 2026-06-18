@@ -4,11 +4,19 @@
 #include <Arduino.h>
 
 // ── Pinos nRF24L01 ─────────────────────────────
-// SPI compartilhado com CC1101 (HSPI: SCK=33, MISO=19, MOSI=13)
+// SPI: usa HSPI (mesmo barramento do CC1101), pinos SCK=33 MISO=19 MOSI=13
+// TFT usa VSPI separado — sem conflito
 #define NRF_CE   22
-#define NRF_CSN   4   // GPIO 26 = BUTTON_SELECT (CONFLITO) → usar GPIO 4
+#define NRF_CSN   4
 
+// ── Funções públicas ────────────────────────────
 void displayModoNRF24();
 void handleModoNRF24();
+
+// ── Ícones do NRF24 (usados pelo Menu_Main) ─────
+// Modo grid (grande)
+void drawNRF24Icon(int x, int y, uint16_t col);
+// Modo lista (pequeno)
+void drawNRF24IconSmall(int x, int y, uint16_t col);
 
 #endif

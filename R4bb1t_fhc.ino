@@ -211,6 +211,7 @@ void setup() {
   systemInitialized = true;
 
   // Inicializa o CC1101 no boot para aparecer conectado no Menu Config
+  // Isso é feito APÓS a tela ter sido configurada para não roubar o barramento SPI
   hwCC1101_ok = rfInit();
 
   // Exibe splash screen com a imagem do SPIFFS
@@ -274,7 +275,7 @@ void loop() {
     break;
 
   case MODO_BLUETOOTH:
-    handleModoBluetooth();
+    handleMenuBT();
     break;
 
   case TELA_BT_SUBMENU:
@@ -343,6 +344,19 @@ void loop() {
 
   case CONFIRMA_APAGAR_CREDENCIAIS:
     handleConfirmaApagar();
+    break;
+
+  case MENU_NRF24:
+  case TELA_NRF_ATTACK:
+    handleModoNRF24();
+    break;
+
+  case TELA_DESLIGAR:
+    handleDesligar();
+    break;
+
+  case TELA_SCREENSAVER_TEST:
+    handleScreensaverTest();
     break;
   }
 

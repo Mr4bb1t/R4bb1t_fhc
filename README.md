@@ -52,6 +52,12 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 | **Random Transmit** | Transmissão de dados aleatórios |
 | **Saved Signals** | Gerenciamento de sinais gravados |
 
+### 📡 NRF24L01 (2.4 GHz)
+| Ferramenta | Descrição |
+|---|---|
+| **Jammer 2.4 GHz** | Inundação de todos os 125 canais do espectro 2.4 GHz, interrompendo comunicações WiFi, Bluetooth e periféricos sem fio |
+| **Scan de canais** | Varredura de atividade por canal no espectro 2.4 GHz |
+
 ### ⚙️ Sistema
 - **Storage UI**: Interface gráfica de gerenciamento do armazenamento interno com gráfico de disco em "Donut" e navegação nativa de pastas.
 - **File Viewer**: Leitor nativo diretamente na tela para arquivos de texto (`.txt`, `.csv`) e renderizador de imagens (`.bmp`) com suporte a *scroll*.
@@ -59,6 +65,7 @@ O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de seguran
 - **UI "Cyber Edition"**: Interface totalmente customizada com temas dourados/neon, animações de micro-interações, redraws parciais otimizados (zero *flickering* / tela piscando) e modos de grade/lista.
 - **Monitoramento de bateria** com barra gráfica de precisão, divisor de tensão e desligamento automático em nível crítico (≤5%).
 - **Screensaver** adaptável contra burn-in no display.
+- **Testar Tela**: 11 animações fluidas e interativas (Matrix Rain, Cubo 3D, Plasma, Tesseract 4D, Corredor, e olhos animados com física de movimento) acessíveis em Configurações → Testar Tela.
 - **Ajuste de brilho** do display dinâmico via PWM suave.
 - **Splash screen** de inicialização lendo imagem BMP colorida direto do SPIFFS.
 - **Navegação universal**: Máquina de estados unificada com sistema robusto de botão "Voltar" (Back) em todas as telas.
@@ -204,6 +211,28 @@ r4bb1t_fhc/
     ├── index.html       # Página do Captive Portal (phishing page)
     └── r4bb1t.bmp       # Imagem da splash screen
 ```
+
+---
+
+## 🙏 Créditos e Referências
+
+Este projeto foi construído sobre trabalho incrível da comunidade open-source. As seguintes partes do código têm origem em projetos externos, devidamente creditados:
+
+### 🎨 Animações de Tela — ESP32-third-eye
+
+As animações da funcionalidade **"Testar Tela"** (Matrix Rain, Cubo 3D, Plasma, Tesseract 4D, Corredor, olhos com física de movimento, etc.) foram portadas e adaptadas do projeto **ESP32-third-eye**:
+
+- **Autor:** [@Jekyllz](https://github.com/Jekyllz/ESP32-third-eye) / comunidade  
+- **Repositório original:** [`ESP32-third-eye`](https://github.com/Jekyllz/ESP32-third-eye) *(incluído como submódulo em `ESP32-third-eye/`)*
+- **Adaptações realizadas:** conversão de `Arduino_GFX` (canvas 240×240 circular) para `TFT_eSPI` direto (128×160 retangular), reescala de coordenadas, preservação completa da lógica de física e fluidez das animações.
+
+### 📡 Jammer NRF24L01 — nRF24_jammer
+
+A lógica de jamming 2.4 GHz do módulo **NRF24L01** (`Menu_NRF24.cpp`) foi baseada e portada do projeto **nRF24_jammer**:
+
+- **Autor:** [@W0rthlessS0ul](https://github.com/W0rthlessS0ul)
+- **Repositório original:** [https://github.com/W0rthlessS0ul/nRF24_jammer](https://github.com/W0rthlessS0ul/nRF24_jammer)
+- **Adaptações realizadas:** substituição do display OLED e botões originais pelo driver `TFT_eSPI` e pinagem GPIO do hardware R4BB1T FHC; integração ao sistema de menus e máquina de estados existente.
 
 ---
 

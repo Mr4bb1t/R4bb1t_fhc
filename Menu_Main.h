@@ -5,8 +5,6 @@
 
 void displayMenuInicial();
 void handleMenuInicial();
-void displayModoBluetooth();
-void handleModoBluetooth();
 void handleScreensaver();
 
 #endif

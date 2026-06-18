@@ -1,492 +1,620 @@
-// Menu_NRF24.cpp — Testes temporários do módulo nRF24L01
-//
-// ⚠️  REQUER: biblioteca "RF24" por TMRh20
-//     Instalar no Arduino IDE:
-//     Ferramentas → Gerenciar Bibliotecas → buscar "RF24" → instalar "RF24 by
-//     TMRh20"
-//
-// Pinos (SPI compartilhado com CC1101 via HSPI):
-//   SCK  = 33 | MISO = 19 | MOSI = 13
-//   CE   = 22 | CSN  = 26
+// Menu_NRF24.cpp — NRF24 Jammer real (FreeRTOS non-blocking)
+// Módulo 1: CE=22 CSN=4  HSPI: SCK=33 MISO=19 MOSI=13
+// Módulo 2: opcional — mesmo HSPI, CE/CSN configuráveis
+// ⚠️ Não mexe no CC1101 (CS=25, GDO0=2, GDO2=32)
 
 #include "Menu_NRF24.h"
 #include "Battery.h"
 #include "Globals.h"
 #include "HWProbe.h"
 #include "Menu_Main.h"
-
+#include "Menu_RF.h" // Necessário para controlar RF_CS
+#include "UI.h"
 #include <RF24.h>
 #include <SPI.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
-// ── Objeto RF24 ───────────────────────────────
-static SPIClass spiNRF(HSPI);       // HSPI compartilhado
-static RF24 radio(NRF_CE, NRF_CSN); // CE, CSN
+// ── Pinos Módulo 2 (opcional, não soldado ainda) ──────
+#define NRF2_CE  18   // GPIO livre — ajustar quando soldar
+#define NRF2_CSN 15   // GPIO livre — ajustar quando soldar
 
-// ── Estado interno ────────────────────────────
-// nrfReady: espelha hwNRF24_ok após init completa do menu
-static bool nrfReady = false;
-static bool nrfInitDone = false;
-
-// ── Sub-menu ──────────────────────────────────
-// 0=< Voltar  1=Status  2=Ping TX  3=Escutar RX
-static const char *nrfLabels[] = {"< Voltar", "Status", "Ping TX",
-                                  "Escutar RX"};
-static const uint16_t nrfColors[] = {TFT_WHITE, TFT_CYAN, TFT_GREEN,
-                                     TFT_YELLOW};
-static const int NRF_ITEMS = 4;
-static int nrfOpcao = 0;
-
+// ── Layout ────────────────────────────────────────────
 #define SCR_W 128
 #define SCR_H 160
 
-// ── Endereço de rádio fixo para os testes ────
-static const byte PIPE_ADDR[6] = "r4bb1";
+// ── Canais ────────────────────────────────────────────
+static const uint8_t BT_CH[]  = {32,34,46,48,50,52,0,1,2,4,6,8,22,24,26,28,30,74,76,78,80};
+static const uint8_t BLE_CH[] = {2, 26, 80};
+static const char    JAM_TEXT[] = "xxxxxxxxxxxxxxxx";
 
-// ─────────────────────────────────────────────
-//  Inicialização (lazy, só na primeira entrada)
-// ─────────────────────────────────────────────
+// ── Objetos de rádio (alocados dinamicamente) ─────────
+// NRF24 usa o SPI global (HSPI/SPI2) — mesmos pinos do CC1101
+// TFT usa VSPI (SPI3) com MOSI=23 SCLK=18 — barramentos separados
+// IMPORTANTE: A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação,
+// por isso precisamos SEMPRE chamar SPI.begin() antes de usar o NRF24
+static SPIClass *spiJam    = &SPI;
+static RF24     *radio[2]  = {nullptr, nullptr};
+static int       radioCount = 0;
+
+// ── Estado geral ──────────────────────────────────────
+static volatile bool nrfInitDone  = false;
+static bool nrfReady     = false;
+
+// ── Task FreeRTOS de jamming ──────────────────────────
+static TaskHandle_t  jamTaskHandle = nullptr;
+static volatile bool jamStop       = false;
+static volatile bool jamRunning    = false;
+
+// ── Task FreeRTOS de init ─────────────────────────────
+static volatile bool nrfInitRunning = false;
+static volatile bool nrfNeedsRedraw = false;
+
+static bool nrfInit(); // Forward declaration
+
+static void nrfInitTask(void *param) {
+  nrfReady = nrfInit();
+  nrfNeedsRedraw = true;
+  nrfInitRunning = false;
+  Serial.printf("[NRF] Init task concluido, nrfReady=%d\n", nrfReady);
+  vTaskDelete(nullptr);
+}
+
+// ── Contadores (atualizados pela task, lidos pela UI) ─
+static volatile unsigned long jamPktCount = 0;
+static volatile uint8_t       jamCurChan  = 0;
+
+// ── Sub-ataques disponíveis ───────────────────────────
+struct NrfAttack { const char *label; const char *desc; uint16_t color; };
+static const NrfAttack ATTACKS[] = {
+  {"< Voltar",        "",                          TFT_WHITE},
+  {"BT Jammer",       "Bluetooth Classic 2.4GHz",  TFT_RED  },
+  {"Drone Jammer",    "Drones 2.4GHz",             TFT_RED  },
+  {"BLE Adv Jammer",  "BLE Adv Channels",          TFT_YELLOW},
+  {"BLE Data Jammer", "BLE Data Channels",         TFT_YELLOW},
+  {"WiFi Jammer",     "802.11 b/g/n 2.4GHz",       TFT_CYAN },
+  {"Zigbee Jammer",   "IEEE 802.15.4",             0x07C0   },
+  {"Misc Jammer",     "Canal livre 0-124",          0x967F   },
+};
+static const int ATK_COUNT = (int)(sizeof(ATTACKS)/sizeof(ATTACKS[0]));
+
+// ── Cursor / scroll do menu ───────────────────────────
+static int nrfCursor = 0;
+static int nrfScroll = 0;
+static const int ITEM_H  = 18;
+static const int ITEM_Y0 = 38;
+static const int MAX_VIS = (SCR_H - ITEM_Y0 - 16) / ITEM_H;
+
+// ── Tela interna ──────────────────────────────────────
+static int nrfActiveAtk = -1;
+enum NrfScreen { NSC_MENU, NSC_ATTACK };
+static NrfScreen nrfScreen = NSC_MENU;
+static unsigned long lastUIUpdate = 0;
+
+// ─────────────────────────────────────────────────────
+//  Init / Deinit de rádios
+// ─────────────────────────────────────────────────────
 static bool nrfInit() {
-  Serial.println("[NRF] ====== Iniciando nRF24L01 ======");
-  Serial.printf("[NRF] CE=%d  CSN=%d\n", NRF_CE, NRF_CSN);
-  Serial.printf("[NRF] SCK=33  MISO=19  MOSI=13\n");
+  if (nrfReady) return true;
 
-  // 1. Pinos primeiro
-  pinMode(NRF_CSN, OUTPUT);
-  digitalWrite(NRF_CSN, HIGH);
-  pinMode(NRF_CE, OUTPUT);
-  digitalWrite(NRF_CE, LOW);
+  Serial.println("[NRF] Iniciando HSPI...");
+
+  // Garante pinos do módulo 1 e desativa CC1101 no barramento
+  pinMode(RF_CS, OUTPUT);    digitalWrite(RF_CS, HIGH); // CS do CC1101 inativo
+  pinMode(NRF_CSN, OUTPUT);  digitalWrite(NRF_CSN, HIGH);
+  pinMode(NRF_CE,  OUTPUT);  digitalWrite(NRF_CE,  LOW);
   delay(20);
 
-  // 2. Inicia HSPI (SS=-1 pois RF24 controla CSN manualmente)
-  spiNRF.begin(33, 19, 13, -1);
-  spiNRF.setFrequency(2000000); // 2 MHz
-  delay(10);
+  // A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação,
+  // precisamos SEMPRE reinicializar o barramento HSPI antes do NRF24
+  bool spiOk = SPI.begin(33, 19, 13, -1);
+  Serial.printf("[NRF] SPI.begin()=%d\n", spiOk);
+  SPI.setFrequency(8000000);
 
-  // 3. radio.begin() com retry
-  bool ok = false;
-  for (int attempt = 1; attempt <= 2 && !ok; attempt++) {
-    ok = radio.begin(&spiNRF);
-    Serial.printf("[NRF] radio.begin() tentativa %d = %s\n", attempt,
-                  ok ? "OK" : "FALHOU");
-    if (!ok)
-      delay(80);
+  // Módulo 1 (obrigatório)
+  radio[0] = new RF24(NRF_CE, NRF_CSN);
+  bool ok0 = false;
+  for (int t = 0; t < 3 && !ok0; t++) {
+    Serial.printf("[NRF] Tentativa %d...\n", t + 1);
+    ok0 = radio[0]->begin(spiJam);
+    Serial.printf("[NRF] begin()=%d\n", ok0);
+    if (!ok0) delay(80);
   }
-
-  if (!ok) {
-    Serial.println("[NRF] Modulo nao respondeu.");
-    Serial.println(
-        "[NRF] Verifique: VCC=3.3V, CE=22, CSN=4, SCK=33, MISO=19, MOSI=13");
+  if (!ok0) {
+    Serial.println("[NRF] Modulo 1 nao respondeu.");
+    delete radio[0]; radio[0] = nullptr;
     return false;
   }
+  radioCount = 1;
 
-  // 4. Configuração
-  radio.setPALevel(RF24_PA_MIN);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setChannel(76);
-  radio.openWritingPipe(PIPE_ADDR);
-  radio.openReadingPipe(1, PIPE_ADDR);
-  radio.stopListening();
+  // Módulo 2 (opcional — só tenta se pinos diferentes)
+  pinMode(NRF2_CSN, OUTPUT); digitalWrite(NRF2_CSN, HIGH);
+  pinMode(NRF2_CE,  OUTPUT); digitalWrite(NRF2_CE,  LOW);
+  delay(10);
+  radio[1] = new RF24(NRF2_CE, NRF2_CSN);
+  bool ok1 = radio[1]->begin(spiJam);
+  if (ok1 && radio[1]->isChipConnected()) {
+    radioCount = 2;
+    Serial.println("[NRF] Modulo 2 detectado!");
+  } else {
+    delete radio[1]; radio[1] = nullptr;
+    Serial.println("[NRF] Modulo 2 ausente (opcional).");
+  }
 
-  Serial.println("[NRF] nRF24L01 configurado com sucesso!");
-  Serial.printf("[NRF] Canal: %d  DataRate: 250kbps  PA: MIN\n",
-                radio.getChannel());
-  radio.printPrettyDetails();
+  // Configura todos os módulos presentes
+  for (int i = 0; i < radioCount; i++) {
+    radio[i]->setAutoAck(false);
+    radio[i]->stopListening();
+    radio[i]->setRetries(0, 0);
+    radio[i]->setPayloadSize(5);
+    radio[i]->setAddressWidth(3);
+    radio[i]->setPALevel(RF24_PA_MAX, true);
+    radio[i]->setDataRate(RF24_2MBPS);
+    radio[i]->setCRCLength(RF24_CRC_DISABLED);
+    radio[i]->disableCRC();
+    radio[i]->disableAckPayload();
+    radio[i]->disableDynamicPayloads();
+  }
+
+  hwNRF24_ok = true;
+  nrfReady   = true;
+  Serial.printf("[NRF] Pronto. Modulos: %d\n", radioCount);
   return true;
 }
 
-// ─────────────────────────────────────────────
-//  Helpers de tela
-// ─────────────────────────────────────────────
-static void nrfHeader(const char *titulo) {
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_CYAN);
-  char buf[24];
-  snprintf(buf, sizeof(buf), "[ %s ]", titulo);
-  tft.setCursor((SCR_W - strlen(buf) * 6) / 2, 5);
-  tft.print(buf);
-  tft.drawFastHLine(0, 17, SCR_W, TFT_DARKGREY);
-}
+static void nrfDeinit() {
+  // Para a task de init se estiver rodando
+  nrfInitRunning = false;
+  nrfNeedsRedraw = false;
 
-static void nrfFooter() {
-  tft.drawFastHLine(0, SCR_H - 16, SCR_W, TFT_DARKGREY);
-  tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(5, SCR_H - 10);
-  tft.print("<");
-  tft.setCursor(SCR_W / 2 - 2, SCR_H - 10);
-  tft.print("o");
-  tft.setCursor(SCR_W - 11, SCR_H - 10);
-  tft.print(">");
-}
-
-// ─────────────────────────────────────────────
-//  TELA: Sub-menu nRF24
-// ─────────────────────────────────────────────
-void displayModoNRF24() {
-  if (!nrfInitDone) {
-    nrfInitDone = true;
-    nrfReady = nrfInit();
-    hwNRF24_ok = nrfReady;
-  }
-
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextSize(1);
-
-  if (!nrfReady) {
-    // ── Tela de ERRO: mostra pinos e botão de retry ──
-    tft.setTextColor(TFT_RED);
-    tft.setCursor(2, 4);
-    tft.print("nRF24: NAO DETECTADO");
-    tft.drawFastHLine(0, 16, SCR_W, TFT_DARKGREY);
-
-    tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(4, 24);
-    tft.print("Pinos esperados:");
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(4, 36);
-    tft.print("CE=22   CSN=4");
-    tft.setCursor(4, 48);
-    tft.print("SCK=33  MISO=19");
-    tft.setCursor(4, 60);
-    tft.print("MOSI=13 VCC=3.3V");
-
-    tft.drawFastHLine(0, 78, SCR_W, 0x2104);
-    tft.setTextColor(TFT_CYAN);
-    tft.setCursor(4, 86);
-    tft.print("[o] Tentar novamente");
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(4, 100);
-    tft.print("[<] Voltar");
-
-    nrfFooter();
-    batteryDraw();
-    return;
-  }
-
-  // ── Módulo OK: cabeçalho + lista de opções ──
-  tft.setCursor(2, 2);
-  tft.setTextColor(TFT_GREEN);
-  tft.print("nRF24L01  OK  2.4GHz");
-  tft.setCursor(32, 14);
-  tft.setTextColor(TFT_YELLOW);
-  tft.print("2.4 GHz");
-  tft.drawFastHLine(0, 24, SCR_W, TFT_DARKGREY);
-
-  const int ITEM_H = 20;
-  const int ITEM_Y0 = 28;
-  for (int i = 0; i < NRF_ITEMS; i++) {
-    int y = ITEM_Y0 + i * ITEM_H;
-    bool sel = (i == nrfOpcao);
-    if (sel) {
-      tft.fillRect(0, y, 5, ITEM_H - 2, nrfColors[i]);
-      tft.fillRect(5, y, SCR_W - 5, ITEM_H - 2, 0x1082);
-      tft.setTextColor(TFT_WHITE);
-    } else {
-      tft.setTextColor(nrfColors[i]);
-    }
-    tft.setCursor(10, y + 5);
-    tft.print(nrfLabels[i]);
-  }
-
-  nrfFooter();
-  batteryDraw();
-}
-
-// ─────────────────────────────────────────────
-//  TESTE 1: Status / Informações do módulo
-// ─────────────────────────────────────────────
-static void runStatus() {
-  nrfHeader("NRF STATUS");
-  tft.setTextSize(1);
-
-  if (!nrfReady) {
-    tft.setTextColor(TFT_RED);
-    tft.setCursor(4, 40);
-    tft.print("Modulo nao detectado!");
-    tft.setCursor(4, 56);
-    tft.print("Verifique fiacao.");
-    nrfFooter();
-    batteryDraw();
-    return;
-  }
-
-  int y = 24;
-  auto row = [&](const char *lbl, String val, uint16_t col = TFT_WHITE) {
-    tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(2, y);
-    tft.print(lbl);
-    tft.setTextColor(col);
-    tft.setCursor(60, y);
-    tft.print(val);
-    y += 12;
-  };
-
-  row("Canal", String(radio.getChannel()));
-  row("PA Level", radio.isPVariant() ? "nRF24L01+" : "nRF24L01");
-  row("DataRate", "250 kbps");
-  row("FIFO TX", radio.isFifo(true, true) ? "FULL" : "OK");
-  row("FIFO RX", radio.isFifo(false, true) ? "FULL" : "OK");
-  row("Chip", radio.isChipConnected() ? "CONN" : "FAIL",
-      radio.isChipConnected() ? TFT_GREEN : TFT_RED);
-  row("Variant", radio.isPVariant() ? "PA+LNA" : "basic");
-
-  tft.setTextColor(TFT_CYAN);
-  tft.setCursor(4, y + 4);
-  tft.print("Ver Serial p/ detalhes");
-
-  nrfFooter();
-  batteryDraw();
-}
-
-// ─────────────────────────────────────────────
-//  TESTE 2: Ping TX — envia pacotes e conta ACK
-// ─────────────────────────────────────────────
-static unsigned long pingCount = 0;
-static unsigned long pingSuccess = 0;
-static unsigned long pingLastMs = 0;
-static bool pingRunning = false;
-
-static void displayPingTX(bool update = false) {
-  if (!update)
-    nrfHeader("PING TX");
-  tft.setTextSize(1);
-
-  if (!nrfReady) {
-    tft.setTextColor(TFT_RED);
-    tft.setCursor(4, 40);
-    tft.print("Modulo indisponivel");
-    nrfFooter();
-    batteryDraw();
-    return;
-  }
-
-  if (!update) {
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(4, 26);
-    tft.print("Canal 76  addr: r4bb1");
-    tft.setTextColor(pingRunning ? TFT_RED : TFT_GREEN);
-    tft.setCursor(4, 40);
-    tft.print(pingRunning ? "TRANSMITINDO..." : "o = INICIAR");
-  }
-
-  // Atualiza contadores
-  tft.fillRect(4, 60, SCR_W - 8, 56, TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setCursor(4, 62);
-  tft.print("Enviados: ");
-  tft.print(pingCount);
-  tft.setTextColor(TFT_GREEN);
-  tft.setCursor(4, 76);
-  tft.print("ACK OK : ");
-  tft.print(pingSuccess);
-  tft.setTextColor(TFT_RED);
-  tft.setCursor(4, 90);
-  tft.print("Falhas : ");
-  tft.print(pingCount - pingSuccess);
-
-  if (pingCount > 0) {
-    int pct = (int)((float)pingSuccess / pingCount * 100);
-    tft.setTextColor(pct > 80 ? TFT_GREEN : TFT_YELLOW);
-    tft.setCursor(4, 106);
-    char buf[20];
-    snprintf(buf, sizeof(buf), "Taxa: %d%%", pct);
-    tft.print(buf);
-  }
-
-  if (!update) {
-    nrfFooter();
-    batteryDraw();
-  }
-}
-
-// ─────────────────────────────────────────────
-//  TESTE 3: Escutar RX — recebe pacotes
-// ─────────────────────────────────────────────
-static unsigned long rxCount = 0;
-static unsigned long rxLastMs = 0;
-static bool rxListening = false;
-static char rxLastMsg[33] = "--";
-
-static void displayEscutar(bool update = false) {
-  if (!update)
-    nrfHeader("ESCUTAR RX");
-  tft.setTextSize(1);
-
-  if (!nrfReady) {
-    tft.setTextColor(TFT_RED);
-    tft.setCursor(4, 40);
-    tft.print("Modulo indisponivel");
-    nrfFooter();
-    batteryDraw();
-    return;
-  }
-
-  if (!update) {
-    tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(4, 26);
-    tft.print(rxListening ? "Escutando..." : "o = INICIAR");
-    nrfFooter();
-    batteryDraw();
-  }
-
-  tft.fillRect(4, 42, SCR_W - 8, 72, TFT_BLACK);
-  tft.setTextColor(TFT_WHITE);
-  tft.setCursor(4, 44);
-  tft.print("Recebidos: ");
-  tft.print(rxCount);
-  tft.setTextColor(TFT_GREEN);
-  tft.setCursor(4, 60);
-  tft.print("Ultimo:");
-  tft.setTextColor(TFT_CYAN);
-  tft.setCursor(4, 72);
-  tft.print(rxLastMsg);
-}
-
-// ─────────────────────────────────────────────
-//  Estado da tela atual dentro do menu NRF
-//  Prefixo NSC_ (NRF Screen) para não conflitar
-//  com macros do nRF24L01.h (NRF_STATUS etc)
-// ─────────────────────────────────────────────
-enum NrfScreen { NSC_MENU, NSC_STATUS, NSC_PING, NSC_LISTEN };
-static NrfScreen nrfScreen = NSC_MENU;
-
-// ─────────────────────────────────────────────
-//  Handler principal
-// ─────────────────────────────────────────────
-void handleModoNRF24() {
-  // ── PING TX: loop não-bloqueante ──────────
-  if (nrfScreen == NSC_PING && pingRunning && nrfReady) {
-    if (millis() - pingLastMs > 500) { // 1 ping a cada 500ms
-      pingLastMs = millis();
-      radio.stopListening();
-
-      uint32_t payload = millis();
-      bool ok = radio.write(&payload, sizeof(payload));
-      pingCount++;
-      if (ok)
-        pingSuccess++;
-
-      Serial.printf("[NRF] Ping %lu → %s\n", pingCount, ok ? "ACK" : "FAIL");
-      displayPingTX(true);
+  for (int i = 0; i < radioCount; i++) {
+    if (radio[i]) {
+      radio[i]->stopConstCarrier();
+      radio[i]->powerDown();
+      delete radio[i]; radio[i] = nullptr;
     }
   }
+  radioCount = 0;
+  nrfReady   = false;
+  hwNRF24_ok = false;
+  nrfInitDone = false;
+}
 
-  // ── RX: verifica buffer ───────────────────
-  if (nrfScreen == NSC_LISTEN && rxListening && nrfReady) {
-    if (radio.available()) {
-      uint32_t payload = 0;
-      radio.read(&payload, sizeof(payload));
-      rxCount++;
-      snprintf(rxLastMsg, sizeof(rxLastMsg), "0x%08lX (#%lu)", payload,
-               rxCount);
-      Serial.printf("[NRF] RX: 0x%08lX (#%lu)\n", payload, rxCount);
-      displayEscutar(true);
-    }
-  }
+// ─────────────────────────────────────────────────────
+//  Task FreeRTOS — loop de jamming
+// ─────────────────────────────────────────────────────
+static void jamTask(void *param) {
+  int atkId = (int)(intptr_t)param;
+  jamPktCount = 0;
+  jamCurChan  = 0;
 
-  // ── Botões ────────────────────────────────
-  if ((millis() - lastDebounceTime) > debounceDelay) {
+  switch (atkId) {
 
-    // ── Se módulo não detectado: só LEFT (voltar) e SELECT (retry) ──
-    if (!nrfReady) {
-      if (digitalRead(BUTTON_LEFT) == LOW) {
-        lastDebounceTime = millis();
-        estadoAtual = MENU_INICIAL;
-        displayMenuInicial();
-        return;
-      }
-      if (digitalRead(BUTTON_SELECT) == LOW) {
-        lastDebounceTime = millis();
-        // Reseta flags para forçar nova tentativa de init
-        nrfInitDone = false;
-        nrfReady = false;
-        displayModoNRF24(); // vai chamar nrfInit() novamente
-        return;
-      }
-      return; // ignora demais botões quando módulo ausente
-    }
-
-    // ── Na tela MENU principal do NRF ────────
-    if (nrfScreen == NSC_MENU) {
-      if (digitalRead(BUTTON_RIGHT) == LOW) {
-        nrfOpcao = (nrfOpcao + 1) % NRF_ITEMS;
-        lastDebounceTime = millis();
-        displayModoNRF24();
-      }
-      if (digitalRead(BUTTON_LEFT) == LOW) {
-        lastDebounceTime = millis();
-        if (nrfOpcao == 0) {
-          estadoAtual = MENU_INICIAL;
-          displayMenuInicial();
-          return;
-        }
-        nrfOpcao = (nrfOpcao - 1 + NRF_ITEMS) % NRF_ITEMS;
-        displayModoNRF24();
-      }
-      if (digitalRead(BUTTON_SELECT) == LOW) {
-        lastDebounceTime = millis();
-        switch (nrfOpcao) {
-        case 0:
-          estadoAtual = MENU_INICIAL;
-          displayMenuInicial();
-          break;
-        case 1:
-          nrfScreen = NSC_STATUS;
-          runStatus();
-          break;
-        case 2:
-          nrfScreen = NSC_PING;
-          pingCount = pingSuccess = 0;
-          pingRunning = false;
-          displayPingTX();
-          break;
-        case 3:
-          nrfScreen = NSC_LISTEN;
-          rxCount = 0;
-          rxListening = false;
-          displayEscutar();
-          break;
+    // ── 1: BT Jammer — portadora constante varrendo BT Classic
+    case 1:
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, BT_CH[0]);
+      while (!jamStop) {
+        for (int ch = 0; ch < 21 && !jamStop; ch++) {
+          for (int i = 0; i < radioCount; i++)
+            radio[i]->setChannel(BT_CH[ch]);
+          jamCurChan = BT_CH[ch];
+          jamPktCount++;
+          vTaskDelay(1);
         }
       }
-    }
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
+      break;
 
-    // ── Em sub-telas ─────────────────────────
-    else {
-      // LEFT → volta ao menu NRF
-      if (digitalRead(BUTTON_LEFT) == LOW) {
-        lastDebounceTime = millis();
-        // Para transmissão/recepção ativas
-        if (pingRunning) {
-          pingRunning = false;
-          radio.stopListening();
-        }
-        if (rxListening) {
-          rxListening = false;
-          radio.stopListening();
-        }
-        nrfScreen = NSC_MENU;
-        displayModoNRF24();
+    // ── 2: Drone Jammer — varrendo 0-124 aleatório + portadora
+    case 2:
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, 45);
+      while (!jamStop) {
+        uint8_t ch = (uint8_t)(random(125));
+        for (int i = 0; i < radioCount; i++)
+          radio[i]->setChannel(ch);
+        jamCurChan = ch;
+        jamPktCount++;
+        vTaskDelay(1);
       }
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
+      break;
 
-      // SELECT → toggle na tela de Ping ou RX
-      if (digitalRead(BUTTON_SELECT) == LOW) {
-        lastDebounceTime = millis();
-        if (nrfScreen == NSC_PING && nrfReady) {
-          pingRunning = !pingRunning;
-          if (!pingRunning)
-            radio.stopListening();
-          displayPingTX();
-        }
-        if (nrfScreen == NSC_LISTEN && nrfReady) {
-          rxListening = !rxListening;
-          if (rxListening) {
-            radio.startListening();
-          } else {
-            radio.stopListening();
+    // ── 3: BLE Adv Jammer — writeFast nos 3 canais ADV
+    case 3:
+      while (!jamStop) {
+        for (int ch = 0; ch < 3 && !jamStop; ch++) {
+          for (int i = 0; i < radioCount; i++) {
+            radio[i]->setChannel(BLE_CH[ch]);
+            radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
           }
-          displayEscutar();
+          jamCurChan = BLE_CH[ch];
+          jamPktCount++;
+        }
+        vTaskDelay(1);
+      }
+      break;
+
+    // ── 4: BLE Data Jammer — portadora nos canais BLE data (2-80 pares)
+    case 4:
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, 45);
+      while (!jamStop) {
+        for (uint8_t ch = 2; ch <= 80 && !jamStop; ch += 2) {
+          for (int i = 0; i < radioCount; i++)
+            radio[i]->setChannel(ch);
+          jamCurChan = ch;
+          jamPktCount++;
+          vTaskDelay(1);
         }
       }
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
+      break;
+
+    // ── 5: WiFi Jammer — todos os 14 canais WiFi (faixas de 23 sub-canais)
+    case 5:
+      while (!jamStop) {
+        for (int wch = 0; wch < 14 && !jamStop; wch++) {
+          int base = (wch * 5) + 1;
+          for (int sub = base; sub <= base + 22 && !jamStop; sub++) {
+            if (sub < 1 || sub > 125) continue;
+            for (int i = 0; i < radioCount; i++) {
+              radio[i]->setChannel((uint8_t)sub);
+              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+            }
+            jamCurChan = (uint8_t)sub;
+            jamPktCount++;
+          }
+          vTaskDelay(1);
+        }
+      }
+      break;
+
+    // ── 6: Zigbee Jammer — canais 11-26 IEEE 802.15.4 → NRF offset
+    case 6:
+      while (!jamStop) {
+        for (int zch = 11; zch < 27 && !jamStop; zch++) {
+          uint8_t nrfCh = (uint8_t)(4 + 5 * (zch - 11));
+          for (int sub = 0; sub < 3 && !jamStop; sub++) {
+            for (int i = 0; i < radioCount; i++) {
+              radio[i]->setChannel(nrfCh + sub);
+              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+            }
+            jamCurChan = nrfCh + sub;
+            jamPktCount++;
+          }
+          vTaskDelay(1);
+        }
+      }
+      break;
+
+    // ── 7: Misc Jammer — portadora varrendo 0-124 sequencialmente
+    case 7:
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, 0);
+      while (!jamStop) {
+        for (uint8_t ch = 0; ch < 125 && !jamStop; ch++) {
+          for (int i = 0; i < radioCount; i++)
+            radio[i]->setChannel(ch);
+          jamCurChan = ch;
+          jamPktCount++;
+          vTaskDelay(1);
+        }
+      }
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
+      break;
+
+    default:
+      break;
+  }
+
+  jamRunning = false;
+  vTaskDelete(nullptr);
+}
+
+static void startJamTask(int atkId) {
+  jamStop    = false;
+  jamRunning = true;
+  xTaskCreatePinnedToCore(
+    jamTask, "nrfJam",
+    4096,
+    (void *)(intptr_t)atkId,
+    5,                // prioridade alta para RF
+    &jamTaskHandle,
+    0               // core 0 (UI no core 1)
+  );
+}
+
+static void stopJamTask() {
+  if (!jamRunning) return;
+  jamStop = true;
+  // Aguarda até 500ms para a task terminar
+  for (int t = 0; t < 50 && jamRunning; t++) delay(10);
+  jamTaskHandle = nullptr;
+}
+
+// ─────────────────────────────────────────────────────
+//  Ícone Proibido + sinais RF
+// ─────────────────────────────────────────────────────
+static void drawProhibitedRFIcon(int cx, int cy, int r, uint16_t col) {
+  tft.drawCircle(cx, cy, r,     col);
+  tft.drawCircle(cx, cy, r - 1, col);
+  float ang = 45.0f * PI / 180.0f;
+  int dx = (int)(r * cos(ang)), dy = (int)(r * sin(ang));
+  tft.drawLine(cx - dx, cy + dy, cx + dx, cy - dy, col);
+  tft.drawLine(cx - dx + 1, cy + dy, cx + dx + 1, cy - dy, col);
+  for (int arc = 6; arc <= 14; arc += 4) {
+    for (float a = -50.0f; a <= 50.0f; a += 2.0f) {
+      float rad = a * PI / 180.0f;
+      int px = cx + (int)(arc * cos(rad)) + r + 2;
+      int py = cy + (int)(arc * sin(rad));
+      if (px < SCR_W && py >= 0 && py < SCR_H) tft.drawPixel(px, py, col);
+    }
+  }
+  for (int arc = 6; arc <= 14; arc += 4) {
+    for (float a = 130.0f; a <= 230.0f; a += 2.0f) {
+      float rad = a * PI / 180.0f;
+      int px = cx + (int)(arc * cos(rad)) - r - 2;
+      int py = cy + (int)(arc * sin(rad));
+      if (px >= 0 && py >= 0 && py < SCR_H) tft.drawPixel(px, py, col);
+    }
+  }
+}
+
+void drawNRF24IconSmall(int x, int y, uint16_t col) {
+  // (x,y) = ponto de ref do item de lista; cx/cy = centro do ícone
+  drawProhibitedRFIcon(x + 10, y + 13, 7, col);
+}
+
+void drawNRF24Icon(int x, int y, uint16_t col) {
+  // (x,y) = centro direto (vindo de iconX/iconY do Menu_Main)
+  drawProhibitedRFIcon(x, y, 11, col);
+}
+
+// ─────────────────────────────────────────────────────
+//  Menu principal
+// ─────────────────────────────────────────────────────
+static void nrfDrawItem(int idx, bool sel) {
+  int slot = idx - nrfScroll;
+  if (slot < 0 || slot >= MAX_VIS) return;
+  drawMenuItem(0, ITEM_Y0 + slot * ITEM_H, SCR_W, ITEM_H,
+               ATTACKS[idx].label, sel, idx > 0);
+}
+
+static void nrfUpdateItems(int oldC, int newC) {
+  int oldScroll = nrfScroll;
+  if (newC < nrfScroll) nrfScroll = newC;
+  if (newC >= nrfScroll + MAX_VIS) nrfScroll = newC - MAX_VIS + 1;
+  if (nrfScroll != oldScroll) {
+    tft.fillRect(0, ITEM_Y0, SCR_W, SCR_H - ITEM_Y0 - 16, C_BG);
+    for (int i = 0; i < MAX_VIS; i++) {
+      int idx = nrfScroll + i;
+      if (idx >= ATK_COUNT) break;
+      nrfDrawItem(idx, idx == newC);
+    }
+    // scroll indicators
+    tft.fillRect(SCR_W - 10, ITEM_Y0 - 10, 10, 20, C_BG);
+    if (nrfScroll > 0) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0-8); tft.print("^"); }
+    if (nrfScroll + MAX_VIS < ATK_COUNT) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0 + MAX_VIS * ITEM_H); tft.print("v"); }
+    return;
+  }
+  nrfDrawItem(oldC, false);
+  nrfDrawItem(newC, true);
+}
+
+void displayModoNRF24() {
+  tft.fillScreen(C_BG);
+  tft.setTextSize(1);
+  drawHeader("NRF24 JAMMER", false);
+  drawProhibitedRFIcon(64, 27, 9, C_RED);
+  tft.drawFastHLine(0, 37, SCR_W, C_GREY);
+
+  if (nrfCursor < nrfScroll) nrfScroll = nrfCursor;
+  if (nrfCursor >= nrfScroll + MAX_VIS) nrfScroll = nrfCursor - MAX_VIS + 1;
+
+  for (int i = 0; i < MAX_VIS; i++) {
+    int idx = nrfScroll + i;
+    if (idx >= ATK_COUNT) break;
+    nrfDrawItem(idx, idx == nrfCursor);
+  }
+  if (nrfScroll > 0) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0-8); tft.print("^"); }
+  if (nrfScroll + MAX_VIS < ATK_COUNT) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0 + MAX_VIS*ITEM_H); tft.print("v"); }
+
+  drawFooter();
+  batteryDraw();
+}
+
+// ─────────────────────────────────────────────────────
+//  Tela de ataque
+// ─────────────────────────────────────────────────────
+static void nrfDrawAttackFull() {
+  tft.fillScreen(C_BG);
+  drawHeader("NRF24 ATTACK", true);
+  tft.setTextSize(1);
+
+  const NrfAttack &atk = ATTACKS[nrfActiveAtk];
+
+  // Nome
+  tft.setTextColor(atk.color);
+  int tx = (SCR_W - (int)strlen(atk.label) * 6) / 2;
+  tft.setCursor(tx < 0 ? 0 : tx, 17);
+  tft.print(atk.label);
+
+  // Desc
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(2, 27);
+  tft.print(atk.desc);
+
+  tft.drawFastHLine(0, 37, SCR_W, C_GREY);
+
+  // Módulos
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(2, 40);
+  tft.print("Modulos:");
+  tft.setTextColor(nrfReady ? C_GREEN : C_RED);
+  char mbuf[12];
+  snprintf(mbuf, sizeof(mbuf), "%d detect.", radioCount);
+  tft.setCursor(56, 40);
+  tft.print(nrfReady ? mbuf : "init...");
+
+  // Banner status (y=52..64)
+  tft.fillRect(0, 52, SCR_W, 14, jamRunning ? C_RED : 0x18C3);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor((SCR_W - 78) / 2, 55);
+  tft.print(jamRunning ? "  [ ATIVO ]  " : "  [INATIVO]  ");
+
+  // Etiquetas fixas
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(2, 72); tft.print("Canal:");
+  tft.setCursor(2, 86); tft.print("Pacotes:");
+
+  // Valores dinâmicos
+  tft.fillRect(50, 70, 78, 10, C_BG);
+  tft.setTextColor(C_CYAN);
+  tft.setCursor(50, 72);
+  char buf[12]; snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+  tft.print(buf);
+
+  tft.fillRect(50, 84, 78, 10, C_BG);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor(50, 86);
+  tft.print((unsigned long)jamPktCount);
+
+  // Instruções
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(2, 108); tft.print("o = Iniciar/Parar");
+  tft.setCursor(2, 120); tft.print("< = Voltar");
+
+  drawFooter();
+  batteryDraw();
+}
+
+// Atualização pontual: só banner + contadores (sem fillScreen)
+static void nrfUpdateAttackDyn() {
+  // Banner
+  tft.fillRect(0, 52, SCR_W, 14, jamRunning ? C_RED : 0x18C3);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor((SCR_W - 78) / 2, 55);
+  tft.print(jamRunning ? "  [ ATIVO ]  " : "  [INATIVO]  ");
+
+  // Canal
+  tft.fillRect(50, 70, 78, 10, C_BG);
+  tft.setTextColor(C_CYAN);
+  tft.setCursor(50, 72);
+  char buf[12]; snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+  tft.print(buf);
+
+  // Pacotes
+  tft.fillRect(50, 84, 78, 10, C_BG);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor(50, 86);
+  tft.print((unsigned long)jamPktCount);
+}
+
+// ─────────────────────────────────────────────────────
+//  Handler principal
+// ─────────────────────────────────────────────────────
+void handleModoNRF24() {
+
+  // Atualiza contadores a cada 300ms enquanto jamming ativo
+  if (nrfScreen == NSC_ATTACK && jamRunning) {
+    if (millis() - lastUIUpdate >= 300) {
+      lastUIUpdate = millis();
+      nrfUpdateAttackDyn();
+    }
+  }
+
+  // Redesenha quando init assíncrono completa
+  if (nrfNeedsRedraw) {
+    nrfNeedsRedraw = false;
+    nrfDrawAttackFull();
+  }
+
+  if ((millis() - lastDebounceTime) <= debounceDelay) return;
+
+  // ── MENU ─────────────────────────────────────────
+  if (nrfScreen == NSC_MENU) {
+
+    if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = nrfCursor;
+      nrfCursor = (nrfCursor + 1) % ATK_COUNT;
+      lastDebounceTime = millis();
+      nrfUpdateItems(old, nrfCursor);
+      return;
+    }
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      lastDebounceTime = millis();
+      if (nrfCursor == 0) { estadoAtual = MENU_INICIAL; displayMenuInicial(); return; }
+      int old = nrfCursor;
+      nrfCursor = (nrfCursor - 1 + ATK_COUNT) % ATK_COUNT;
+      nrfUpdateItems(old, nrfCursor);
+      return;
+    }
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      if (nrfCursor == 0) { estadoAtual = MENU_INICIAL; displayMenuInicial(); return; }
+
+      nrfActiveAtk = nrfCursor;
+      nrfScreen    = NSC_ATTACK;
+      estadoAtual  = TELA_NRF_ATTACK;
+      jamPktCount  = 0;
+      jamCurChan   = 0;
+
+      // Desenha a tela de ataque
+      nrfDrawAttackFull();
+
+      // Inicializa o hardware de forma ASSÍNCRONA (task no core 0)
+      if (!nrfInitDone) {
+        nrfInitDone = true;
+        nrfInitRunning = true;
+        xTaskCreatePinnedToCore(
+          nrfInitTask, "nrfInit",
+          4096,
+          nullptr,
+          5,
+          nullptr,
+          0  // core 0 — deixa core 1 livre para o TFT
+        );
+      }
+      return;
+    }
+  }
+
+  // ── ATTACK ───────────────────────────────────────
+  else {
+
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      lastDebounceTime = millis();
+      stopJamTask();
+      nrfDeinit();
+      nrfScreen = NSC_MENU;
+      estadoAtual = MENU_NRF24;
+      displayModoNRF24();
+      return;
+    }
+
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      if (!nrfReady && !nrfInitRunning) {
+        // Tenta init novamente se falhou (assíncrono)
+        nrfInitRunning = true;
+        nrfInitDone = false;
+        xTaskCreatePinnedToCore(
+          nrfInitTask, "nrfInit",
+          4096, nullptr, 5, nullptr, 0
+        );
+        return;
+      }
+      if (jamRunning) {
+        stopJamTask();
+      } else {
+        jamPktCount = 0;
+        startJamTask(nrfActiveAtk);
+      }
+      lastUIUpdate = millis();
+      nrfUpdateAttackDyn();
+      return;
     }
   }
 }

@@ -19,4 +19,10 @@ void blOff(); // apaga o backlight (LEDC → duty 0)
 void displayArmazenamento();
 void handleArmazenamento();
 
+void displayDesligar();
+void handleDesligar();
+
+void displayScreensaverTest();
+void handleScreensaverTest();
+
 #endif

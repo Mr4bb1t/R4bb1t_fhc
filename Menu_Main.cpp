@@ -28,11 +28,11 @@ static const Cell cells[4] = {
 };
 
 static const int iconX[4] = {
-  cells[0].x + 29, cells[1].x + 24,
+  cells[0].x + 29, cells[1].x + 29,
   cells[2].x + 18, cells[3].x + 19,
 };
 static const int iconY[4] = {
-  cells[0].y + 10, cells[1].y + 7,
+  cells[0].y + 10, cells[1].y + 22,
   cells[2].y + 9,  cells[3].y + 7,
 };
 
@@ -41,7 +41,7 @@ static const int labelY[4] = {
   cells[2].y + 46, cells[3].y + 46,
 };
 
-static const char *labels[4] = {"WiFi", "BT", "RF 433", "Config"};
+static const char *labels[4] = {"WiFi", "NRF24", "RF 433", "Config"};
 
 // ── Timer de inatividade (screensaver) ─────────
 #define IDLE_TIMEOUT_MS 30000UL
@@ -65,7 +65,7 @@ static void drawMenuInicialItem(int i, bool sel) {
     }
 
     if (i == 0)      drawWiFiIconSmall(4, y, iconColor);
-    else if (i == 1) drawBluetoothIconSmall(4, y, iconColor);
+    else if (i == 1) drawNRF24IconSmall(4, y, iconColor);
     else if (i == 2) drawRFIconSmall(4, y, iconColor);
     else             drawSettingsIconSmall(4, y, iconColor, sel ? C_GOLD_SEL : C_BG);
 
@@ -92,7 +92,7 @@ static void drawMenuInicialItem(int i, bool sel) {
     }
 
     if (i == 0) drawWiFiIcon(iconX[i], iconY[i], iconColor);
-    else if (i == 1) drawBluetoothIcon(iconX[i], iconY[i], iconColor);
+    else if (i == 1) drawNRF24Icon(iconX[i], iconY[i], iconColor);
     else if (i == 2) drawRFIcon(iconX[i], iconY[i], iconColor);
     else drawSettingsIcon(iconX[i], iconY[i], iconColor, C_BG);
 
@@ -168,8 +168,8 @@ void handleMenuInicial() {
         displayNetworks();
 
       } else if (opcaoMenuInicial == 1) {
-        estadoAtual = MODO_BLUETOOTH;
-        displayModoBluetooth();
+        estadoAtual = MENU_NRF24;
+        displayModoNRF24();
 
       } else if (opcaoMenuInicial == 2) {
         estadoAtual = MENU_RF;
@@ -187,10 +187,6 @@ void handleMenuInicial() {
     }
   }
 }
-
-// ──────────────────────────────────────────────
-void displayModoBluetooth() { displayMenuBT(); }
-void handleModoBluetooth()  { handleMenuBT();  }
 
 // ──────────────────────────────────────────────
 void handleScreensaver() {

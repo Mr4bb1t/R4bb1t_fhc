@@ -11,25 +11,45 @@
 #include <WiFi.h>
 #include <esp_chip_info.h>
 #include <esp_wifi.h>
+#include <esp_sleep.h>
 #include <math.h>
 
 #define SCR_W 128
 #define SCR_H 160
 
 static const char *configItems[] = {"Voltar", "Sobre",     "Mudar MAC",
-                                    "Brilho", "Modo Menu", "Armazenamento"};
-static const int NUM_CONFIG_ITEMS = 6;
+                                    "Brilho", "Modo Menu", "Armazenamento", "Testar Tela", "Desligar"};
+static const int NUM_CONFIG_ITEMS = 8;
 static int opcaoConfig = 0;
 
 // ═══════════════════════════════════════════════
 //  CONFIGURAÇÕES
 // ═══════════════════════════════════════════════
+#define CONFIG_PER_PAGE 6
+static int configScroll = 0;
+
 void displayConfiguracoes() {
   tft.fillScreen(C_BG);
   drawHeader("SETTINGS", true);
 
-  for (int i = 0; i < NUM_CONFIG_ITEMS; i++) {
-    drawMenuItem(0, 16 + i * 20, 128, 19, configItems[i], i == opcaoConfig);
+  if (opcaoConfig < configScroll) configScroll = opcaoConfig;
+  if (opcaoConfig >= configScroll + CONFIG_PER_PAGE) configScroll = opcaoConfig - CONFIG_PER_PAGE + 1;
+
+  for (int i = 0; i < CONFIG_PER_PAGE; i++) {
+    int idx = configScroll + i;
+    if (idx >= NUM_CONFIG_ITEMS) break;
+    drawMenuItem(0, 16 + i * 20, 128, 19, configItems[idx], idx == opcaoConfig);
+  }
+
+  if (configScroll > 0) {
+    tft.setTextColor(C_GREY);
+    tft.setCursor(120, 20);
+    tft.print("^");
+  }
+  if (configScroll + CONFIG_PER_PAGE < NUM_CONFIG_ITEMS) {
+    tft.setTextColor(C_GREY);
+    tft.setCursor(120, 16 + (CONFIG_PER_PAGE - 1) * 20 + 6);
+    tft.print("v");
   }
 
   drawFooter();
@@ -42,17 +62,23 @@ void handleConfiguracoes() {
       int old = opcaoConfig;
       opcaoConfig = (opcaoConfig - 1 + NUM_CONFIG_ITEMS) % NUM_CONFIG_ITEMS;
       lastDebounceTime = millis();
-      drawMenuItem(0, 16 + old * 20, 128, 19, configItems[old], false);
-      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig],
-                   true);
+      if (opcaoConfig < configScroll || opcaoConfig >= configScroll + CONFIG_PER_PAGE || old < configScroll || old >= configScroll + CONFIG_PER_PAGE) {
+        displayConfiguracoes();
+      } else {
+        drawMenuItem(0, 16 + (old - configScroll) * 20, 128, 19, configItems[old], false);
+        drawMenuItem(0, 16 + (opcaoConfig - configScroll) * 20, 128, 19, configItems[opcaoConfig], true);
+      }
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       int old = opcaoConfig;
       opcaoConfig = (opcaoConfig + 1) % NUM_CONFIG_ITEMS;
       lastDebounceTime = millis();
-      drawMenuItem(0, 16 + old * 20, 128, 19, configItems[old], false);
-      drawMenuItem(0, 16 + opcaoConfig * 20, 128, 19, configItems[opcaoConfig],
-                   true);
+      if (opcaoConfig < configScroll || opcaoConfig >= configScroll + CONFIG_PER_PAGE || old < configScroll || old >= configScroll + CONFIG_PER_PAGE) {
+        displayConfiguracoes();
+      } else {
+        drawMenuItem(0, 16 + (old - configScroll) * 20, 128, 19, configItems[old], false);
+        drawMenuItem(0, 16 + (opcaoConfig - configScroll) * 20, 128, 19, configItems[opcaoConfig], true);
+      }
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
@@ -75,6 +101,12 @@ void handleConfiguracoes() {
       } else if (opcaoConfig == 5) {
         estadoAtual = TELA_ARMAZENAMENTO;
         displayArmazenamento();
+      } else if (opcaoConfig == 6) {
+        estadoAtual = TELA_SCREENSAVER_TEST;
+        displayScreensaverTest();
+      } else if (opcaoConfig == 7) {
+        estadoAtual = TELA_DESLIGAR;
+        displayDesligar();
       }
     }
   }
@@ -552,6 +584,11 @@ static void blSet(int v) {
 void blOff() {
   blInit();
   ledcWrite(TFT_BL, 0);
+  ledcDetach(TFT_BL);
+  pinMode(TFT_BL, OUTPUT);
+  digitalWrite(TFT_BL, LOW);
+  gpio_hold_en((gpio_num_t)TFT_BL);
+  gpio_deep_sleep_hold_en();
 }
 
 static void drawBrilhoSlider() {
@@ -1218,6 +1255,487 @@ void handleArmazenamento() {
         lastDebounceTime = millis();
         storageState = 1;
         displayArquivosSPIFFS();
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  DESLIGAR
+// ═══════════════════════════════════════════════
+
+void displayDesligar() {
+  tft.fillScreen(C_BG);
+  drawHeader("DESLIGAR", true);
+
+  tft.setTextSize(1);
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(15, 50);
+  tft.print("Tem certeza que");
+  tft.setCursor(15, 65);
+  tft.print("deseja desligar?");
+
+  drawSeparator(95, C_GREY);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(10, 106);
+  tft.print("<    CANCELAR");
+  tft.setTextColor(C_GOLD);
+  tft.setCursor(10, 120);
+  tft.print("  o  CONFIRMAR");
+
+  drawFooter();
+  batteryDraw();
+}
+
+void handleDesligar() {
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      lastDebounceTime = millis();
+      estadoAtual = MENU_CONFIGURACOES;
+      displayConfiguracoes();
+    }
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      
+      tft.fillScreen(TFT_BLACK);
+      
+      const int TX = 64, TY_TOP = 30, TY_BOT = 100, TW = 50;
+      tft.fillTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT, TFT_YELLOW);
+      tft.drawTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT, TFT_BLACK);
+      tft.setTextSize(4);
+      tft.setTextColor(TFT_BLACK);
+      tft.setCursor(TX - 12, TY_TOP + 22); 
+      tft.print("!");
+      tft.setTextSize(1);
+      tft.setTextColor(TFT_YELLOW);
+      tft.setCursor(32, TY_BOT + 12);
+      tft.print("DESLIGANDO");
+      
+      for (int i = 3; i >= 1; i--) {
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_DARKGREY);
+        tft.fillRect(30, TY_BOT + 34, 70, 10, TFT_BLACK);
+        tft.setCursor(32, TY_BOT + 34);
+        char cbuf[16];
+        snprintf(cbuf, sizeof(cbuf), "Aguarde %d...", i);
+        tft.print(cbuf);
+        delay(1000);
+      }
+      
+      tft.fillScreen(TFT_BLACK);
+      blOff();
+      esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+      esp_deep_sleep_start();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  TESTAR TELA — Animações do ESP32-third-eye
+//  Adaptado de 240x240 round (GFX canvas) para
+//  128x160 retangular (TFT_eSPI direto)
+// ═══════════════════════════════════════════════
+
+#define ANIM_W  128
+#define ANIM_H  160
+#define ANIM_CX 64
+#define ANIM_CY 80
+
+// LUT de seno (256 entradas, amplitude ±127)
+static int16_t animSinLUT[256];
+static bool animLUTReady = false;
+
+static void animInitLUT() {
+  if (animLUTReady) return;
+  for (int i = 0; i < 256; i++)
+    animSinLUT[i] = (int16_t)(sin(i * 2.0 * PI / 256.0) * 127);
+  animLUTReady = true;
+}
+static inline int16_t aSin(float a) { return animSinLUT[((int)a) & 0xFF]; }
+static inline int16_t aCos(float a) { return animSinLUT[((int)a + 64) & 0xFF]; }
+
+// Cor ciclante baseada em tempo
+static uint16_t pCol(uint8_t speed, int offset) {
+  uint32_t t = (speed == 0) ? 0 : (millis() / speed);
+  uint8_t r = aSin(t + offset) + 128;
+  uint8_t g = aSin(t + offset + 85) + 128;
+  uint8_t b = aSin(t + offset + 170) + 128;
+  return tft.color565(r, g, b);
+}
+
+// Número de animações (8 normais + 1 Olho + 1 botão voltar)
+#define ANIM_COUNT 10
+
+static int animIndex = 0;
+static const char *animNames[] = {
+  "Matrix Rain",
+  "Cubo 3D",
+  "Plasma",
+  "Tesseract 4D",
+  "Corredor",
+  "Onda Grade",
+  "Aneis",
+  "Quadrados",
+  "Olho Magenta",
+  "<- VOLTAR"
+};
+
+static TFT_eSprite* animSpr = nullptr;
+
+
+// ── Seleção de animação ──────────────────────────────────────
+void displayScreensaverTest() {
+  tft.fillScreen(C_BG);
+  drawHeader("TESTAR TELA", true);
+
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 20);
+  tft.print("Animacao:");
+  tft.setTextColor(C_GOLD);
+  tft.setCursor(4, 32);
+  tft.print(animNames[animIndex]);
+
+  // Indicadores
+  int dotSpacing = ANIM_W / ANIM_COUNT;
+  for (int i = 0; i < ANIM_COUNT; i++) {
+    int cx = 6 + i * dotSpacing;
+    if (i == animIndex)
+      tft.fillCircle(cx, 50, 3, C_GOLD);
+    else
+      tft.drawCircle(cx, 50, 3, C_GREY);
+  }
+
+  drawSeparator(58, C_GREY);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 64);
+  tft.print("< >  escolher");
+  tft.setCursor(4, 76);
+  tft.print(" o   executar");
+
+  tft.setTextColor(C_GREY);
+  tft.setCursor(4, 96);
+  tft.print("Durante animacao:");
+  tft.setCursor(4, 108);
+  tft.print("< >  prox/ant");
+  tft.setCursor(4, 120);
+  tft.print(" o   voltar");
+
+  drawFooter();
+  batteryDraw();
+}
+
+// ── Estado de execução da animação ──────────────────────────
+static bool animRunning = false;
+
+// Matriz rain columns
+struct AnimCol { int y, speed; uint32_t lastUpdate; };
+static AnimCol matCols[13];
+static void matInitCol(int i) {
+  matCols[i].y = random(-100, 0);
+  matCols[i].speed = random(30, 120);
+  matCols[i].lastUpdate = millis();
+}
+
+// Olho: física de movimento
+static float eyeX = ANIM_CX, eyeY = ANIM_CY;
+static float eyeTX = ANIM_CX, eyeTY = ANIM_CY;
+static float eyeSpd = 2.0f;
+static uint32_t eyeNextMove = 0;
+static bool eyeMoving = false;
+
+static void eyePhysics(uint32_t now) {
+  if (eyeMoving) {
+    float dx = eyeTX - eyeX, dy = eyeTY - eyeY;
+    float dist = sqrtf(dx*dx + dy*dy);
+    if (dist < 1.0f || now > eyeNextMove) {
+      eyeX = eyeTX; eyeY = eyeTY;
+      eyeMoving = false;
+      eyeNextMove = now + random(400, 1400);
+    } else {
+      if (dist > eyeSpd) { eyeX += (dx/dist)*eyeSpd; eyeY += (dy/dist)*eyeSpd; }
+      else { eyeX = eyeTX; eyeY = eyeTY; }
+    }
+  } else {
+    if (now > eyeNextMove) {
+      eyeTX = random(30, ANIM_W-30);
+      eyeTY = random(40, ANIM_H-40);
+      eyeSpd = (float)random(20, 60) / 10.0f;
+      eyeMoving = true;
+      eyeNextMove = now + 1500;
+    }
+  }
+}
+
+// ── Renderiza um frame da animação atual ─────────────────────
+static void animFrame(uint32_t now) {
+  if (!animSpr) return;
+
+  animSpr->fillSprite(TFT_BLACK);
+
+  switch (animIndex) {
+
+    // 0: MATRIX RAIN
+    case 0: {
+      for (int i = 0; i < 13; i++) {
+        if (now - matCols[i].lastUpdate > matCols[i].speed) {
+          matCols[i].y += 10;
+          matCols[i].lastUpdate = now;
+        }
+        int x = i * 10;
+        int y = matCols[i].y;
+        if (y >= -10 && y < ANIM_H) {
+          animSpr->setCursor(x, y);
+          animSpr->setTextColor(0xBE76);
+          animSpr->print((char)random(33, 126));
+        }
+        for (int j = 1; j < 10; j++) {
+          int tY = y - j * 10;
+          if (tY >= -10 && tY < ANIM_H) {
+            int gv = 255 - j * 25;
+            if (gv < 40) gv = 40;
+            animSpr->setCursor(x, tY);
+            animSpr->setTextColor(animSpr->color565(0, gv, 0));
+            animSpr->print((char)random(33, 126));
+          }
+        }
+        if (matCols[i].y > ANIM_H + 60) matInitCol(i);
+      }
+      break;
+    }
+
+    // 1: CUBO 3D ROTATIVO
+    case 1: {
+      float cube[8][3] = {{-1,-1,-1},{1,-1,-1},{1,1,-1},{-1,1,-1},
+                          {-1,-1,1},{1,-1,1},{1,1,1},{-1,1,1}};
+      int edges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},
+                          {0,4},{1,5},{2,6},{3,7}};
+      float rX = now/1000.0f, rY = now/1300.0f, rZ = now/1700.0f;
+      int px[8], py[8];
+      for (int i = 0; i < 8; i++) {
+        float x = cube[i][0], y = cube[i][1], z = cube[i][2];
+        float ty = y*cos(rX)-z*sin(rX), tz = y*sin(rX)+z*cos(rX); y=ty; z=tz;
+        float tx = x*cos(rY)+z*sin(rY); tz = -x*sin(rY)+z*cos(rY); x=tx; z=tz;
+        tx = x*cos(rZ)-y*sin(rZ); ty = x*sin(rZ)+y*cos(rZ); x=tx; y=ty;
+        float p = 3.0f/(3.0f-z);
+        px[i] = ANIM_CX + (int)(x*p*32);
+        py[i] = ANIM_CY + (int)(y*p*32);
+      }
+      for (int i = 0; i < 12; i++)
+        animSpr->drawLine(px[edges[i][0]], py[edges[i][0]],
+                     px[edges[i][1]], py[edges[i][1]], pCol(5, i*15));
+      break;
+    }
+
+    // 2: PLASMA FLUINDO
+    case 2: {
+      uint32_t t = now + 50000;
+      for (int x = 0; x < ANIM_W; x += 10) {
+        for (int y = 0; y < ANIM_H; y += 10) {
+          float v = aSin(x / 16.0f + t / 800.0f) + aSin((y + t / 10.0f) / 20.0f) + aSin((x + y + t / 15.0f) / 30.0f);
+          uint8_t spd = (uint8_t)(v * 4 + 10);
+          animSpr->fillRect(x, y, 10, 10, pCol(spd, x / 2 + y / 2));
+        }
+      }
+      break;
+    }
+
+    // 3: TESSERACT 4D
+    case 3: {
+      float nd[16][4] = {
+        {-1,-1,-1,-1},{1,-1,-1,-1},{1,1,-1,-1},{-1,1,-1,-1},
+        {-1,-1,1,-1},{1,-1,1,-1},{1,1,1,-1},{-1,1,1,-1},
+        {-1,-1,-1,1},{1,-1,-1,1},{1,1,-1,1},{-1,1,-1,1},
+        {-1,-1,1,1},{1,-1,1,1},{1,1,1,1},{-1,1,1,1}};
+      int ed[32][2] = {
+        {0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},
+        {0,4},{1,5},{2,6},{3,7},{8,9},{9,10},{10,11},{11,8},
+        {12,13},{13,14},{14,15},{15,12},{8,12},{9,13},{10,14},{11,15},
+        {0,8},{1,9},{2,10},{3,11},{4,12},{5,13},{6,14},{7,15}};
+      float r = now/1000.0f;
+      int px[16], py[16];
+      for (int i = 0; i < 16; i++) {
+        float x=nd[i][0],y=nd[i][1],z=nd[i][2],w=nd[i][3];
+        float tw=w*cos(r)-x*sin(r); float tx=w*sin(r)+x*cos(r); w=tw; x=tx;
+        float ty=y*cos(r*0.8f)-z*sin(r*0.8f); float tz=y*sin(r*0.8f)+z*cos(r*0.8f); y=ty; z=tz;
+        float p=4.0f/(4.0f-w), p2=3.0f/(3.0f-z);
+        px[i] = ANIM_CX + (int)(x*p*p2*28);
+        py[i] = ANIM_CY + (int)(y*p*p2*28);
+      }
+      for (int i = 0; i < 32; i++)
+        animSpr->drawLine(px[ed[i][0]], py[ed[i][0]], px[ed[i][1]], py[ed[i][1]], pCol(8, i*4));
+      break;
+    }
+
+    // 4: CORREDOR (tuneel infinito)
+    case 4: {
+      float spd = now/250.0f;
+      const int NS = 12;
+      float spacing = 1.0f;
+      float maxZ = NS * spacing;
+      struct Seg { int x1,y1,x2,y2,sz; uint16_t col,drk; } s[NS];
+      float off = fmod(spd, spacing);
+      for (int i = 0; i < NS; i++) {
+        float z = maxZ - i*spacing - off;
+        if (z <= 0.1f) z = 0.1f;
+        s[i].sz = (int)(140.0f/z);
+        int cx2 = ANIM_CX + (int)(0.6f*(z*z)*1.0f);
+        s[i].x1=cx2-s[i].sz/2; s[i].y1=ANIM_CY-s[i].sz/2;
+        s[i].x2=cx2+s[i].sz/2; s[i].y2=ANIM_CY+s[i].sz/2;
+        uint16_t base = pCol(15, (int)(spd*10+i*20));
+        uint8_t r2=(base>>11)<<3, g2=((base>>5)&0x3F)<<2, b2=(base&0x1F)<<3;
+        s[i].col = animSpr->color565(r2, g2, b2);
+        s[i].drk = animSpr->color565(r2/5, g2/4, b2/3);
+      }
+      for (int i = 0; i < NS-1; i++) {
+        if (s[i].sz < 2 || s[i+1].sz > 500) continue;
+        animSpr->fillTriangle(s[i+1].x1,s[i+1].y1,s[i+1].x1,s[i+1].y2,s[i].x1,s[i].y2,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x1,s[i+1].y1,s[i+1].x1,s[i+1].y2,s[i].x1,s[i].y1,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x2,s[i+1].y1,s[i+1].x2,s[i+1].y2,s[i].x2,s[i].y2,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x2,s[i+1].y1,s[i+1].x2,s[i+1].y2,s[i].x2,s[i].y1,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x1,s[i+1].y1,s[i+1].x2,s[i+1].y1,s[i].x2,s[i].y1,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x1,s[i+1].y1,s[i+1].x2,s[i+1].y1,s[i].x1,s[i].y1,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x1,s[i+1].y2,s[i+1].x2,s[i+1].y2,s[i].x2,s[i].y2,s[i].drk);
+        animSpr->fillTriangle(s[i+1].x1,s[i+1].y2,s[i+1].x2,s[i+1].y2,s[i].x1,s[i].y2,s[i].drk);
+        animSpr->drawLine(s[i+1].x1,s[i+1].y1,s[i].x1,s[i].y1,s[i].col);
+        animSpr->drawLine(s[i+1].x1,s[i+1].y2,s[i].x1,s[i].y2,s[i].col);
+        animSpr->drawLine(s[i+1].x2,s[i+1].y1,s[i].x2,s[i].y1,s[i].col);
+        animSpr->drawLine(s[i+1].x2,s[i+1].y2,s[i].x2,s[i].y2,s[i].col);
+        animSpr->drawRect(s[i].x1,s[i].y1,s[i].sz,s[i].sz,s[i].col);
+      }
+      animSpr->drawRect(s[NS-1].x1,s[NS-1].y1,s[NS-1].sz,s[NS-1].sz,s[NS-1].col);
+      break;
+    }
+
+    // 5: ONDA GRADE
+    case 5: {
+      for (int x = 0; x < ANIM_W; x += 12) {
+        for (int y = 0; y < ANIM_H; y += 12) {
+          float v = aSin(x + now/16.0f) + aSin(y + now/12.0f);
+          uint8_t spd = (uint8_t)(v / 8 + 5);
+          animSpr->fillRect(x, y, 12, 12, pCol(spd, x+y));
+        }
+      }
+      break;
+    }
+
+    // 6: ANEIS PULSANTES
+    case 6: {
+      for (int i = 0; i < 8; i++) {
+        int br = (aSin(now/8.0f) + 150) * 30 / 127;
+        animSpr->drawCircle(ANIM_CX, ANIM_CY, br + i*8, pCol(10, i*15));
+      }
+      break;
+    }
+
+    // 7: QUADRADOS EXPANSIVOS
+    case 7: {
+      for (int i = 0; i < 10; i++) {
+        int sz = (now/10 + i*20) % 160;
+        animSpr->drawRect(ANIM_CX-sz/2, ANIM_CY-sz/2, sz, sz, pCol(5, i*20));
+      }
+      break;
+    }
+
+    // 8: OLHO MAGENTA
+    case 8: {
+      int irX = ANIM_CX + (int)((eyeX-ANIM_CX)*0.35f);
+      int irY = ANIM_CY + (int)((eyeY-ANIM_CY)*0.35f);
+      int puX = ANIM_CX + (int)((eyeX-ANIM_CX)*0.6f);
+      int puY = ANIM_CY + (int)((eyeY-ANIM_CY)*0.6f);
+
+      animSpr->fillCircle(ANIM_CX, ANIM_CY, 55, 0xF81F); // magenta
+      animSpr->fillCircle(irX, irY, 38, 0xFFFF);
+      animSpr->fillCircle(puX, puY, 28, 0xF81F);
+      animSpr->fillCircle(puX, puY, 14, TFT_BLACK);
+      animSpr->fillCircle(puX-6, puY-6, 4, 0xFFFF); // brilho
+      eyePhysics(now);
+      break;
+    }
+  }
+
+  animSpr->pushSprite(0, 0);
+}
+
+
+// ── Handler da tela de teste ─────────────────────────────────
+void handleScreensaverTest() {
+  if (!animRunning) {
+    // Modo seleção
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        animIndex = (animIndex - 1 + ANIM_COUNT) % ANIM_COUNT;
+        lastDebounceTime = millis();
+        displayScreensaverTest();
+      }
+      if (digitalRead(BUTTON_RIGHT) == LOW) {
+        animIndex = (animIndex + 1) % ANIM_COUNT;
+        lastDebounceTime = millis();
+        displayScreensaverTest();
+      }
+      if (digitalRead(BUTTON_SELECT) == LOW) {
+        lastDebounceTime = millis();
+        
+        // Se for a última opção ("<- VOLTAR")
+        if (animIndex == ANIM_COUNT - 1) {
+          estadoAtual = MENU_CONFIGURACOES;
+          displayConfiguracoes();
+          return;
+        }
+
+        // Inicia animação
+        animInitLUT();
+        
+        if (!animSpr) {
+          animSpr = new TFT_eSprite(&tft);
+          animSpr->createSprite(ANIM_W, ANIM_H);
+        }
+
+        // Inicializa estado de each anim
+        if (animIndex == 0) {
+          for (int i = 0; i < 13; i++) matInitCol(i);
+        }
+        eyeX = ANIM_CX; eyeY = ANIM_CY;
+        eyeTX = ANIM_CX; eyeTY = ANIM_CY;
+        eyeNextMove = millis() + 800;
+        eyeMoving = false;
+        animRunning = true;
+      }
+    }
+  } else {
+    // Modo animação rodando — sem debounce rígido para fluidez dos botões
+    uint32_t now = millis();
+    animFrame(now);
+
+    // Verifica botões para trocar/sair
+    if ((now - lastDebounceTime) > 150) {
+      if (digitalRead(BUTTON_SELECT) == LOW) {
+        lastDebounceTime = now;
+        animRunning = false;
+        
+        if (animSpr) {
+          animSpr->deleteSprite();
+          delete animSpr;
+          animSpr = nullptr;
+        }
+
+        displayScreensaverTest();
+      }
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        lastDebounceTime = now;
+        // Pula a opção "VOLTAR" durante a execução (por isso ANIM_COUNT - 1)
+        animIndex = (animIndex - 1 + (ANIM_COUNT - 1)) % (ANIM_COUNT - 1);
+        if (animIndex == 0) for (int i = 0; i < 13; i++) matInitCol(i);
+        eyeX = ANIM_CX; eyeY = ANIM_CY;
+        eyeNextMove = now + 800; eyeMoving = false;
+      }
+      if (digitalRead(BUTTON_RIGHT) == LOW) {
+        lastDebounceTime = now;
+        // Pula a opção "VOLTAR" durante a execução
+        animIndex = (animIndex + 1) % (ANIM_COUNT - 1);
+        if (animIndex == 0) for (int i = 0; i < 13; i++) matInitCol(i);
+        eyeX = ANIM_CX; eyeY = ANIM_CY;
+        eyeNextMove = now + 800; eyeMoving = false;
       }
     }
   }
