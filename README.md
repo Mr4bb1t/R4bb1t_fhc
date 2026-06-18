@@ -82,7 +82,7 @@
 |---|---|---|
 | Capacitor cerâmico | 2 | 100nF (104) — um para cada módulo NRF24L01 entre VCC e GND |
 | Capacitor eletrolítico | 2 | 10µF — um para cada módulo NRF24L01 entre VCC e GND |
-| Resistor divisor de tensão | 2 | 100kΩ + 100kΩ — leitura de bateria no ADC |
+| Resistor divisor de tensão | 2 | 3.2kΩ + 1kΩ — leitura de bateria no ADC |
 
 > **⚠️ IMPORTANTE sobre os capacitores NRF24L01:**
 > Os módulos NRF24L01+ são非常敏感 a ruído na alimentação. Sem o capacitor de desacoplamento, o módulo pode:
