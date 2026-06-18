@@ -19,7 +19,7 @@
 #include "Config.h"
 #include "Globals.h"
 #include "Menu_Attacks.h"
-#include "Menu_BT.h"
+
 #include "Menu_Config.h"
 #include "Menu_Main.h"
 #include "Menu_NRF24.h"
@@ -274,21 +274,7 @@ void loop() {
     handleVisualizarCredenciais();
     break;
 
-  case MODO_BLUETOOTH:
-    handleMenuBT();
-    break;
 
-  case TELA_BT_SUBMENU:
-    handleBT_SubMenu();
-    break;
-
-  case TELA_BT_SCAN:
-    handleBT_Scan();
-    break;
-
-  case TELA_BT_ATTACK:
-    handleBT_Attack();
-    break;
 
   case MENU_CONFIGURACOES:
     handleConfiguracoes();
