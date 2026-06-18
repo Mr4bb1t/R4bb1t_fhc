@@ -68,9 +68,9 @@
 
 | Componente | Qtd | Especificação |
 |---|---|---|
-| ESP32 Dev Module | 1 | Wemos D1 Mini ESP32 ou equivalente |
+| ESP32 Dev Module | 1 | ESP32 WROOM  ou equivalente |
 | Display TFT | 1 | ST7735/ST7789 128×160 px |
-| NRF24L01+ | 1-2 | Com antena PCB ou externa (recomendado: versão com antena externa de 2.4G) |
+| NRF24L01+ | 2 | recomendado versão com antena externa de 2.4G |
 | CC1101 | 1 | Módulo RF 315/433/868/915 MHz |
 | Botões tácteis | 3 | 6×6 mm |
 | Bateria LiPo | 1 | 3.7V (com circuito de proteção) |
@@ -85,7 +85,7 @@
 | Resistor divisor de tensão | 2 | 3.2kΩ + 1kΩ — leitura de bateria no ADC |
 
 > **⚠️ IMPORTANTE sobre os capacitores NRF24L01:**
-> Os módulos NRF24L01+ são非常敏感 a ruído na alimentação. Sem o capacitor de desacoplamento, o módulo pode:
+> Os módulos NRF24L01+ são muito sensíveis a ruído na alimentação. Sem o capacitor de desacoplamento, o módulo pode:
 > - Não responder durante a inicialização
 > - Reiniciar aleatoriamente durante transmissões
 > - Gerar travamentos no display (por pico de corrente na rede SPI)
@@ -108,7 +108,7 @@
 | GPIO 17 | DC |
 | GPIO 16 | RST |
 | GPIO 21 | Backlight |
-| — | CS (ligado ao GND) |
+| GPIO 5| CS |
 
 ### Botões
 | Pino ESP32 | Função |
@@ -136,7 +136,7 @@
 | GPIO 4 | CSN |
 | GPIO 22 | CE |
 
-### NRF24L01 — Módulo 2 (Opcional)
+### NRF24L01 — Módulo 2 
 | Pino ESP32 | Função |
 |---|---|
 | GPIO 33 | SCK (HSPI) |
