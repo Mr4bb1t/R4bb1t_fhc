@@ -13,6 +13,10 @@
 void displayModoNRF24();
 void handleModoNRF24();
 
+// Probe leve chamado no setup() — detecta o NRF24 e seta hwNRF24_ok
+// (igual ao rfInit() do CC1101, sem alocar tasks de jamming)
+bool nrfProbe();
+
 // ── Ícones do NRF24 (usados pelo Menu_Main) ─────
 // Modo grid (grande)
 void drawNRF24Icon(int x, int y, uint16_t col);

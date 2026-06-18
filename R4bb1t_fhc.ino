@@ -214,6 +214,9 @@ void setup() {
   // Isso é feito APÓS a tela ter sido configurada para não roubar o barramento SPI
   hwCC1101_ok = rfInit();
 
+  // Inicializa a detecção do NRF24 no boot para aparecer conectado no Menu Config / Sobre
+  nrfProbe();
+
   // Exibe splash screen com a imagem do SPIFFS
   displaySplash(2500); // 2,5 segundos
 

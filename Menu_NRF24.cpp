@@ -16,8 +16,11 @@
 #include <freertos/task.h>
 
 // ── Pinos Módulo 2 (opcional, não soldado ainda) ──────
-#define NRF2_CE  18   // GPIO livre — ajustar quando soldar
-#define NRF2_CSN 15   // GPIO livre — ajustar quando soldar
+// ⚠️ NRF2_CE estava em GPIO18 = TFT_SCLK → destruía o display!
+// Quando for soldar o módulo 2, escolha GPIOs livres e mude NRF2_ENABLED para 1.
+#define NRF2_ENABLED 0    // 0 = módulo 2 desativado (não soldado)
+#define NRF2_CE   0   // GPIO0  — livre pós-boot (ajustar quando soldar)
+#define NRF2_CSN  15  // GPIO15 — livre (ajustar quando soldar)
 
 // ── Layout ────────────────────────────────────────────
 #define SCR_W 128
@@ -29,11 +32,10 @@ static const uint8_t BLE_CH[] = {2, 26, 80};
 static const char    JAM_TEXT[] = "xxxxxxxxxxxxxxxx";
 
 // ── Objetos de rádio (alocados dinamicamente) ─────────
-// NRF24 usa o SPI global (HSPI/SPI2) — mesmos pinos do CC1101
-// TFT usa VSPI (SPI3) com MOSI=23 SCLK=18 — barramentos separados
-// IMPORTANTE: A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação,
-// por isso precisamos SEMPRE chamar SPI.begin() antes de usar o NRF24
-static SPIClass *spiJam    = &SPI;
+// NRF24 usa HSPI (SPI2) — MESMO barramento do CC1101, mas DIFERENTE do TFT!
+// TFT usa VSPI (SPI3) com MOSI=23 SCLK=18 — barramentos SEPARADOS.
+// ⚠️ NUNCA use o objeto global `SPI` (VSPI) aqui — isso destrói o TFT!
+static SPIClass  spiJam(HSPI); // HSPI dedicado, não compartilha com o TFT
 static RF24     *radio[2]  = {nullptr, nullptr};
 static int       radioCount = 0;
 
@@ -54,6 +56,7 @@ static bool nrfInit(); // Forward declaration
 
 static void nrfInitTask(void *param) {
   nrfReady = nrfInit();
+  hwNRF24_ok = nrfReady;
   nrfNeedsRedraw = true;
   nrfInitRunning = false;
   Serial.printf("[NRF] Init task concluido, nrfReady=%d\n", nrfReady);
@@ -91,6 +94,40 @@ enum NrfScreen { NSC_MENU, NSC_ATTACK };
 static NrfScreen nrfScreen = NSC_MENU;
 static unsigned long lastUIUpdate = 0;
 
+// Probe leve chamado no setup() — detecta o NRF24 e seta hwNRF24_ok
+// (igual ao rfInit() do CC1101, sem alocar tasks de jamming)
+bool nrfProbe() {
+  if (hwNRF24_ok) return true;
+
+  Serial.println("[NRF] Fazendo probe leve...");
+
+  // Garante pinos do módulo 1 e desativa CC1101 no barramento
+  pinMode(RF_CS, OUTPUT);    digitalWrite(RF_CS, HIGH); // CS do CC1101 inativo
+  pinMode(NRF_CSN, OUTPUT);  digitalWrite(NRF_CSN, HIGH);
+  pinMode(NRF_CE,  OUTPUT);  digitalWrite(NRF_CE,  LOW);
+  delay(10);
+
+  // Inicializa o HSPI dedicado para o NRF24.
+  spiJam.begin(33, 19, 13, -1); // SCK=33, MISO=19, MOSI=13
+  spiJam.setFrequency(8000000);
+
+  RF24 probeRadio(NRF_CE, NRF_CSN);
+  bool ok = false;
+  for (int t = 0; t < 3 && !ok; t++) {
+    ok = probeRadio.begin(&spiJam);
+    if (!ok) delay(20);
+  }
+
+  if (ok && probeRadio.isChipConnected()) {
+    hwNRF24_ok = true;
+    Serial.println("[NRF] Probe detectou modulo 1 com sucesso!");
+  } else {
+    hwNRF24_ok = false;
+    Serial.println("[NRF] Probe falhou: modulo 1 ausente.");
+  }
+  return hwNRF24_ok;
+}
+
 // ─────────────────────────────────────────────────────
 //  Init / Deinit de rádios
 // ─────────────────────────────────────────────────────
@@ -105,18 +142,19 @@ static bool nrfInit() {
   pinMode(NRF_CE,  OUTPUT);  digitalWrite(NRF_CE,  LOW);
   delay(20);
 
-  // A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação,
-  // precisamos SEMPRE reinicializar o barramento HSPI antes do NRF24
-  bool spiOk = SPI.begin(33, 19, 13, -1);
-  Serial.printf("[NRF] SPI.begin()=%d\n", spiOk);
-  SPI.setFrequency(8000000);
+  // Inicializa o HSPI dedicado para o NRF24.
+  // NUNCA usar SPI (VSPI) aqui — o VSPI pertence ao TFT_eSPI (pinos 23/18/5)!
+  // SS=-1: o barramento não gerencia CS. CE=22 e CSN=4 são controlados pelo RF24.
+  spiJam.begin(33, 19, 13, -1); // SCK=33, MISO=19, MOSI=13
+  spiJam.setFrequency(8000000);
+  Serial.println("[NRF] HSPI iniciado (SCK=33 MISO=19 MOSI=13 | CE=22 CSN=4 gerenciados pelo RF24)");
 
   // Módulo 1 (obrigatório)
   radio[0] = new RF24(NRF_CE, NRF_CSN);
   bool ok0 = false;
   for (int t = 0; t < 3 && !ok0; t++) {
     Serial.printf("[NRF] Tentativa %d...\n", t + 1);
-    ok0 = radio[0]->begin(spiJam);
+    ok0 = radio[0]->begin(&spiJam);
     Serial.printf("[NRF] begin()=%d\n", ok0);
     if (!ok0) delay(80);
   }
@@ -127,12 +165,13 @@ static bool nrfInit() {
   }
   radioCount = 1;
 
-  // Módulo 2 (opcional — só tenta se pinos diferentes)
+#if NRF2_ENABLED
+  // Módulo 2 (opcional — só tenta se pinos diferentes e NRF2_ENABLED=1)
   pinMode(NRF2_CSN, OUTPUT); digitalWrite(NRF2_CSN, HIGH);
   pinMode(NRF2_CE,  OUTPUT); digitalWrite(NRF2_CE,  LOW);
   delay(10);
   radio[1] = new RF24(NRF2_CE, NRF2_CSN);
-  bool ok1 = radio[1]->begin(spiJam);
+  bool ok1 = radio[1]->begin(&spiJam);
   if (ok1 && radio[1]->isChipConnected()) {
     radioCount = 2;
     Serial.println("[NRF] Modulo 2 detectado!");
@@ -140,6 +179,9 @@ static bool nrfInit() {
     delete radio[1]; radio[1] = nullptr;
     Serial.println("[NRF] Modulo 2 ausente (opcional).");
   }
+#else
+  Serial.println("[NRF] Modulo 2 desativado (NRF2_ENABLED=0).");
+#endif
 
   // Configura todos os módulos presentes
   for (int i = 0; i < radioCount; i++) {
@@ -531,7 +573,11 @@ void handleModoNRF24() {
     nrfDrawAttackFull();
   }
 
-  if ((millis() - lastDebounceTime) <= debounceDelay) return;
+  // Debounce mais curto na tela de ataque (inicio/parada rapidos)
+  // Menu de navegacao usa debounce global (200ms) — evita duplo clique
+  static const unsigned long NRF_ATK_DEBOUNCE = 80; // ms
+  unsigned long nrfDebounce = (nrfScreen == NSC_ATTACK) ? NRF_ATK_DEBOUNCE : debounceDelay;
+  if ((millis() - lastDebounceTime) <= nrfDebounce) return;
 
   // ── MENU ─────────────────────────────────────────
   if (nrfScreen == NSC_MENU) {
