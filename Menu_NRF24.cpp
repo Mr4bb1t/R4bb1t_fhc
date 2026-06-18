@@ -16,11 +16,8 @@
 #include <freertos/task.h>
 
 // ── Pinos Módulo 2 (opcional, não soldado ainda) ──────
-// ⚠️ NRF2_CE era GPIO 18 — conflitava com TFT_SCLK (VSPI),
-//    causando congelamento da tela ao iniciar qualquer ataque NRF24.
-//    Movido para GPIO 12 (livre, safe após boot se LOW).
-#define NRF2_CE  12
-#define NRF2_CSN 15
+#define NRF2_CE  18   // GPIO livre — ajustar quando soldar
+#define NRF2_CSN 15   // GPIO livre — ajustar quando soldar
 
 // ── Layout ────────────────────────────────────────────
 #define SCR_W 128
@@ -32,14 +29,11 @@ static const uint8_t BLE_CH[] = {2, 26, 80};
 static const char    JAM_TEXT[] = "xxxxxxxxxxxxxxxx";
 
 // ── Objetos de rádio (alocados dinamicamente) ─────────
-// NRF24 usa SPIClass dedicada em HSPI (SPI2) com pinos SCK=33 MISO=19 MOSI=13
-// TFT usa SPIClass(VSPI) com MOSI=23 SCLK=18 — barramentos separados
-// IMPORTANTE: Usamos uma SPIClass separada (nrfSpi) em vez do SPI global
-// para evitar que SPI.begin() no core 0 corrompa o DMA/registradores do VSPI.
-// A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação, por isso
-// o SPI global pode ficar em estado inválido — nunca usá-lo para o NRF24.
-static SPIClass  nrfSpi(HSPI);
-static SPIClass *spiJam    = &nrfSpi;
+// NRF24 usa o SPI global (HSPI/SPI2) — mesmos pinos do CC1101
+// TFT usa VSPI (SPI3) com MOSI=23 SCLK=18 — barramentos separados
+// IMPORTANTE: A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação,
+// por isso precisamos SEMPRE chamar SPI.begin() antes de usar o NRF24
+static SPIClass *spiJam    = &SPI;
 static RF24     *radio[2]  = {nullptr, nullptr};
 static int       radioCount = 0;
 
@@ -111,11 +105,11 @@ static bool nrfInit() {
   pinMode(NRF_CE,  OUTPUT);  digitalWrite(NRF_CE,  LOW);
   delay(20);
 
-  // Inicializa HSPI via SPIClass separada — NÃO usar SPI.begin() do global
-  // pois ele pode corromper o barramento VSPI do TFT via DMA
-  bool spiOk = nrfSpi.begin(33, 19, 13, -1);
-  Serial.printf("[NRF] nrfSpi.begin()=%d\n", spiOk);
-  nrfSpi.setFrequency(8000000);
+  // A ELECHOUSE CC1101 chama SPI.end() ao final de cada operação,
+  // precisamos SEMPRE reinicializar o barramento HSPI antes do NRF24
+  bool spiOk = SPI.begin(33, 19, 13, -1);
+  Serial.printf("[NRF] SPI.begin()=%d\n", spiOk);
+  SPI.setFrequency(8000000);
 
   // Módulo 1 (obrigatório)
   radio[0] = new RF24(NRF_CE, NRF_CSN);
@@ -133,7 +127,7 @@ static bool nrfInit() {
   }
   radioCount = 1;
 
-  // Módulo 2 (opcional — GPIO 12/15)
+  // Módulo 2 (opcional — só tenta se pinos diferentes)
   pinMode(NRF2_CSN, OUTPUT); digitalWrite(NRF2_CSN, HIGH);
   pinMode(NRF2_CE,  OUTPUT); digitalWrite(NRF2_CE,  LOW);
   delay(10);
@@ -154,7 +148,7 @@ static bool nrfInit() {
     radio[i]->setRetries(0, 0);
     radio[i]->setPayloadSize(5);
     radio[i]->setAddressWidth(3);
-    radio[i]->setPALevel(RF24_PA_MIN, true);
+    radio[i]->setPALevel(RF24_PA_MAX, true);
     radio[i]->setDataRate(RF24_2MBPS);
     radio[i]->setCRCLength(RF24_CRC_DISABLED);
     radio[i]->disableCRC();
@@ -184,9 +178,6 @@ static void nrfDeinit() {
   nrfReady   = false;
   hwNRF24_ok = false;
   nrfInitDone = false;
-
-  // Libera o barramento HSPI da instância dedicada
-  nrfSpi.end();
 }
 
 // ─────────────────────────────────────────────────────
@@ -202,7 +193,7 @@ static void jamTask(void *param) {
     // ── 1: BT Jammer — portadora constante varrendo BT Classic
     case 1:
       for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MIN, BT_CH[0]);
+        radio[i]->startConstCarrier(RF24_PA_MAX, BT_CH[0]);
       while (!jamStop) {
         for (int ch = 0; ch < 21 && !jamStop; ch++) {
           for (int i = 0; i < radioCount; i++)
@@ -218,7 +209,7 @@ static void jamTask(void *param) {
     // ── 2: Drone Jammer — varrendo 0-124 aleatório + portadora
     case 2:
       for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MIN, 45);
+        radio[i]->startConstCarrier(RF24_PA_MAX, 45);
       while (!jamStop) {
         uint8_t ch = (uint8_t)(random(125));
         for (int i = 0; i < radioCount; i++)
@@ -248,7 +239,7 @@ static void jamTask(void *param) {
     // ── 4: BLE Data Jammer — portadora nos canais BLE data (2-80 pares)
     case 4:
       for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MIN, 45);
+        radio[i]->startConstCarrier(RF24_PA_MAX, 45);
       while (!jamStop) {
         for (uint8_t ch = 2; ch <= 80 && !jamStop; ch += 2) {
           for (int i = 0; i < radioCount; i++)
@@ -301,7 +292,7 @@ static void jamTask(void *param) {
     // ── 7: Misc Jammer — portadora varrendo 0-124 sequencialmente
     case 7:
       for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MIN, 0);
+        radio[i]->startConstCarrier(RF24_PA_MAX, 0);
       while (!jamStop) {
         for (uint8_t ch = 0; ch < 125 && !jamStop; ch++) {
           for (int i = 0; i < radioCount; i++)
