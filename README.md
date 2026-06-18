@@ -28,11 +28,6 @@
 | **Captive Portal** | Hotspot com página de phishing para extração de credenciais |
 | **MAC Changer** | Alteração dinâmica do endereço MAC |
 
-### Bluetooth
-| Ferramenta | Descrição |
-|---|---|
-| **Scan BT** | Varredura de dispositivos Classic e BLE |
-| **Ataques BT** | Flood e spam sobre Bluetooth |
 
 ### RF — CC1101
 | Ferramenta | Descrição |
@@ -206,7 +201,6 @@ r4bb1t_fhc/
 ├── UI.h/.cpp             # Componentes de interface
 ├── Menu_Main.h/.cpp      # Menu inicial
 ├── Menu_Attacks.h/.cpp   # Submenus de ataques WiFi
-├── Menu_BT.h/.cpp        # Menu Bluetooth
 ├── Menu_NRF24.h/.cpp     # Menu NRF24L01 (jamming 2.4GHz)
 ├── Menu_RF.h/.cpp        # Menu ferramentas RF (CC1101)
 ├── Menu_Config.h/.cpp    # Configurações do sistema
