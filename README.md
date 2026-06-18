@@ -7,125 +7,118 @@
 [![Platform](https://img.shields.io/badge/Platform-ESP32-blue?style=for-the-badge&logo=espressif)](https://www.espressif.com/)
 [![Language](https://img.shields.io/badge/Language-C%2B%2B%20%2F%20Arduino-orange?style=for-the-badge&logo=cplusplus)](https://www.arduino.cc/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Em%20Desenvolvimento-yellow?style=for-the-badge)]()
 
 </div>
 
 ---
 
-> ⚠️ **AVISO LEGAL:** Este projeto é desenvolvido **exclusivamente para fins educacionais e de pesquisa em cibersegurança**. Todas as funcionalidades devem ser utilizadas **somente em redes e dispositivos próprios ou com autorização explícita do proprietário**. O uso indevido desta ferramenta pode constituir crime conforme a [Lei 12.737/2012 (Lei Carolina Dieckmann)](https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2012/lei/l12737.htm) e outras legislações aplicáveis. **O autor não se responsabiliza por usos ilícitos.**
+> ⚠️ **AVISO LEGAL:** Uso exclusivamente para fins educacionais e de pesquisa em cibersegurança. Utilize somente em redes e dispositivos próprios ou com autorização explícita. Violação pode configurar crime conforme a [Lei 12.737/2012](https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2012/lei/l12737.htm). **O autor não se responsabiliza por usos ilícitos.**
 
 ---
 
-## 📖 Sobre o Projeto
+## Funcionalidades
 
-O **R4BB1T FHC** é um dispositivo portátil de pentesting e análise de segurança sem fio, construído sobre o microcontrolador **ESP32**. Com um display TFT compacto e navegação por 3 botões físicos, oferece um arsenal completo de ferramentas para auditoria de redes WiFi, Bluetooth e RF, tudo em um hardware minimalista e autônomo com monitoramento de bateria integrado.
-
----
-
-## ✨ Funcionalidades
-
-### 📡 WiFi
+### WiFi
 | Ferramenta | Descrição |
 |---|---|
 | **Scanner de Redes** | Escaneamento de APs com RSSI, BSSID e canal |
-| **Deauther** | Ataques de desautenticação em modo *Broadcast* e *Targeted* (com Scanner de Clientes em modo promíscuo) |
-| **CTS Jammer** | NAV Jamming avançado na camada MAC que bloqueia o espectro do canal inteiro (Efetivo contra WPA3) |
-| **Beacon Spam** | Criação de múltiplos SSIDs falsos simultâneos (com caracteres zero-width para clonagem invisível) |
-| **Captive Portal** | Hotspot com página de phishing customizada para extração de credenciais |
-| **Captura de Handshake** | Monitoramento e captura de handshakes WPA/WPA2 |
-| **Visualizar Credenciais** | Leitura das credenciais capturadas no SPIFFS |
+| **Deauther** | Desautenticação Broadcast e Targeted (com scanner de clientes em modo promíscuo) |
+| **CTS Jammer** | NAV Jamming na camada MAC — bloqueia o espectro do canal (efetivo contra WPA3) |
+| **Beacon Spam** | Múltiplos SSIDs falsos simultâneos (zero-width chars para clonagem invisível) |
+| **Captive Portal** | Hotspot com página de phishing para extração de credenciais |
 | **MAC Changer** | Alteração dinâmica do endereço MAC |
 
-### 🔵 Bluetooth
+### Bluetooth
 | Ferramenta | Descrição |
 |---|---|
-| **Scan BT** | Varredura de dispositivos Bluetooth Classic e BLE |
-| **Ataques BT** | Técnicas de flood e spam sobre Bluetooth |
+| **Scan BT** | Varredura de dispositivos Classic e BLE |
+| **Ataques BT** | Flood e spam sobre Bluetooth |
 
-### 📻 RF (Rádio Frequência — CC1101)
+### RF — CC1101
 | Ferramenta | Descrição |
 |---|---|
 | **Replay Attack** | Gravação e repetição de sinais RF |
 | **Raw Capture** | Captura de sinal bruto |
 | **RF Analyser** | Análise em tempo real do espectro |
 | **Random Transmit** | Transmissão de dados aleatórios |
-| **Saved Signals** | Gerenciamento de sinais gravados |
 
-### 📡 NRF24L01 (2.4 GHz)
+### NRF24L01 — 2.4 GHz
 | Ferramenta | Descrição |
 |---|---|
-| **Jammer 2.4 GHz** | Inundação de todos os 125 canais do espectro 2.4 GHz, interrompendo comunicações WiFi, Bluetooth e periféricos sem fio |
-| **Scan de canais** | Varredura de atividade por canal no espectro 2.4 GHz |
+| **BT Jammer** | Portadora constante varrendo canais Bluetooth Classic |
+| **Drone Jammer** | Varredura randômica 0-124 canais |
+| **BLE Adv Jammer** | writeFast nos 3 canais de advertising BLE |
+| **BLE Data Jammer** | Portadora nos canais BLE data (2-80) |
+| **WiFi Jammer** | Todos os 14 canais WiFi com sub-canais (14×23 = 322 pontos) |
+| **Zigbee Jammer** | Canais IEEE 802.15.4 (11-26) mapeados para NRF24 |
+| **Misc Jammer** | Portadora varrendo 0-124 sequencialmente |
 
-### ⚙️ Sistema
-- **Storage UI**: Interface gráfica de gerenciamento do armazenamento interno com gráfico de disco em "Donut" e navegação nativa de pastas.
-- **File Viewer**: Leitor nativo diretamente na tela para arquivos de texto (`.txt`, `.csv`) e renderizador de imagens (`.bmp`) com suporte a *scroll*.
-- **Persistência de Configurações** via NVRAM (salva nível de brilho, modo de menu e MAC falso selecionado).
-- **UI "Cyber Edition"**: Interface totalmente customizada com temas dourados/neon, animações de micro-interações, redraws parciais otimizados (zero *flickering* / tela piscando) e modos de grade/lista.
-- **Monitoramento de bateria** com barra gráfica de precisão, divisor de tensão e desligamento automático em nível crítico (≤5%).
-- **Screensaver** adaptável contra burn-in no display.
-- **Testar Tela**: 11 animações fluidas e interativas (Matrix Rain, Cubo 3D, Plasma, Tesseract 4D, Corredor, e olhos animados com física de movimento) acessíveis em Configurações → Testar Tela.
-- **Ajuste de brilho** do display dinâmico via PWM suave.
-- **Splash screen** de inicialização lendo imagem BMP colorida direto do SPIFFS.
-- **Navegação universal**: Máquina de estados unificada com sistema robusto de botão "Voltar" (Back) em todas as telas.
-
----
-
-## 📸 Galeria
-<div align="center">
-  <img src="fotos-fhc/foto1.jpg" width="45%" />
-  <img src="fotos-fhc/foto2.jpg" width="45%" />
-  <br>
-  <img src="fotos-fhc/foto3.jpg" width="45%" />
-  <img src="fotos-fhc/foto4.jpg" width="45%" />
-  <br>
-  <img src="fotos-fhc/foto5.jpg" width="45%" />
-</div>
+### Sistema
+- Monitoramento de bateria com desligamento automático ≤5%
+- Persistência de configurações via NVRAM
+- Storage UI com visualizador de arquivos (.txt, .csv, .bmp)
+- Splash screen BMP colorida via SPIFFS
+- Screensaver anti burn-in
 
 ---
 
-## 🔧 Hardware
+## Lista de Materiais
 
-### Componentes Necessários
+### Componentes Principais
 
-| Componente | Modelo / Especificação |
-|---|---|
-| Microcontrolador | ESP32 (Wemos S2 Mini ou equivalente) |
-| Display | TFT ST7735 / ST7789 128×160 px |
-| Módulo RF | CC1101 |
-| Botões | 3× botões tácteis |
-| Bateria | LiPo com circuito de proteção |
-| Carregador | TP4056 |
+| Componente | Qtd | Especificação |
+|---|---|---|
+| ESP32 Dev Module | 1 | Wemos D1 Mini ESP32 ou equivalente |
+| Display TFT | 1 | ST7735/ST7789 128×160 px |
+| NRF24L01+ | 1-2 | Com antena PCB ou externa (recomendado: versão com antena externa de 2.4G) |
+| CC1101 | 1 | Módulo RF 315/433/868/915 MHz |
+| Botões tácteis | 3 | 6×6 mm |
+| Bateria LiPo | 1 | 3.7V (com circuito de proteção) |
+| Carregador | 1 | TP4056 com proteção |
 
-### Circuito Divisor de Tensão (Bateria)
-Para que o ESP32 consiga ler a tensão da bateria LiPo com segurança (máx 4.2V), é necessário utilizar um divisor de tensão, já que o pino ADC suporta no máximo ~3.3V.
+### Componentes Adicionais (Recomendados)
+
+| Componente | Qtd | Especificação |
+|---|---|---|
+| Capacitor cerâmico | 2 | 100nF (104) — um para cada módulo NRF24L01 entre VCC e GND |
+| Capacitor eletrolítico | 2 | 10µF — um para cada módulo NRF24L01 entre VCC e GND |
+| Resistor divisor de tensão | 2 | 100kΩ + 100kΩ — leitura de bateria no ADC |
+
+> **⚠️ IMPORTANTE sobre os capacitores NRF24L01:**
+> Os módulos NRF24L01+ são非常敏感 a ruído na alimentação. Sem o capacitor de desacoplamento, o módulo pode:
+> - Não responder durante a inicialização
+> - Reiniciar aleatoriamente durante transmissões
+> - Gerar travamentos no display (por pico de corrente na rede SPI)
+>
+> **Solda os capacitores diretamente nos pinos VCC e GND do módulo NRF24, o mais próximo possível do chip.** Use fios curtos. Isso é **obrigatório** para operação estável.
 
 <div align="center">
   <img src="circuito-divisor-de-tensao.png" width="60%" alt="Circuito Divisor de Tensão">
 </div>
 
-### Pinagem
+---
 
-#### Display TFT
-| Pino ESP32 | Função TFT |
-|---|---|
-| GPIO 23 | MOSI |
-| GPIO 5 | SCLK |
-| GPIO 17 | DC |
-| GPIO 16 | RST |
-| GPIO 21 | Backlight (BL) |
-| — | CS (sem seleção / -1) |
+## Pinagem
 
-#### Botões
+### Display TFT
 | Pino ESP32 | Função |
 |---|---|
-| GPIO 14 | Botão ESQUERDA |
-| GPIO 27 | Botão DIREITA |
-| GPIO 26 | Botão SELECT |
+| GPIO 23 | MOSI |
+| GPIO 18 | SCLK |
+| GPIO 17 | DC |
+| GPIO 16 | RST |
+| GPIO 21 | Backlight |
+| — | CS (ligado ao GND) |
 
-#### CC1101 (RF)
-| Pino ESP32 | Função CC1101 |
+### Botões
+| Pino ESP32 | Função |
+|---|---|
+| GPIO 14 | Esquerda |
+| GPIO 27 | Direita |
+| GPIO 26 | Select |
+
+### CC1101
+| Pino ESP32 | Função |
 |---|---|
 | GPIO 33 | SCK |
 | GPIO 19 | MISO |
@@ -134,20 +127,38 @@ Para que o ESP32 consiga ler a tensão da bateria LiPo com segurança (máx 4.2V
 | GPIO 2 | GDO0 |
 | GPIO 32 | GDO2 |
 
+### NRF24L01 — Módulo 1
+| Pino ESP32 | Função |
+|---|---|
+| GPIO 33 | SCK (HSPI) |
+| GPIO 19 | MISO (HSPI) |
+| GPIO 13 | MOSI (HSPI) |
+| GPIO 4 | CSN |
+| GPIO 22 | CE |
+
+### NRF24L01 — Módulo 2 (Opcional)
+| Pino ESP32 | Função |
+|---|---|
+| GPIO 33 | SCK (HSPI) |
+| GPIO 19 | MISO (HSPI) |
+| GPIO 13 | MOSI (HSPI) |
+| GPIO 15 | CSN |
+| GPIO 12 | CE |
+
+> **Nota:** O módulo 2 compartilha o barramento HSPI com o módulo 1 e o CC1101. O TFT usa VSPI (barramento separado). Não há conflito SPI entre os módulos.
+
 ---
 
-## 🚀 Como Compilar e Gravar
+## Como Compilar
 
 ### Pré-requisitos
-- [Arduino IDE 2.x](https://www.arduino.cc/en/software) ou superior
-- Suporte à placa ESP32 instalado via Boards Manager:
+- [Arduino IDE 2.x](https://www.arduino.cc/en/software)
+- Suporte ESP32 via Boards Manager:
   ```
   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
   ```
 
-### Bibliotecas Necessárias
-Instale pelo **Library Manager** do Arduino IDE:
-
+### Bibliotecas (via Library Manager)
 | Biblioteca | Autor |
 |---|---|
 | `TFT_eSPI` | Bodmer |
@@ -155,107 +166,92 @@ Instale pelo **Library Manager** do Arduino IDE:
 | `AsyncTCP` | Me-No-Dev |
 | `SmartRC-CC1101-Driver-Lib` | lsatan |
 | `rc-switch` | sui77 |
+| `RF24` | TMRh20 |
 
-### Configuração do `TFT_eSPI`
-Edite o arquivo `User_Setup.h` da biblioteca `TFT_eSPI` para corresponder ao seu display. Consulte [`Config.h`](Config.h) para os pinos utilizados.
+### Configuração do TFT_eSPI
+Edite `User_Setup.h` na pasta da biblioteca `TFT_eSPI` conforme sua pinagem. Referência em `Config.h`.
+
+### Patch de Injeção de Pacotes (Obrigatório para ataques WiFi)
+1. Feche o Arduino IDE
+2. Execute `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS)
+3. Aguarde confirmação de sucesso
 
 ### Gravação do SPIFFS
-O diretório `data/` contém os arquivos do sistema de arquivos (splash screen BMP e página HTML do captive portal). Para enviar ao ESP32:
-
 1. Instale o plugin [Arduino ESP32 LittleFS/SPIFFS Data Upload](https://github.com/me-no-dev/arduino-esp32fs-plugin)
-2. Vá em **Ferramentas → ESP32 Sketch Data Upload**
+2. **Ferramentas → ESP32 Sketch Data Upload**
 
-### Patch de Injeção de Pacotes WiFi (Bypass) ⚠️
-Para que os ataques WiFi (Deauther, Beacon Spam) funcionem corretamente sem serem bloqueados pelos filtros do driver nativo da Espressif, é **obrigatório** aplicar um patch na biblioteca pré-compilada. 
-1. Feche o Arduino IDE.
-2. Execute o arquivo `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS) que acompanha o repositório. (Dê permissão de execução no Linux/macOS: `chmod +x patch_libnet.sh`).
-3. Aguarde a mensagem de sucesso. Este procedimento contorna o bloqueio de envio de pacotes de gerenciamento forjados.
-
-### Compilar e Gravar
-1. Abra `r4bb1t_fhc.ino` no Arduino IDE
-2. Selecione a placa: `ESP32 Dev Module`
-3. Configure a velocidade de gravação: `921600`
+### Upload
+1. Abra `R4bb1t_fhc.ino` no Arduino IDE
+2. Selecione: `ESP32 Dev Module`
+3. Velocidade de upload: `921600`
 4. Clique em **Upload** (▶)
 
 ---
 
-## 📁 Estrutura do Projeto
+## Estrutura do Projeto
 
 ```
 r4bb1t_fhc/
-├── r4bb1t_fhc.ino       # Sketch principal (setup + loop + máquina de estados)
-├── Config.h             # Definição de pinos e constantes globais
-├── Globals.h / .cpp     # Variáveis globais e objetos compartilhados
-│
-├── Attacks.h / .cpp     # Implementação dos ataques WiFi (deauth, beacon)
-├── Captive.h / .cpp     # Lógica do Captive Portal
-├── Scanner.h / .cpp     # Scanner de redes WiFi
-├── Radio.h / .cpp       # Interface com módulo CC1101 (RF)
-│
-├── Menu_Main.h / .cpp   # Menu inicial
-├── Menu_Attacks.h / .cpp# Submenus de ataques WiFi
-├── Menu_BT.h / .cpp     # Menu e ataques Bluetooth
-├── Menu_NRF24.h / .cpp  # Suporte NRF24L01 (reservado)
-├── Menu_RF.h / .cpp     # Menu de ferramentas RF (CC1101)
-├── Menu_Config.h / .cpp # Tela de configurações do sistema
-├── Menu_Networks.h / .cpp# Seleção de redes
-│
-├── Battery.h / .cpp     # Leitura ADC e monitoramento de bateria
-├── HWProbe.h / .cpp     # Diagnóstico de hardware
-├── Splash.h / .cpp      # Tela de inicialização (BMP do SPIFFS)
-├── UI.h / .cpp          # Utilitários de interface (desenho, backlight)
-│
-├── wsl_bypasser.h / .c  # Bypass de limitação de canal WSL (802.11)
-│
-└── data/
-    ├── index.html       # Página do Captive Portal (phishing page)
-    └── r4bb1t.bmp       # Imagem da splash screen
+├── R4bb1t_fhc.ino        # Setup, loop, máquina de estados
+├── Config.h              # Pinos e constantes
+├── Globals.h/.cpp        # Variáveis globais
+├── Attacks.h/.cpp        # Ataques WiFi (deauth, beacon, CTS)
+├── wsl_bypasser.h/.c     # Bypass de filtro 802.11 (injeção de pacotes)
+├── Scanner.h/.cpp        # Scanner de redes
+├── Radio.h/.cpp          # Interface CC1101
+├── Captive.h/.cpp        # Captive Portal
+├── Battery.h/.cpp        # Monitoramento de bateria
+├── HWProbe.h/.cpp        # Diagnóstico de hardware
+├── Splash.h/.cpp         # Tela de boot (BMP via SPIFFS)
+├── UI.h/.cpp             # Componentes de interface
+├── Menu_Main.h/.cpp      # Menu inicial
+├── Menu_Attacks.h/.cpp   # Submenus de ataques WiFi
+├── Menu_BT.h/.cpp        # Menu Bluetooth
+├── Menu_NRF24.h/.cpp     # Menu NRF24L01 (jamming 2.4GHz)
+├── Menu_RF.h/.cpp        # Menu ferramentas RF (CC1101)
+├── Menu_Config.h/.cpp    # Configurações do sistema
+├── Menu_Networks.h/.cpp  # Seleção de redes
+├── ESP32-third-eye/      # Animações de teste de tela (submódulo)
+├── data/
+│   ├── index.html        # Página do Captive Portal
+│   └── r4bb1t.bmp        # Splash screen
+└── patch_libnet.bat/.sh  # Script de patch do driver WiFi
 ```
 
 ---
 
-## 🙏 Créditos e Referências
+## Solução de Problemas
 
-Este projeto foi construído sobre trabalho incrível da comunidade open-source. As seguintes partes do código têm origem em projetos externos, devidamente creditados:
+### Tela trava ao iniciar ataque NRF24
+**Causa:** Conflito de GPIO entre CE do módulo NRF24 e SCLK do display TFT. Verifique se o `NRF2_CE` em `Menu_NRF24.cpp` não usa o mesmo GPIO que `TFT_SCLK` no `User_Setup.h`.
 
-### 🎨 Animações de Tela — ESP32-third-eye
+### Módulo NRF24 não é detectado
+1. Verifique a alimentação — o módulo precisa de 3.3V estable (não 5V!)
+2. **Instale o capacitor 100nF + 10µF entre VCC e GND** do módulo
+3. Verifique a solda nos pinos SPI (SCK, MISO, MOSI, CSN, CE)
+4. Teste com outro módulo — NRF24L01+ defeituosos são comuns
 
-As animações da funcionalidade **"Testar Tela"** (Matrix Rain, Cubo 3D, Plasma, Tesseract 4D, Corredor, olhos com física de movimento, etc.) foram portadas e adaptadas do projeto **ESP32-third-eye**:
+### Ataques WiFi não funcionam (Deauther/Beacon)
+Execute o patch `patch_libnet.bat` antes de compilar. Sem ele, o driver nativo do ESP32 bloqueia pacotes de gerenciamento.
 
-- **Autor:** [@Jekyllz](https://github.com/Jekyllz/ESP32-third-eye) / comunidade  
-- **Repositório original:** [`ESP32-third-eye`](https://github.com/Jekyllz/ESP32-third-eye) *(incluído como submódulo em `ESP32-third-eye/`)*
-- **Adaptações realizadas:** conversão de `Arduino_GFX` (canvas 240×240 circular) para `TFT_eSPI` direto (128×160 retangular), reescala de coordenadas, preservação completa da lógica de física e fluidez das animações.
-
-### 📡 Jammer NRF24L01 — nRF24_jammer
-
-A lógica de jamming 2.4 GHz do módulo **NRF24L01** (`Menu_NRF24.cpp`) foi baseada e portada do projeto **nRF24_jammer**:
-
-- **Autor:** [@W0rthlessS0ul](https://github.com/W0rthlessS0ul)
-- **Repositório original:** [https://github.com/W0rthlessS0ul/nRF24_jammer](https://github.com/W0rthlessS0ul/nRF24_jammer)
-- **Adaptações realizadas:** substituição do display OLED e botões originais pelo driver `TFT_eSPI` e pinagem GPIO do hardware R4BB1T FHC; integração ao sistema de menus e máquina de estados existente.
+### Display não liga ou fica com cores erradas
+Verifique se `User_Setup.h` está configurado corretamente para o seu display (ST7735 vs ST7789, offset X/Y).
 
 ---
 
-## 🤝 Contribuindo
+## Créditos
 
-Pull requests são bem-vindos! Para mudanças maiores, abra uma issue primeiro para discutir o que você gostaria de alterar.
-
-1. Faça um Fork do repositório
-2. Crie sua branch: `git checkout -b feature/nova-funcionalidade`
-3. Commit suas mudanças: `git commit -m 'feat: adiciona nova funcionalidade'`
-4. Push para a branch: `git push origin feature/nova-funcionalidade`
-5. Abra um Pull Request
+- **ESP32-third-eye**: Animações de teste de tela — [@Jekyllz](https://github.com/Jekyllz/ESP32-third-eye)
+- **nRF24_jammer**: Lógica de jamming NRF24 — [@W0rthlessS0ul](https://github.com/W0rthlessS0ul/nRF24_jammer)
 
 ---
 
-## 📜 Licença
+## Licença
 
-Distribuído sob a licença MIT. Veja [`LICENSE`](LICENSE) para mais informações.
-
----
+MIT — veja [`LICENSE`](LICENSE).
 
 <div align="center">
 
-Feito com ❤️ por **Mr4bb1t** — para aprender, pesquisar e nunca parar de questionar.
+Feito com ❤️ por **Mr4bb1t**
 
 </div>
