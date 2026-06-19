@@ -283,25 +283,22 @@ static void jamTask(void *param) {
       for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
       break;
 
-    // ── 3: BLE Adv Jammer — write nos 3 canais ADV
+    // ── 3: BLE Adv Jammer — Const Carrier Flood nos 3 canais ADV
     case 3:
-      Serial.println("[NRF] Iniciando BLE Adv Jammer (WriteFast Flood)");
-      toggleCeHigh();
+      Serial.println("[NRF] Iniciando BLE Adv Jammer (Const Carrier)");
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, BLE_CH[0]);
       while (!jamStop) {
         for (int ch = 0; ch < 3 && !jamStop; ch++) {
           toggleCeLow();
           for (int i = 0; i < radioCount; i++) radio[i]->setChannel(BLE_CH[ch]);
           toggleCeHigh();
-          for (int i = 0; i < radioCount; i++) {
-            radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
-            radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
-          }
           jamCurChan = BLE_CH[ch];
-          jamPktCount += 2;
+          jamPktCount++;
+          vTaskDelay(1);
         }
-        vTaskDelay(1);
       }
-      toggleCeLow();
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
       Serial.println("[NRF] BLE Adv Jammer Parado.");
       break;
 
@@ -325,8 +322,9 @@ static void jamTask(void *param) {
 
     // ── 5: WiFi Jammer — todos os 14 canais WiFi (faixas de 23 sub-canais)
     case 5:
-      Serial.println("[NRF] Iniciando WiFi Jammer (WriteFast Flood)");
-      toggleCeHigh();
+      Serial.println("[NRF] Iniciando WiFi Jammer (Const Carrier)");
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, 1);
       while (!jamStop) {
         for (int wch = 0; wch < 14 && !jamStop; wch++) {
           int base = (wch * 5) + 1;
@@ -337,23 +335,21 @@ static void jamTask(void *param) {
             for (int i = 0; i < radioCount; i++) radio[i]->setChannel((uint8_t)sub);
             toggleCeHigh();
             
-            for (int i = 0; i < radioCount; i++) {
-              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
-            }
             jamCurChan = (uint8_t)sub;
             jamPktCount++;
           }
           vTaskDelay(1);
         }
       }
-      toggleCeLow();
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
       Serial.println("[NRF] WiFi Jammer Parado.");
       break;
 
     // ── 6: Zigbee Jammer — canais 11-26 IEEE 802.15.4 → NRF offset
     case 6:
-      Serial.println("[NRF] Iniciando Zigbee Jammer (WriteFast Flood)");
-      toggleCeHigh();
+      Serial.println("[NRF] Iniciando Zigbee Jammer (Const Carrier)");
+      for (int i = 0; i < radioCount; i++)
+        radio[i]->startConstCarrier(RF24_PA_MAX, 4);
       while (!jamStop) {
         for (int zch = 11; zch < 27 && !jamStop; zch++) {
           uint8_t nrfCh = (uint8_t)(4 + 5 * (zch - 11));
@@ -361,16 +357,13 @@ static void jamTask(void *param) {
             toggleCeLow();
             for (int i = 0; i < radioCount; i++) radio[i]->setChannel(nrfCh + sub);
             toggleCeHigh();
-            for (int i = 0; i < radioCount; i++) {
-              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
-            }
             jamCurChan = nrfCh + sub;
             jamPktCount++;
           }
           vTaskDelay(1);
         }
       }
-      toggleCeLow();
+      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
       Serial.println("[NRF] Zigbee Jammer Parado.");
       break;
 
