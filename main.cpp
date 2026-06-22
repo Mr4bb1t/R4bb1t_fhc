@@ -20,13 +20,13 @@
 #include "Globals.h"
 #include "Menu_Attacks.h"
 
+#include "Battery.h"
+#include "HWProbe.h"
 #include "Menu_Config.h"
 #include "Menu_Main.h"
 #include "Menu_NRF24.h"
 #include "Menu_Networks.h"
 #include "Menu_RF.h"
-#include "Battery.h"
-#include "HWProbe.h"
 #include "Radio.h"
 #include "Scanner.h"
 #include "Splash.h"
@@ -60,6 +60,69 @@ void cleanup() {
   ctsAtivo = false;
 
   Serial.println("Limpeza concluída");
+}
+
+// ==================== BATERIA CRÍTICA ====================
+
+static void showLowBatteryShutdown() {
+  Serial.println("[BAT] CRITICA! Iniciando desligamento...");
+
+  tft.fillScreen(TFT_BLACK);
+
+  // ── Título Superior ────────────────────────────
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_RED);
+  const char *t1 = "BATERIA CRITICA";
+  tft.setCursor((128 - strlen(t1) * 6) / 2, 20);
+  tft.print(t1);
+
+  // ── Desenho da Bateria (Centro) ────────────────
+  int bx = 30, by = 40, bw = 64, bh = 32;
+  // Borda grossa (2 px)
+  tft.drawRoundRect(bx, by, bw, bh, 3, TFT_WHITE);
+  tft.drawRoundRect(bx - 1, by - 1, bw + 2, bh + 2, 4, TFT_WHITE);
+  // Terminal positivo
+  tft.fillRoundRect(bx + bw + 2, by + 8, 4, 16, 2, TFT_WHITE);
+
+  // Carga (vermelho) simulando carga baixa
+  tft.fillRect(bx + 4, by + 4, 8, bh - 8, TFT_RED);
+
+  // Símbolo de alerta dentro do corpo da bateria
+  tft.setTextSize(3);
+  tft.setTextColor(TFT_RED);
+  tft.setCursor(bx + 26, by + 6);
+  tft.print("!");
+
+  // ── Mensagem Inferior ──────────────────────────
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_LIGHTGREY);
+  const char *t2 = "Conecte ao carregador";
+  tft.setCursor((128 - strlen(t2) * 6) / 2, 84);
+  tft.print(t2);
+
+  // ── Percentual ─────────────────────────────────
+  char pctBuf[16];
+  snprintf(pctBuf, sizeof(pctBuf), "[ %d%% ]", batteryPercent());
+  tft.setTextColor(TFT_ORANGE);
+  tft.setCursor((128 - strlen(pctBuf) * 6) / 2, 102);
+  tft.print(pctBuf);
+
+  // ── Contagem Regressiva ────────────────────────
+  for (int i = 5; i >= 1; i--) {
+    tft.fillRect(0, 130, 128, 16, TFT_BLACK);
+    char cbuf[32];
+    snprintf(cbuf, sizeof(cbuf), "Desligando em %ds...", i);
+    tft.setTextColor(TFT_DARKGREY);
+    tft.setCursor((128 - strlen(cbuf) * 6) / 2, 134);
+    tft.print(cbuf);
+    delay(1000);
+  }
+
+  // ── Desligamento Físico ────────────────────────
+  tft.fillScreen(TFT_BLACK);
+  blOff();
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  esp_deep_sleep_start();
 }
 
 // ==================== SETUP ====================
@@ -113,63 +176,7 @@ void setup() {
 
   // ── Verificação de bateria crítica no boot ──────────────────
   if (batteryPercent() <= 5) {
-    Serial.println("AVISO: Bateria critica! Desligando...");
-
-    tft.fillScreen(TFT_BLACK);
-
-    // ── Triângulo amarelo de aviso ────────────────────────────
-    // Triângulo com vértice no topo, base na parte de baixo
-    const int TX = 64, TY_TOP = 30, TY_BOT = 100, TW = 50;
-    // Triângulo preenchido (3 pontos: topo, baixo-esq, baixo-dir)
-    tft.fillTriangle(TX, TY_TOP,      // vértice topo
-                     TX - TW, TY_BOT, // baixo esquerda
-                     TX + TW, TY_BOT, // baixo direita
-                     TFT_YELLOW);
-    // Borda preta fina para contraste
-    tft.drawTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT, TFT_BLACK);
-
-    // ── Símbolo "!" dentro do triângulo — tamanho 4, centrado ─
-    tft.setTextSize(6);
-    tft.setTextColor(TFT_BLACK);
-    tft.setCursor(TX - 12, TY_TOP + 22); // centralizado no X e Y do triângulo
-    tft.print("!");
-
-    // ── Texto de aviso ────────────────────────────────────────
-    tft.setTextSize(1);
-    tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(18, TY_BOT + 12);
-    tft.print("  BATERIA BAIXA");
-    tft.setCursor(6, TY_BOT + 26);
-    tft.print("Carregue antes de usar");
-
-    // Percentual em vermelho
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_RED);
-    char pctBuf[6];
-    snprintf(pctBuf, sizeof(pctBuf), "%d%%", batteryPercent());
-    int px = (128 - (int)strlen(pctBuf) * 12) / 2;
-    tft.setCursor(px, TY_BOT + 44);
-    tft.print(pctBuf);
-
-    // Aguarda 5 segundos (contagem regressiva na tela)
-    for (int i = 5; i >= 1; i--) {
-      tft.setTextSize(1);
-      tft.setTextColor(TFT_DARKGREY);
-      tft.fillRect(40, TY_BOT + 64, 50, 10, TFT_BLACK);
-      tft.setCursor(32, TY_BOT + 64);
-      char cbuf[16];
-      snprintf(cbuf, sizeof(cbuf), "Desligando em %d...", i);
-      tft.print(cbuf);
-      delay(1000);
-    }
-
-    // Apaga o display e entra em deep sleep sem fonte de wakeup
-    // → equivale a "desligar" o ESP32
-    tft.fillScreen(TFT_BLACK); // limpa antes de apagar o backlight
-    blOff();                   // apaga o backlight via LEDC (PWM duty=0)
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-    esp_deep_sleep_start();
-    // Nunca retorna daqui
+    showLowBatteryShutdown();
   }
   // ────────────────────────────────────────────────────────────
 
@@ -214,10 +221,12 @@ void setup() {
   systemInitialized = true;
 
   // Inicializa o CC1101 no boot para aparecer conectado no Menu Config
-  // Isso é feito APÓS a tela ter sido configurada para não roubar o barramento SPI
+  // Isso é feito APÓS a tela ter sido configurada para não roubar o barramento
+  // SPI
   hwCC1101_ok = rfInit();
 
-  // Inicializa a detecção do NRF24 no boot para aparecer conectado no Menu Config / Sobre
+  // Inicializa a detecção do NRF24 no boot para aparecer conectado no Menu
+  // Config / Sobre
   nrfProbe();
 
   // Exibe splash screen com a imagem do SPIFFS
@@ -279,8 +288,6 @@ void loop() {
   case VISUALIZAR_CREDENCIAIS:
     handleVisualizarCredenciais();
     break;
-
-
 
   case MENU_CONFIGURACOES:
     handleConfiguracoes();
@@ -357,46 +364,7 @@ void loop() {
 
   // Verificação de bateria crítica durante uso normal
   if (batteryPercent() <= 5) {
-    Serial.println("[BAT] CRITICA durante uso! Iniciando desligamento...");
-
-    tft.fillScreen(TFT_BLACK);
-
-    const int TX = 64, TY_TOP = 30, TY_BOT = 100, TW = 50;
-    tft.fillTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT, TFT_YELLOW);
-    tft.drawTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT, TFT_BLACK);
-    tft.setTextSize(4);
-    tft.setTextColor(TFT_BLACK);
-    tft.setCursor(TX - 12, TY_TOP + 22); // centralizado no X e Y do triângulo
-    tft.print("!");
-    tft.setTextSize(1);
-    tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(18, TY_BOT + 12);
-    tft.print("  BATERIA BAIXA");
-    tft.setCursor(6, TY_BOT + 26);
-    tft.print("Carregue antes de usar");
-    tft.setTextSize(2);
-    tft.setTextColor(TFT_RED);
-    char pctBuf[6];
-    snprintf(pctBuf, sizeof(pctBuf), "%d%%", batteryPercent());
-    int px = (128 - (int)strlen(pctBuf) * 12) / 2;
-    tft.setCursor(px, TY_BOT + 44);
-    tft.print(pctBuf);
-
-    for (int i = 5; i >= 1; i--) {
-      tft.setTextSize(1);
-      tft.setTextColor(TFT_DARKGREY);
-      tft.fillRect(40, TY_BOT + 64, 50, 10, TFT_BLACK);
-      tft.setCursor(32, TY_BOT + 64);
-      char cbuf[16];
-      snprintf(cbuf, sizeof(cbuf), "Desligando em %d...", i);
-      tft.print(cbuf);
-      delay(1000);
-    }
-
-    tft.fillScreen(TFT_BLACK); // limpa antes de apagar o backlight
-    blOff();                   // apaga o backlight via LEDC (PWM duty=0)
-    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
-    esp_deep_sleep_start();
+    showLowBatteryShutdown();
   }
 
   delay(10);

@@ -1369,20 +1369,35 @@ void displayDesligar() {
   tft.fillScreen(C_BG);
   drawHeader("DESLIGAR", true);
 
+  // ── Símbolo Power (Círculo aberto com traço) ──
+  int px = 64;
+  int py = 54;
+  int size = 16;
+  uint16_t color = C_GOLD;
+
+  for (int r = size - 2; r <= size; r++) {
+    for (float a = 30.0f; a <= 330.0f; a += 1.0f) {
+      float rad = a * PI / 180.0f;
+      int dx = px + (int)(r * sin(rad));
+      int dy = py - (int)(r * cos(rad));
+      tft.drawPixel(dx, dy, color);
+    }
+  }
+  tft.fillRect(px - 1, py - size, 3, size + 2, color);
+
   tft.setTextSize(1);
   tft.setTextColor(C_WHITE);
-  tft.setCursor(15, 50);
-  tft.print("Tem certeza que");
-  tft.setCursor(15, 65);
-  tft.print("deseja desligar?");
+  const char* t = "Deseja desligar?";
+  tft.setCursor((128 - strlen(t) * 6) / 2, 82);
+  tft.print(t);
 
   drawSeparator(95, C_GREY);
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(10, 106);
-  tft.print("<    CANCELAR");
+  tft.setCursor(14, 106);
+  tft.print("<  CANCELAR");
   tft.setTextColor(C_GOLD);
-  tft.setCursor(10, 120);
-  tft.print("  o  CONFIRMAR");
+  tft.setCursor(14, 120);
+  tft.print("o  CONFIRMAR");
 
   drawFooter();
   batteryDraw();
@@ -1400,26 +1415,34 @@ void handleDesligar() {
 
       tft.fillScreen(TFT_BLACK);
 
-      const int TX = 64, TY_TOP = 30, TY_BOT = 100, TW = 50;
-      tft.fillTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT,
-                       TFT_YELLOW);
-      tft.drawTriangle(TX, TY_TOP, TX - TW, TY_BOT, TX + TW, TY_BOT, TFT_BLACK);
-      tft.setTextSize(4);
-      tft.setTextColor(TFT_BLACK);
-      tft.setCursor(TX - 12, TY_TOP + 22);
-      tft.print("!");
+      // ── Símbolo Power vermelho e maior ──
+      int px = 64;
+      int py = 54;
+      int size = 22;
+      uint16_t color = TFT_RED;
+
+      for (int r = size - 3; r <= size; r++) {
+        for (float a = 30.0f; a <= 330.0f; a += 0.5f) {
+          float rad = a * PI / 180.0f;
+          int dx = px + (int)(r * sin(rad));
+          int dy = py - (int)(r * cos(rad));
+          tft.drawPixel(dx, dy, color);
+        }
+      }
+      tft.fillRect(px - 1, py - size - 2, 4, size + 4, color);
+
       tft.setTextSize(1);
-      tft.setTextColor(TFT_YELLOW);
-      tft.setCursor(32, TY_BOT + 12);
-      tft.print("DESLIGANDO");
+      tft.setTextColor(TFT_RED);
+      const char* tMsg = "DESLIGANDO SISTEMA";
+      tft.setCursor((128 - strlen(tMsg) * 6) / 2, 95);
+      tft.print(tMsg);
 
       for (int i = 3; i >= 1; i--) {
-        tft.setTextSize(1);
-        tft.setTextColor(TFT_DARKGREY);
-        tft.fillRect(30, TY_BOT + 34, 70, 10, TFT_BLACK);
-        tft.setCursor(32, TY_BOT + 34);
+        tft.fillRect(0, 110, 128, 16, TFT_BLACK);
         char cbuf[16];
         snprintf(cbuf, sizeof(cbuf), "Aguarde %d...", i);
+        tft.setTextColor(TFT_DARKGREY);
+        tft.setCursor((128 - strlen(cbuf) * 6) / 2, 114);
         tft.print(cbuf);
         delay(1000);
       }
@@ -1807,23 +1830,17 @@ static void animFrame(uint32_t now) {
   animSpr->pushSprite(0, 0);
 }
 
-// ── Iniciar o Screensaver de fora (idle na tela inicial) ───────────
-static bool animStartedFromIdle = false;
-
-void startScreensaver(bool fromIdle) {
-  animStartedFromIdle = fromIdle;
-  estadoAtual = TELA_SCREENSAVER_TEST; // reaproveita o estado
-  
-  if (fromIdle) {
-    animIndex = prefs.getInt("screensaver", 1);
-    if (animIndex == 0 || animIndex >= ANIM_COUNT) animIndex = 1;
-  }
-
+// ── Inicializa ou desaloca buffers dependendo da animação ───────────
+static void initCurrentAnim() {
   if (animIndex == 1) {
+    if (animSpr) {
+      animSpr->deleteSprite();
+      delete animSpr;
+      animSpr = nullptr;
+    }
     tft.fillScreen(TFT_BLACK);
     extern void displaySplash(unsigned long delayMs);
     displaySplash(0);
-    animRunning = true;
   } else {
     animInitLUT();
     if (!animSpr) {
@@ -1839,8 +1856,23 @@ void startScreensaver(bool fromIdle) {
     eyeTY = ANIM_CY;
     eyeNextMove = millis() + 800;
     eyeMoving = false;
-    animRunning = true;
   }
+}
+
+// ── Iniciar o Screensaver de fora (idle na tela inicial) ───────────
+static bool animStartedFromIdle = false;
+
+void startScreensaver(bool fromIdle) {
+  animStartedFromIdle = fromIdle;
+  estadoAtual = TELA_SCREENSAVER_TEST; // reaproveita o estado
+  
+  if (fromIdle) {
+    animIndex = prefs.getInt("screensaver", 1);
+    if (animIndex == 0 || animIndex >= ANIM_COUNT) animIndex = 1;
+  }
+
+  animRunning = true;
+  initCurrentAnim();
   
   // Escurece a tela apenas se for a partir do repouso
   if (fromIdle) {
@@ -1940,13 +1972,7 @@ void handleScreensaverTest() {
           animIndex = animIndex - 1;
           if (animIndex <= 0) animIndex = ANIM_COUNT - 1;
           
-          if (animIndex == 2)
-            for (int i = 0; i < 13; i++)
-              matInitCol(i);
-          eyeX = ANIM_CX;
-          eyeY = ANIM_CY;
-          eyeNextMove = now + 800;
-          eyeMoving = false;
+          initCurrentAnim();
         }
         if (digitalRead(BUTTON_RIGHT) == LOW) {
           lastDebounceTime = now;
@@ -1954,13 +1980,7 @@ void handleScreensaverTest() {
           animIndex = animIndex + 1;
           if (animIndex >= ANIM_COUNT) animIndex = 1;
           
-          if (animIndex == 2)
-            for (int i = 0; i < 13; i++)
-              matInitCol(i);
-          eyeX = ANIM_CX;
-          eyeY = ANIM_CY;
-          eyeNextMove = now + 800;
-          eyeMoving = false;
+          initCurrentAnim();
         }
       }
     }
