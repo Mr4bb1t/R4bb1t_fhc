@@ -26,7 +26,7 @@
 | **CTS Jammer** | NAV Jamming na camada MAC — bloqueia o espectro do canal (efetivo contra WPA3) |
 | **Beacon Spam** | Múltiplos SSIDs falsos simultâneos (zero-width chars para clonagem invisível) |
 | **Captive Portal** | Hotspot com página de phishing para extração de credenciais |
-| **MAC Changer** | Alteração dinâmica do endereço MAC |
+| **MAC Changer** | Alteração dinâmica do endereço MAC (via menu de Configurações) |
 
 
 ### RF — CC1101
@@ -144,42 +144,34 @@
 
 ---
 
-## Como Compilar
+## Como Compilar e Subir o Código
+
+O projeto foi migrado para o **PlatformIO**, o que automatiza a instalação de dependências e configurações complexas de bibliotecas (como os parâmetros do TFT_eSPI, que agora ficam no `platformio.ini`).
 
 ### Pré-requisitos
-- [Arduino IDE 2.x](https://www.arduino.cc/en/software)
-- Suporte ESP32 via Boards Manager:
-  ```
-  https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-  ```
+1. [VS Code](https://code.visualstudio.com/)
+2. Extensão do [PlatformIO IDE](https://platformio.org/install/ide?install=vscode)
 
-### Bibliotecas (via Library Manager)
-| Biblioteca | Autor |
-|---|---|
-| `TFT_eSPI` | Bodmer |
-| `ESPAsyncWebServer` | Me-No-Dev |
-| `AsyncTCP` | Me-No-Dev |
-| `SmartRC-CC1101-Driver-Lib` | lsatan |
-| `rc-switch` | sui77 |
-| `RF24` | TMRh20 |
-
-### Configuração do TFT_eSPI
-Edite `User_Setup.h` na pasta da biblioteca `TFT_eSPI` conforme sua pinagem. Referência em `Config.h`.
+### Instalação
+1. Abra a pasta do projeto `r4bb1t_fhc` no VS Code.
+2. O PlatformIO irá detectar o arquivo `platformio.ini` e baixar automaticamente todas as bibliotecas e ferramentas necessárias.
 
 ### Patch de Injeção de Pacotes (Obrigatório para ataques WiFi)
-1. Feche o Arduino IDE
-2. Execute `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS)
-3. Aguarde confirmação de sucesso
+O projeto utiliza um bypass dinâmico de pacotes, mas dependendo da versão do framework baixado, pode ser necessário rodar o script de patch na biblioteca nativa do ESP32 (`libnet80211.a`):
+1. Feche o VS Code para evitar conflitos de arquivos em uso.
+2. Execute `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS). O script tentará encontrar a pasta do framework do PlatformIO automaticamente.
+3. Aguarde a confirmação de sucesso.
 
-### Gravação do SPIFFS
-1. Instale o plugin [Arduino ESP32 LittleFS/SPIFFS Data Upload](https://github.com/me-no-dev/arduino-esp32fs-plugin)
-2. **Ferramentas → ESP32 Sketch Data Upload**
+### Upload do Sistema de Arquivos (SPIFFS)
+A página web do Captive Portal, credenciais salvas e a tela de boot (imagem BMP) precisam ser gravadas no sistema de arquivos do ESP32:
+1. Conecte o R4bb1t ao computador.
+2. No menu lateral esquerdo do PlatformIO (ícone do alien), abra **Project Tasks**.
+3. Navegue até `env:r4bb1t_fhc` > `Platform`.
+4. Clique em **Build Filesystem Image** e, em seguida, em **Upload Filesystem Image**.
 
-### Upload
-1. Abra `R4bb1t_fhc.ino` no Arduino IDE
-2. Selecione: `ESP32 Dev Module`
-3. Velocidade de upload: `921600`
-4. Clique em **Upload** (▶)
+### Upload do Código (Firmware)
+1. Na barra inferior azul do VS Code (PlatformIO), clique no botão **Upload** (ícone de seta `→`).
+2. O código será compilado e enviado para a placa automaticamente.
 
 ---
 
@@ -187,7 +179,8 @@ Edite `User_Setup.h` na pasta da biblioteca `TFT_eSPI` conforme sua pinagem. Ref
 
 ```
 r4bb1t_fhc/
-├── R4bb1t_fhc.ino        # Setup, loop, máquina de estados
+├── main.cpp              # Setup, loop, máquina de estados
+├── platformio.ini        # Configuração do PlatformIO e dependências
 ├── Config.h              # Pinos e constantes
 ├── Globals.h/.cpp        # Variáveis globais
 ├── Attacks.h/.cpp        # Ataques WiFi (deauth, beacon, CTS)
@@ -205,11 +198,13 @@ r4bb1t_fhc/
 ├── Menu_RF.h/.cpp        # Menu ferramentas RF (CC1101)
 ├── Menu_Config.h/.cpp    # Configurações do sistema
 ├── Menu_Networks.h/.cpp  # Seleção de redes
-├── ESP32-third-eye/      # Animações de teste de tela (submódulo)
 ├── data/
 │   ├── index.html        # Página do Captive Portal
-│   └── r4bb1t.bmp        # Splash screen
-└── patch_libnet.bat/.sh  # Script de patch do driver WiFi
+│   ├── r4bb1t.bmp        # Splash screen
+│   └── credenciais.txt   # Credenciais salvas
+├── fotos-fhc/            # Imagens e referências do hardware
+├── patch_libnet.bat/.sh  # Script de patch do driver WiFi
+└── LICENSE               # Licença do projeto
 ```
 
 ---
