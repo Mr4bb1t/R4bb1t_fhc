@@ -13,8 +13,6 @@ build/
 sdkconfig
 sdkconfig.old
 
-# Credenciais capturadas (dados sensíveis do SPIFFS)
-data/credenciais.txt
 
 # OS generated
 .DS_Store
@@ -29,7 +27,7 @@ desktop.ini
 
 # Logs
 *.log
-nRF24_jammer/
+
 
 #skills
 EXEMPLE.md
