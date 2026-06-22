@@ -124,11 +124,15 @@ static bool deleteRFSignal(int index) {
 
 // ── Inicialização CC1101 ─────────────────────────
 bool rfInit() {
+  Serial.println("[RF] Iniciando CC1101...");
+  Serial.printf("[RF] Pinos: SCK=%d MISO=%d MOSI=%d CS=%d GDO0=%d GDO2=%d\n",
+                RF_SCK, RF_MISO, RF_MOSI, RF_CS, RF_GDO0, RF_GDO2);
+
   ELECHOUSE_cc1101.setSpiPin(RF_SCK, RF_MISO, RF_MOSI, RF_CS);
   ELECHOUSE_cc1101.setGDO(RF_GDO0, RF_GDO2);
 
   if (!ELECHOUSE_cc1101.getCC1101()) {
-    Serial.println("[RF] CC1101 nao encontrado!");
+    Serial.println("[RF] ERRO: CC1101 nao encontrado! Verifique a fiacao SPI.");
     rfReady = false;
     return false;
   }
@@ -142,7 +146,12 @@ bool rfInit() {
   rcSwitch.setRepeatTransmit(10);
 
   rfReady = true;
+
+  // Lê RSSI inicial para confirmar comunicação SPI
+  float rssiInit = ELECHOUSE_cc1101.getRssi();
+  float lqiInit  = ELECHOUSE_cc1101.getLqi();
   Serial.println("[RF] CC1101 OK @ 433.92 MHz");
+  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit, lqiInit);
   return true;
 }
 
@@ -296,11 +305,19 @@ void displayRF_Replay() {
 void handleRF_Replay() {
   // Recepção contínua
   if (rfReady && rcSwitch.available()) {
-    replayVal = rcSwitch.getReceivedValue();
-    replayBits = rcSwitch.getReceivedBitlength();
+    replayVal      = rcSwitch.getReceivedValue();
+    replayBits     = rcSwitch.getReceivedBitlength();
     replayProtocol = rcSwitch.getReceivedProtocol();
     rcSwitch.resetAvailable();
     replayHasSig = true;
+
+    float rssi = ELECHOUSE_cc1101.getRssi();
+    float lqi  = ELECHOUSE_cc1101.getLqi();
+    Serial.println("[RF][REPLAY] Sinal capturado!");
+    Serial.printf("[RF][REPLAY]   Valor   : %lu (0x%lX)\n", replayVal, replayVal);
+    Serial.printf("[RF][REPLAY]   Bits    : %d  |  Protocolo: %d\n", replayBits, replayProtocol);
+    Serial.printf("[RF][REPLAY]   RSSI    : %.1f dBm  |  LQI: %.0f\n", rssi, lqi);
+
     displayRF_Replay();
   }
 
@@ -309,12 +326,15 @@ void handleRF_Replay() {
     // SELECT → retransmite
     if (digitalRead(BUTTON_SELECT) == LOW && replayHasSig) {
       lastDebounceTime = millis();
+      Serial.printf("[RF][REPLAY] Retransmitindo -> Val:%lu Bits:%d Proto:%d\n",
+                    replayVal, replayBits, replayProtocol);
       ELECHOUSE_cc1101.SetTx();
       delay(5);
       rcSwitch.setProtocol(replayProtocol);
       rcSwitch.send(replayVal, replayBits);
       delay(5);
       ELECHOUSE_cc1101.SetRx();
+      Serial.println("[RF][REPLAY] TX concluido, voltando para RX.");
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(TFT_ORANGE);
       tft.setCursor(4, 92);
@@ -327,6 +347,7 @@ void handleRF_Replay() {
     if (digitalRead(BUTTON_RIGHT) == LOW && replayHasSig) {
       lastDebounceTime = millis();
       bool ok = saveRFSignal(replayVal, replayBits, replayProtocol);
+      Serial.printf("[RF][REPLAY] Salvar no SPIFFS: %s\n", ok ? "OK" : "ERRO");
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
       tft.setCursor(4, 92);
@@ -387,7 +408,15 @@ void handleRF_Raw() {
     // Pega o maior sinal detectado
     int dbm = peakRSSI;
     if (dbm == -100) dbm = (int)ELECHOUSE_cc1101.getRssi(); // Fallback
+    float lqi = ELECHOUSE_cc1101.getLqi();
     peakRSSI = -100; // Reseta para a próxima captura
+
+    Serial.println("[RF][RAW] Sinal recebido:");
+    Serial.printf("[RF][RAW]   Dec     : %lu\n", val);
+    Serial.printf("[RF][RAW]   Hex     : 0x%lX\n", val);
+    Serial.printf("[RF][RAW]   Bits    : %d  |  Protocolo: %d\n", bits, proto);
+    Serial.printf("[RF][RAW]   RSSI    : %d dBm  |  LQI: %.0f\n", dbm, lqi);
+    Serial.printf("[RF][RAW]   Barras  : %d/10\n", constrain(map(dbm, -45, -20, 1, 10), 1, 10));
 
     // Partial redraw: limpa as 3 linhas de texto (Y=40 até 74) e a linha do Sinal/Barras (Y=82 até 90)
     tft.fillRect(0, 40, SCR_W, 34, TFT_BLACK);
@@ -579,6 +608,11 @@ void handleRF_Analyser() {
     wfSigCount++;
     wfSigActive = true;
 
+    float rssi = ELECHOUSE_cc1101.getRssi();
+    float lqi  = ELECHOUSE_cc1101.getLqi();
+    Serial.printf("[RF][ANALYSER] Sinal #%lu  RSSI: %.1f dBm  LQI: %.0f\n",
+                  wfSigCount, rssi, lqi);
+
     // Se estava em idle ou decay, reinicia attack
     if (wfEnv == ENV_IDLE || wfEnv == ENV_DECAY) {
       wfEnv = ENV_ATTACK;
@@ -601,6 +635,13 @@ void handleRF_Analyser() {
 
     int dbm = rfReady ? (int)ELECHOUSE_cc1101.getRssi() : WF_DBM_MIN;
     uint8_t rssiBase = rssiNorm(dbm);
+    // Log periódico de RSSI a cada ~2s (cada tick = 60ms, 33 ticks ≈ 2s)
+    static uint8_t _dbgTick = 0;
+    if (++_dbgTick >= 33) {
+      _dbgTick = 0;
+      Serial.printf("[RF][ANALYSER] RSSI: %d dBm  norm: %d  env: %d\n",
+                    dbm, rssiBase, wfEnvLevel);
+    }
 
     // ── Máquina de estados do envelope ───────────
     switch (wfEnv) {
@@ -750,6 +791,14 @@ void handleRF_Random() {
     // Atualiza contador na tela a cada 150ms (sem redesenhar tudo)
     if (millis() - jammerLastDraw > 150) {
       jammerLastDraw = millis();
+      // Log periódico do jammer a cada ~1.5s (10 ticks x 150ms)
+      static uint8_t _jamTick = 0;
+      if (++_jamTick >= 10) {
+        _jamTick = 0;
+        float rssiTx = ELECHOUSE_cc1101.getRssi();
+        Serial.printf("[RF][JAMMER] Pacotes: %lu  RSSI TX: %.1f dBm\n",
+                      jammerPackets, rssiTx);
+      }
       tft.fillRect(4, 66, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextSize(1);
       tft.setTextColor(TFT_WHITE);
@@ -771,6 +820,7 @@ void handleRF_Random() {
       lastDebounceTime = millis();
       jammerAtivo = false;
       ELECHOUSE_cc1101.SetRx();
+      Serial.printf("[RF][JAMMER] Jammer PARADO. Total de pacotes enviados: %lu\n", jammerPackets);
       jammerPackets = 0;
       displayRF_Random();
     }
@@ -786,6 +836,7 @@ void handleRF_Random() {
         jammerAtivo = true;
         jammerPackets = 0;
         jammerLastDraw = 0;
+        Serial.println("[RF][JAMMER] Jammer INICIADO em 433.92 MHz");
         displayRF_Random();
       }
 
@@ -921,10 +972,16 @@ void handleRF_Saved() {
     if (digitalRead(BUTTON_SELECT) == LOW && savedCount > 0) {
       lastDebounceTime = millis();
 
+      Serial.printf("[RF][SAVED] Transmitindo sinal #%d -> Val:%lu Bits:%d Proto:%d\n",
+                    savedIndex + 1,
+                    savedSignals[savedIndex].value,
+                    savedSignals[savedIndex].bits,
+                    savedSignals[savedIndex].protocol);
       ELECHOUSE_cc1101.SetTx();
       rcSwitch.send(savedSignals[savedIndex].value,
                     savedSignals[savedIndex].bits);
       ELECHOUSE_cc1101.SetRx();
+      Serial.println("[RF][SAVED] TX concluido.");
 
       // Feedback visual
       tft.fillRect(4, SCR_H - 42, SCR_W - 8, 12, TFT_BLACK);

@@ -105,7 +105,7 @@ extern bool clientScanRunning;
 extern uint8_t targetClientMac[6]; // MAC do cliente alvo para deauth unicast
 
 // CTS Jammer
-extern bool ctsAtivo;
+extern volatile bool ctsAtivo;
 extern unsigned long ctsCounter;
 
 // Beacon Spam

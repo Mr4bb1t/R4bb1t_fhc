@@ -12,41 +12,37 @@
 #include "UI.h"
 #include <RF24.h>
 #include <SPI.h>
+#include <esp_task_wdt.h> // para esp_task_wdt_reset() — alimenta o WDT sem yield
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-// ── Pinos Módulo 2 (opcional, não soldado ainda) ──────
-// ⚠️ NRF2_CE estava em GPIO18 = TFT_SCLK → destruía o display!
-// Quando for soldar o módulo 2, escolha GPIOs livres e mude NRF2_ENABLED para 1.
-#define NRF2_ENABLED 0    // 0 = módulo 2 desativado (não soldado)
-#define NRF2_CE   0   // GPIO0  — livre pós-boot (ajustar quando soldar)
-#define NRF2_CSN  15  // GPIO15 — livre (ajustar quando soldar)
 
 // ── Layout ────────────────────────────────────────────
 #define SCR_W 128
 #define SCR_H 160
 
 // ── Canais ────────────────────────────────────────────
-static const uint8_t BT_CH[]  = {32,34,46,48,50,52,0,1,2,4,6,8,22,24,26,28,30,74,76,78,80};
+static const uint8_t BT_CH[] = {32, 34, 46, 48, 50, 52, 0,  1,  2,  4, 6,
+                                8,  22, 24, 26, 28, 30, 74, 76, 78, 80};
 static const uint8_t BLE_CH[] = {2, 26, 80};
-static const char    JAM_TEXT[] = "xxxxx";
+    static const char JAM_TEXT[] = "xxxxxxxxxxxxxxxx";
 
 // ── Objetos de rádio (alocados dinamicamente) ─────────
 // NRF24 usa HSPI (SPI2) — MESMO barramento do CC1101, mas DIFERENTE do TFT!
 // TFT usa VSPI (SPI3) com MOSI=23 SCLK=18 — barramentos SEPARADOS.
 // ⚠️ NUNCA use o objeto global `SPI` (VSPI) aqui — isso destrói o TFT!
-static SPIClass  spiJam(HSPI); // HSPI dedicado, não compartilha com o TFT
-static RF24     *radio[2]  = {nullptr, nullptr};
-static int       radioCount = 0;
+static SPIClass spiJam(HSPI); // HSPI dedicado, não compartilha com o TFT
+static RF24 *radio[2] = {nullptr, nullptr};
+static int radioCount = 0;
 
 // ── Estado geral ──────────────────────────────────────
-static volatile bool nrfInitDone  = false;
-static bool nrfReady     = false;
+static volatile bool nrfInitDone = false;
+static bool nrfReady = false;
 
 // ── Task FreeRTOS de jamming ──────────────────────────
-static TaskHandle_t  jamTaskHandle = nullptr;
-static volatile bool jamStop       = false;
-static volatile bool jamRunning    = false;
+static TaskHandle_t jamTaskHandle = nullptr;
+static volatile bool jamStop = false;
+static volatile bool jamRunning = false;
 
 // ── Task FreeRTOS de init ─────────────────────────────
 static volatile bool nrfInitRunning = false;
@@ -65,26 +61,29 @@ static void nrfInitTask(void *param) {
 
 // ── Contadores (atualizados pela task, lidos pela UI) ─
 static volatile unsigned long jamPktCount = 0;
-static volatile uint8_t       jamCurChan  = 0;
+static volatile uint8_t jamCurChan = 0;
 
 // ── Sub-ataques disponíveis ───────────────────────────
-struct NrfAttack { const char *label; const char *desc; uint16_t color; };
-static const NrfAttack ATTACKS[] = {
-  {"< Voltar",        "",                          TFT_WHITE},
-  {"BT Jammer",       "Bluetooth Classic 2.4GHz",  TFT_RED  },
-  {"Drone Jammer",    "Drones 2.4GHz",             TFT_RED  },
-  {"BLE Adv Jammer",  "BLE Adv Channels",          TFT_YELLOW},
-  {"BLE Data Jammer", "BLE Data Channels",         TFT_YELLOW},
-  {"WiFi Jammer",     "802.11 b/g/n 2.4GHz",       TFT_CYAN },
-  {"Zigbee Jammer",   "IEEE 802.15.4",             0x07C0   },
-  {"Misc Jammer",     "Canal livre 0-124",          0x967F   },
+struct NrfAttack {
+  const char *label;
+  const char *desc;
+  uint16_t color;
 };
-static const int ATK_COUNT = (int)(sizeof(ATTACKS)/sizeof(ATTACKS[0]));
+static const NrfAttack ATTACKS[] = {
+    {"< Voltar", "", TFT_WHITE},
+    {"BT Jammer", "Bluetooth Classic", TFT_RED},
+    {"Drone Jammer", "Drones 2.4GHz", TFT_RED},
+    {"BLE Adv Jammer", "BLE Adv Channels", TFT_YELLOW},
+    {"BLE Data Jammer", "BLE Data Channels", TFT_YELLOW},
+    {"Zigbee Jammer", "IEEE 802.15.4", 0x07C0},
+    {"Misc Jammer", "Canal livre 0-124", 0x967F},
+};
+static const int ATK_COUNT = (int)(sizeof(ATTACKS) / sizeof(ATTACKS[0]));
 
 // ── Cursor / scroll do menu ───────────────────────────
 static int nrfCursor = 0;
 static int nrfScroll = 0;
-static const int ITEM_H  = 18;
+static const int ITEM_H = 18;
 static const int ITEM_Y0 = 38;
 static const int MAX_VIS = (SCR_H - ITEM_Y0 - 16) / ITEM_H;
 
@@ -97,25 +96,30 @@ static unsigned long lastUIUpdate = 0;
 // Probe leve chamado no setup() — detecta o NRF24 e seta hwNRF24_ok
 // (igual ao rfInit() do CC1101, sem alocar tasks de jamming)
 bool nrfProbe() {
-  if (hwNRF24_ok) return true;
+  if (hwNRF24_ok)
+    return true;
 
   Serial.println("[NRF] Fazendo probe leve...");
 
   // Garante pinos do módulo 1 e desativa CC1101 no barramento
-  pinMode(RF_CS, OUTPUT);    digitalWrite(RF_CS, HIGH); // CS do CC1101 inativo
-  pinMode(NRF_CSN, OUTPUT);  digitalWrite(NRF_CSN, HIGH);
-  pinMode(NRF_CE,  OUTPUT);  digitalWrite(NRF_CE,  LOW);
+  pinMode(RF_CS, OUTPUT);
+  digitalWrite(RF_CS, HIGH); // CS do CC1101 inativo
+  pinMode(NRF_CSN, OUTPUT);
+  digitalWrite(NRF_CSN, HIGH);
+  pinMode(NRF_CE, OUTPUT);
+  digitalWrite(NRF_CE, LOW);
   delay(10);
 
   // Inicializa o HSPI dedicado para o NRF24.
-  spiJam.begin(33, 19, 13, -1); // SCK=33, MISO=19, MOSI=13
-  spiJam.setFrequency(8000000);
+  spiJam.begin(33, 19, 13, -1);  // SCK=33, MISO=19, MOSI=13
+  spiJam.setFrequency(16000000); // 16MHz igual ao nRF24_jammer original
 
   RF24 probeRadio(NRF_CE, NRF_CSN);
   bool ok = false;
   for (int t = 0; t < 3 && !ok; t++) {
     ok = probeRadio.begin(&spiJam);
-    if (!ok) delay(20);
+    if (!ok)
+      delay(20);
   }
 
   if (ok && probeRadio.isChipConnected()) {
@@ -128,26 +132,65 @@ bool nrfProbe() {
   return hwNRF24_ok;
 }
 
+bool nrfProbe2() {
+  if (hwNRF24_2_ok)
+    return true;
+
+  Serial.println("[NRF] Fazendo probe leve modulo 2...");
+
+  pinMode(NRF2_CSN, OUTPUT);
+  digitalWrite(NRF2_CSN, HIGH);
+  pinMode(NRF2_CE, OUTPUT);
+  digitalWrite(NRF2_CE, LOW);
+  delay(10);
+
+  spiJam.begin(33, 19, 13, -1);
+  spiJam.setFrequency(16000000);
+
+  RF24 probeRadio2(NRF2_CE, NRF2_CSN);
+  bool ok = false;
+  for (int t = 0; t < 3 && !ok; t++) {
+    ok = probeRadio2.begin(&spiJam);
+    if (!ok)
+      delay(20);
+  }
+
+  if (ok && probeRadio2.isChipConnected()) {
+    hwNRF24_2_ok = true;
+    Serial.println("[NRF] Probe detectou modulo 2 com sucesso!");
+  } else {
+    hwNRF24_2_ok = false;
+    Serial.println("[NRF] Probe falhou: modulo 2 ausente.");
+  }
+  return hwNRF24_2_ok;
+}
+
 // ─────────────────────────────────────────────────────
 //  Init / Deinit de rádios
 // ─────────────────────────────────────────────────────
 static bool nrfInit() {
-  if (nrfReady) return true;
+  if (nrfReady)
+    return true;
 
   Serial.println("[NRF] Iniciando HSPI...");
 
   // Garante pinos do módulo 1 e desativa CC1101 no barramento
-  pinMode(RF_CS, OUTPUT);    digitalWrite(RF_CS, HIGH); // CS do CC1101 inativo
-  pinMode(NRF_CSN, OUTPUT);  digitalWrite(NRF_CSN, HIGH);
-  pinMode(NRF_CE,  OUTPUT);  digitalWrite(NRF_CE,  LOW);
+  pinMode(RF_CS, OUTPUT);
+  digitalWrite(RF_CS, HIGH); // CS do CC1101 inativo
+  pinMode(NRF_CSN, OUTPUT);
+  digitalWrite(NRF_CSN, HIGH);
+  pinMode(NRF_CE, OUTPUT);
+  digitalWrite(NRF_CE, LOW);
   delay(20);
 
   // Inicializa o HSPI dedicado para o NRF24.
   // NUNCA usar SPI (VSPI) aqui — o VSPI pertence ao TFT_eSPI (pinos 23/18/5)!
-  // SS=-1: o barramento não gerencia CS. CE=22 e CSN=4 são controlados pelo RF24.
-  spiJam.begin(33, 19, 13, -1); // SCK=33, MISO=19, MOSI=13
-  spiJam.setFrequency(8000000);
-  Serial.println("[NRF] HSPI iniciado (SCK=33 MISO=19 MOSI=13 | CE=22 CSN=4 gerenciados pelo RF24)");
+  // SS=-1: o barramento não gerencia CS. CE=22 e CSN=4 são controlados pelo
+  // RF24.
+  spiJam.begin(33, 19, 13, -1);  // SCK=33, MISO=19, MOSI=13
+  spiJam.setFrequency(16000000); // 16MHz igual ao nRF24_jammer original
+  Serial.println("[NRF] HSPI iniciado (SCK=33 MISO=19 MOSI=13 | CE=22 CSN=4 "
+                 "gerenciados pelo RF24)");
 
   // Módulo 1 (obrigatório)
   radio[0] = new RF24(NRF_CE, NRF_CSN);
@@ -156,19 +199,22 @@ static bool nrfInit() {
     Serial.printf("[NRF] Tentativa %d...\n", t + 1);
     ok0 = radio[0]->begin(&spiJam);
     Serial.printf("[NRF] begin()=%d\n", ok0);
-    if (!ok0) delay(80);
+    if (!ok0)
+      delay(80);
   }
   if (!ok0) {
     Serial.println("[NRF] Modulo 1 nao respondeu.");
-    delete radio[0]; radio[0] = nullptr;
+    delete radio[0];
+    radio[0] = nullptr;
     return false;
   }
   radioCount = 1;
 
-#if NRF2_ENABLED
-  // Módulo 2 (opcional — só tenta se pinos diferentes e NRF2_ENABLED=1)
-  pinMode(NRF2_CSN, OUTPUT); digitalWrite(NRF2_CSN, HIGH);
-  pinMode(NRF2_CE,  OUTPUT); digitalWrite(NRF2_CE,  LOW);
+  // Módulo 2 (opcional — tenta inicializar)
+  pinMode(NRF2_CSN, OUTPUT);
+  digitalWrite(NRF2_CSN, HIGH);
+  pinMode(NRF2_CE, OUTPUT);
+  digitalWrite(NRF2_CE, LOW);
   delay(10);
   radio[1] = new RF24(NRF2_CE, NRF2_CSN);
   bool ok1 = radio[1]->begin(&spiJam);
@@ -176,12 +222,10 @@ static bool nrfInit() {
     radioCount = 2;
     Serial.println("[NRF] Modulo 2 detectado!");
   } else {
-    delete radio[1]; radio[1] = nullptr;
+    delete radio[1];
+    radio[1] = nullptr;
     Serial.println("[NRF] Modulo 2 ausente (opcional).");
   }
-#else
-  Serial.println("[NRF] Modulo 2 desativado (NRF2_ENABLED=0).");
-#endif
 
   // Configura todos os módulos presentes
   for (int i = 0; i < radioCount; i++) {
@@ -199,7 +243,7 @@ static bool nrfInit() {
   }
 
   hwNRF24_ok = true;
-  nrfReady   = true;
+  nrfReady = true;
   Serial.printf("[NRF] Pronto. Modulos: %d\n", radioCount);
   return true;
 }
@@ -213,16 +257,48 @@ static void nrfDeinit() {
     if (radio[i]) {
       radio[i]->stopConstCarrier();
       radio[i]->powerDown();
-      delete radio[i]; radio[i] = nullptr;
+      delete radio[i];
+      radio[i] = nullptr;
     }
   }
   radioCount = 0;
-  nrfReady   = false;
+  delay(20);
+
+  spiJam.end();
+
+  pinMode(NRF_CSN, OUTPUT);
+  digitalWrite(NRF_CSN, HIGH);
+  pinMode(NRF_CE, OUTPUT);
+  digitalWrite(NRF_CE, LOW);
+
+  nrfReady = false;
   hwNRF24_ok = false;
   nrfInitDone = false;
 }
 
 // toggleCeLow e High removidos pois o jammer precisa do CE travado no alto
+
+static void nrfReconfigRadios() {
+  for (int i = 0; i < radioCount; i++) {
+    radio[i]->stopConstCarrier();
+    radio[i]->powerDown();
+  }
+  delay(10);
+  for (int i = 0; i < radioCount; i++) {
+    radio[i]->begin(&spiJam);
+    radio[i]->setAutoAck(false);
+    radio[i]->stopListening();
+    radio[i]->setRetries(0, 0);
+    radio[i]->setPayloadSize(5);
+    radio[i]->setAddressWidth(3);
+    radio[i]->setPALevel(RF24_PA_MAX, true);
+    radio[i]->setDataRate(RF24_2MBPS);
+    radio[i]->setCRCLength(RF24_CRC_DISABLED);
+    radio[i]->disableCRC();
+    radio[i]->disableAckPayload();
+    radio[i]->disableDynamicPayloads();
+  }
+}
 
 // ─────────────────────────────────────────────────────
 //  Task FreeRTOS — loop de jamming
@@ -230,144 +306,223 @@ static void nrfDeinit() {
 static void jamTask(void *param) {
   int atkId = (int)(intptr_t)param;
   jamPktCount = 0;
-  jamCurChan  = 0;
+  jamCurChan = 0;
+  // Prioridade alta mas NÃO máxima — prioridade máxima impede o IDLE de rodar
+  // e dispara o Task Watchdog (TWDT) em ~5 segundos.
+  // Usamos esp_task_wdt_reset() no loop para alimentar o WDT sem ceder CPU.
+  // Desativa o Watchdog do Task scheduler nesse arquivo
+  // pois a task nao devera ceder ao Idle
+  // disableCore0WDT() ja foi chamado no main
 
   switch (atkId) {
 
-    // ── 1: BT Jammer — portadora constante varrendo BT Classic
-    case 1:
-      Serial.println("[NRF] Iniciando BT Jammer (Const Carrier)");
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, BT_CH[0]);
-      while (!jamStop) {
-        for (int ch = 0; ch < 21 && !jamStop; ch++) {
-          for (int i = 0; i < radioCount; i++)
-            radio[i]->setChannel(BT_CH[ch]);
+  // ── 1: BT Jammer — portadora constante varrendo canais BT Classic
+  // Com 2 módulos (Separate): módulo 0 → canais 0..10, módulo 1 → canais 11..20
+  // Com 1 módulo: varre os 21 canais sequencialmente
+  case 1: {
+    Serial.println("[NRF] Iniciando BT Jammer (Const Carrier)");
+    nrfReconfigRadios();
+    const int BT_TOTAL = 21;
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, 45);
+    while (!jamStop) {
+      if (radioCount > 1) {
+        int base = BT_TOTAL / radioCount;
+        int rem = BT_TOTAL % radioCount;
+        int ch = 0;
+        for (int j = 0; j < radioCount; j++) {
+          int count = base + (j < rem ? 1 : 0);
+          for (int i = 0; i < count && !jamStop; i++, ch++) {
+            radio[j]->setChannel(BT_CH[ch]);
+            jamCurChan = BT_CH[ch];
+            jamPktCount++;
+          }
+        }
+      } else {
+        for (int ch = 0; ch < BT_TOTAL && !jamStop; ch++) {
+          radio[0]->setChannel(BT_CH[ch]);
           jamCurChan = BT_CH[ch];
           jamPktCount++;
-          if ((jamPktCount & 0xFF) == 0) yield();
         }
       }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      Serial.println("[NRF] BT Jammer Parado.");
-      break;
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    Serial.println("[NRF] BT Jammer Parado.");
+    break;
+  }
 
-    // ── 2: Drone Jammer — varrendo 0-124 aleatório + portadora
-    case 2:
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, 45);
-      while (!jamStop) {
+  // ── 2: Drone Jammer — varrendo 0-124 aleatório + portadora
+  // Com 2 módulos: cada módulo sorteia um canal DIFERENTE simultaneamente
+  case 2: {
+    nrfReconfigRadios();
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, 45);
+    while (!jamStop) {
+      if (radioCount > 1) {
+        for (int j = 0; j < radioCount && !jamStop; j++) {
+          uint8_t ch = (uint8_t)(random(125));
+          radio[j]->setChannel(ch);
+          jamCurChan = ch;
+          jamPktCount++;
+        }
+      } else {
         uint8_t ch = (uint8_t)(random(125));
-        for (int i = 0; i < radioCount; i++)
-          radio[i]->setChannel(ch);
+        radio[0]->setChannel(ch);
         jamCurChan = ch;
         jamPktCount++;
-        if ((jamPktCount & 0xFF) == 0) yield();
       }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      break;
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    break;
+  }
 
-    // ── 3: BLE Adv Jammer — Const Carrier + WriteFast
-    case 3:
-      Serial.println("[NRF] Iniciando BLE Adv Jammer");
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, BLE_CH[0]);
-      while (!jamStop) {
-        for (int ch = 0; ch < 3 && !jamStop; ch++) {
-          for (int i = 0; i < radioCount; i++) {
-             radio[i]->setChannel(BLE_CH[ch]);
-             radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+  // ── 3: BLE Adv Jammer — 3 canais de advertising BLE
+  // Com 2 módulos: módulo 0 → ch 2 e 80, módulo 1 → ch 26
+  case 3: {
+    Serial.println("[NRF] Iniciando BLE Adv Jammer");
+    nrfReconfigRadios();
+    const int BLE_TOTAL = 3;
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, BLE_CH[0]);
+    while (!jamStop) {
+      if (radioCount > 1) {
+        int base = BLE_TOTAL / radioCount;
+        int rem = BLE_TOTAL % radioCount;
+        int ch = 0;
+        for (int j = 0; j < radioCount; j++) {
+          int count = base + (j < rem ? 1 : 0);
+          for (int i = 0; i < count && !jamStop; i++, ch++) {
+            radio[j]->setChannel(BLE_CH[ch]);
+            radio[j]->writeFast(JAM_TEXT, sizeof(JAM_TEXT));
+            jamCurChan = BLE_CH[ch];
+            jamPktCount++;
           }
+        }
+      } else {
+        for (int ch = 0; ch < BLE_TOTAL && !jamStop; ch++) {
+          radio[0]->setChannel(BLE_CH[ch]);
+          radio[0]->writeFast(JAM_TEXT, sizeof(JAM_TEXT));
           jamCurChan = BLE_CH[ch];
           jamPktCount++;
-          if ((jamPktCount & 0xFF) == 0) yield();
         }
       }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      Serial.println("[NRF] BLE Adv Jammer Parado.");
-      break;
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    Serial.println("[NRF] BLE Adv Jammer Parado.");
+    break;
+  }
 
-    // ── 4: BLE Data Jammer — portadora nos canais BLE data (2-80 pares)
-    case 4:
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, 45);
-      while (!jamStop) {
-        for (uint8_t ch = 2; ch <= 80 && !jamStop; ch += 2) {
-          for (int i = 0; i < radioCount; i++)
-            radio[i]->setChannel(ch);
-          jamCurChan = ch;
-          jamPktCount++;
-          if ((jamPktCount & 0xFF) == 0) yield();
-        }
-      }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      break;
-
-    // ── 5: WiFi Jammer — Const Carrier + WriteFast nos 14 canais WiFi
-    case 5:
-      Serial.println("[NRF] Iniciando WiFi Jammer");
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, 1);
-      while (!jamStop) {
-        for (int wch = 0; wch < 14 && !jamStop; wch++) {
-          int base = (wch * 5) + 1;
-          for (int sub = base; sub <= base + 22 && !jamStop; sub++) {
-            if (sub < 1 || sub > 125) continue;
-            for (int i = 0; i < radioCount; i++) {
-              radio[i]->setChannel((uint8_t)sub);
-              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
-            }
-            jamCurChan = (uint8_t)sub;
+  // ── 4: BLE Data Jammer — 40 canais BLE data (ch 2,4,6,...,80)
+  // Com 2 módulos: cada um cobre 20 canais distintos
+  case 4: {
+    nrfReconfigRadios();
+    const int BLE_DATA_TOTAL = 40;
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, 45);
+    while (!jamStop) {
+      if (radioCount > 1) {
+        int base = BLE_DATA_TOTAL / radioCount;
+        int rem = BLE_DATA_TOTAL % radioCount;
+        int ch = 2;
+        for (int j = 0; j < radioCount; j++) {
+          int count = base + (j < rem ? 1 : 0);
+          for (int i = 0; i < count && !jamStop; i++, ch += 2) {
+            radio[j]->setChannel((uint8_t)ch);
+            jamCurChan = (uint8_t)ch;
             jamPktCount++;
-            if ((jamPktCount & 0xFF) == 0) yield();
           }
         }
+      } else {
+        for (uint8_t ch = 2; ch <= 80 && !jamStop; ch += 2) {
+          radio[0]->setChannel(ch);
+          jamCurChan = ch;
+          jamPktCount++;
+        }
       }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      Serial.println("[NRF] WiFi Jammer Parado.");
-      break;
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    break;
+  }
 
-    // ── 6: Zigbee Jammer — Const Carrier + WriteFast
-    case 6:
-      Serial.println("[NRF] Iniciando Zigbee Jammer");
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, 4);
-      while (!jamStop) {
-        for (int zch = 11; zch < 27 && !jamStop; zch++) {
-          uint8_t nrfCh = (uint8_t)(4 + 5 * (zch - 11));
-          for (int sub = 0; sub < 3 && !jamStop; sub++) {
-            for (int i = 0; i < radioCount; i++) {
-              radio[i]->setChannel(nrfCh + sub);
-              radio[i]->writeFast(&JAM_TEXT, sizeof(JAM_TEXT));
+  // ── 5: Zigbee Jammer — 16 canais Zigbee, 3 sub-freqs cada
+  // Com 2 módulos: divide as 3 sub-freqs de cada canal entre os módulos
+  case 5: {
+    Serial.println("[NRF] Iniciando Zigbee Jammer");
+    nrfReconfigRadios();
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, 4);
+    while (!jamStop) {
+      for (int zch = 11; zch < 27 && !jamStop; zch++) {
+        uint8_t nrfCh = (uint8_t)(4 + 5 * (zch - 11));
+        if (radioCount > 1) {
+          const int ZIG_SUB = 3;
+          int base = ZIG_SUB / radioCount;
+          int rem = ZIG_SUB % radioCount;
+          int sub = 0;
+          for (int j = 0; j < radioCount; j++) {
+            int count = base + (j < rem ? 1 : 0);
+            for (int i = 0; i < count && !jamStop; i++, sub++) {
+              radio[j]->setChannel(nrfCh + sub);
+              radio[j]->writeFast(JAM_TEXT, sizeof(JAM_TEXT));
+              jamCurChan = nrfCh + sub;
+              jamPktCount++;
             }
+          }
+        } else {
+          for (int sub = 0; sub < 3 && !jamStop; sub++) {
+            radio[0]->setChannel(nrfCh + sub);
+            radio[0]->writeFast(JAM_TEXT, sizeof(JAM_TEXT));
             jamCurChan = nrfCh + sub;
             jamPktCount++;
-            if ((jamPktCount & 0xFF) == 0) yield();
           }
         }
       }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      Serial.println("[NRF] Zigbee Jammer Parado.");
-      break;
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    Serial.println("[NRF] Zigbee Jammer Parado.");
+    break;
+  }
 
-    // ── 7: Misc Jammer — portadora varrendo 0-124 sequencialmente
-    case 7:
-      for (int i = 0; i < radioCount; i++)
-        radio[i]->startConstCarrier(RF24_PA_MAX, 0);
-      while (!jamStop) {
+  // ── 6: Misc Jammer — varrendo todos os 125 canais
+  // Com 2 módulos: cada um cobre ~62 canais distintos
+  case 6: {
+    nrfReconfigRadios();
+    const int MISC_TOTAL = 125;
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, 0);
+    while (!jamStop) {
+      if (radioCount > 1) {
+        int base = MISC_TOTAL / radioCount;
+        int rem = MISC_TOTAL % radioCount;
+        int ch = 0;
+        for (int j = 0; j < radioCount; j++) {
+          int count = base + (j < rem ? 1 : 0);
+          for (int i = 0; i < count && !jamStop; i++, ch++) {
+            radio[j]->setChannel((uint8_t)ch);
+            jamCurChan = (uint8_t)ch;
+            jamPktCount++;
+          }
+        }
+      } else {
         for (uint8_t ch = 0; ch < 125 && !jamStop; ch++) {
-          for (int i = 0; i < radioCount; i++)
-            radio[i]->setChannel(ch);
+          radio[0]->setChannel(ch);
           jamCurChan = ch;
           jamPktCount++;
-          if ((jamPktCount & 0xFF) == 0) yield();
         }
       }
-      for (int i = 0; i < radioCount; i++) radio[i]->stopConstCarrier();
-      break;
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    break;
+  }
 
-    default:
-      break;
+  default:
+    break;
   }
 
   jamRunning = false;
@@ -375,50 +530,54 @@ static void jamTask(void *param) {
 }
 
 static void startJamTask(int atkId) {
-  jamStop    = false;
+  jamStop = false;
   jamRunning = true;
-  xTaskCreatePinnedToCore(
-    jamTask, "nrfJam",
-    4096,
-    (void *)(intptr_t)atkId,
-    5,                // prioridade alta para RF
-    &jamTaskHandle,
-    0               // core 0 (UI no core 1)
+
+  xTaskCreatePinnedToCore(jamTask, "nrfJam", 4096, (void *)(intptr_t)atkId,
+                          5, // prioridade alta para RF
+                          &jamTaskHandle,
+                          0 // core 0 (UI no core 1)
   );
 }
 
 static void stopJamTask() {
-  if (!jamRunning) return;
+  if (!jamRunning)
+    return;
   jamStop = true;
-  // Aguarda até 500ms para a task terminar
-  for (int t = 0; t < 50 && jamRunning; t++) delay(10);
+  for (int t = 0; t < 100 && jamRunning; t++)
+    delay(10);
   jamTaskHandle = nullptr;
+  delay(50);
 }
 
 // ─────────────────────────────────────────────────────
 //  Ícone Proibido + sinais RF
 // ─────────────────────────────────────────────────────
 static void drawProhibitedRFIcon(int cx, int cy, int r, uint16_t col) {
-  tft.drawCircle(cx, cy, r,     col);
+  tft.drawCircle(cx, cy, r, col);
   tft.drawCircle(cx, cy, r - 1, col);
   float ang = 45.0f * PI / 180.0f;
   int dx = (int)(r * cos(ang)), dy = (int)(r * sin(ang));
   tft.drawLine(cx - dx, cy + dy, cx + dx, cy - dy, col);
   tft.drawLine(cx - dx + 1, cy + dy, cx + dx + 1, cy - dy, col);
-  for (int arc = 6; arc <= 14; arc += 4) {
+  int startArc = (r < 9) ? 4 : 6;
+  int maxArc   = (r < 9) ? 8 : 14;
+  for (int arc = startArc; arc <= maxArc; arc += 4) {
     for (float a = -50.0f; a <= 50.0f; a += 2.0f) {
       float rad = a * PI / 180.0f;
       int px = cx + (int)(arc * cos(rad)) + r + 2;
       int py = cy + (int)(arc * sin(rad));
-      if (px < SCR_W && py >= 0 && py < SCR_H) tft.drawPixel(px, py, col);
+      if (px < SCR_W && py >= 0 && py < SCR_H)
+        tft.drawPixel(px, py, col);
     }
   }
-  for (int arc = 6; arc <= 14; arc += 4) {
+  if (r >= 9) for (int arc = startArc; arc <= maxArc; arc += 4) {
     for (float a = 130.0f; a <= 230.0f; a += 2.0f) {
       float rad = a * PI / 180.0f;
       int px = cx + (int)(arc * cos(rad)) - r - 2;
       int py = cy + (int)(arc * sin(rad));
-      if (px >= 0 && py >= 0 && py < SCR_H) tft.drawPixel(px, py, col);
+      if (px >= 0 && py >= 0 && py < SCR_H)
+        tft.drawPixel(px, py, col);
     }
   }
 }
@@ -438,26 +597,39 @@ void drawNRF24Icon(int x, int y, uint16_t col) {
 // ─────────────────────────────────────────────────────
 static void nrfDrawItem(int idx, bool sel) {
   int slot = idx - nrfScroll;
-  if (slot < 0 || slot >= MAX_VIS) return;
-  drawMenuItem(0, ITEM_Y0 + slot * ITEM_H, SCR_W, ITEM_H,
-               ATTACKS[idx].label, sel, idx > 0);
+  if (slot < 0 || slot >= MAX_VIS)
+    return;
+  drawMenuItem(0, ITEM_Y0 + slot * ITEM_H, SCR_W, ITEM_H, ATTACKS[idx].label,
+               sel, idx > 0);
 }
 
 static void nrfUpdateItems(int oldC, int newC) {
   int oldScroll = nrfScroll;
-  if (newC < nrfScroll) nrfScroll = newC;
-  if (newC >= nrfScroll + MAX_VIS) nrfScroll = newC - MAX_VIS + 1;
+  if (newC < nrfScroll)
+    nrfScroll = newC;
+  if (newC >= nrfScroll + MAX_VIS)
+    nrfScroll = newC - MAX_VIS + 1;
   if (nrfScroll != oldScroll) {
     tft.fillRect(0, ITEM_Y0, SCR_W, SCR_H - ITEM_Y0 - 16, C_BG);
     for (int i = 0; i < MAX_VIS; i++) {
       int idx = nrfScroll + i;
-      if (idx >= ATK_COUNT) break;
+      if (idx >= ATK_COUNT)
+        break;
       nrfDrawItem(idx, idx == newC);
     }
     // scroll indicators
-    tft.fillRect(SCR_W - 10, ITEM_Y0 - 10, 10, 20, C_BG);
-    if (nrfScroll > 0) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0-8); tft.print("^"); }
-    if (nrfScroll + MAX_VIS < ATK_COUNT) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0 + MAX_VIS * ITEM_H); tft.print("v"); }
+    tft.fillRect(SCR_W - 10, ITEM_Y0 - 10, 10, 10, C_BG);
+    tft.drawFastHLine(0, 37, SCR_W, C_GREY);
+    if (nrfScroll > 0) {
+      tft.setTextColor(C_GOLD_DIM);
+      tft.setCursor(SCR_W - 8, ITEM_Y0 - 8);
+      tft.print("^");
+    }
+    if (nrfScroll + MAX_VIS < ATK_COUNT) {
+      tft.setTextColor(C_GOLD_DIM);
+      tft.setCursor(SCR_W - 8, ITEM_Y0 + MAX_VIS * ITEM_H);
+      tft.print("v");
+    }
     return;
   }
   nrfDrawItem(oldC, false);
@@ -471,16 +643,27 @@ void displayModoNRF24() {
   drawProhibitedRFIcon(64, 27, 9, C_RED);
   tft.drawFastHLine(0, 37, SCR_W, C_GREY);
 
-  if (nrfCursor < nrfScroll) nrfScroll = nrfCursor;
-  if (nrfCursor >= nrfScroll + MAX_VIS) nrfScroll = nrfCursor - MAX_VIS + 1;
+  if (nrfCursor < nrfScroll)
+    nrfScroll = nrfCursor;
+  if (nrfCursor >= nrfScroll + MAX_VIS)
+    nrfScroll = nrfCursor - MAX_VIS + 1;
 
   for (int i = 0; i < MAX_VIS; i++) {
     int idx = nrfScroll + i;
-    if (idx >= ATK_COUNT) break;
+    if (idx >= ATK_COUNT)
+      break;
     nrfDrawItem(idx, idx == nrfCursor);
   }
-  if (nrfScroll > 0) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0-8); tft.print("^"); }
-  if (nrfScroll + MAX_VIS < ATK_COUNT) { tft.setTextColor(C_GOLD_DIM); tft.setCursor(SCR_W-8, ITEM_Y0 + MAX_VIS*ITEM_H); tft.print("v"); }
+  if (nrfScroll > 0) {
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(SCR_W - 8, ITEM_Y0 - 8);
+    tft.print("^");
+  }
+  if (nrfScroll + MAX_VIS < ATK_COUNT) {
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(SCR_W - 8, ITEM_Y0 + MAX_VIS * ITEM_H);
+    tft.print("v");
+  }
 
   drawFooter();
   batteryDraw();
@@ -527,14 +710,17 @@ static void nrfDrawAttackFull() {
 
   // Etiquetas fixas
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(2, 72); tft.print("Canal:");
-  tft.setCursor(2, 86); tft.print("Pacotes:");
+  tft.setCursor(2, 72);
+  tft.print("Canal:");
+  tft.setCursor(2, 86);
+  tft.print("Pacotes:");
 
   // Valores dinâmicos
   tft.fillRect(50, 70, 78, 10, C_BG);
   tft.setTextColor(C_CYAN);
   tft.setCursor(50, 72);
-  char buf[12]; snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
   tft.print(buf);
 
   tft.fillRect(50, 84, 78, 10, C_BG);
@@ -544,8 +730,10 @@ static void nrfDrawAttackFull() {
 
   // Instruções
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(2, 108); tft.print("o = Iniciar/Parar");
-  tft.setCursor(2, 120); tft.print("< = Voltar");
+  tft.setCursor(2, 108);
+  tft.print("o = Iniciar/Parar");
+  tft.setCursor(2, 120);
+  tft.print("< = Voltar");
 
   drawFooter();
   batteryDraw();
@@ -563,7 +751,8 @@ static void nrfUpdateAttackDyn() {
   tft.fillRect(50, 70, 78, 10, C_BG);
   tft.setTextColor(C_CYAN);
   tft.setCursor(50, 72);
-  char buf[12]; snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+  char buf[12];
+  snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
   tft.print(buf);
 
   // Pacotes
@@ -595,8 +784,10 @@ void handleModoNRF24() {
   // Debounce mais curto na tela de ataque (inicio/parada rapidos)
   // Menu de navegacao usa debounce global (200ms) — evita duplo clique
   static const unsigned long NRF_ATK_DEBOUNCE = 300; // ms
-  unsigned long nrfDebounce = (nrfScreen == NSC_ATTACK) ? NRF_ATK_DEBOUNCE : debounceDelay;
-  if ((millis() - lastDebounceTime) <= nrfDebounce) return;
+  unsigned long nrfDebounce =
+      (nrfScreen == NSC_ATTACK) ? NRF_ATK_DEBOUNCE : debounceDelay;
+  if ((millis() - lastDebounceTime) <= nrfDebounce)
+    return;
 
   // ── MENU ─────────────────────────────────────────
   if (nrfScreen == NSC_MENU) {
@@ -610,7 +801,11 @@ void handleModoNRF24() {
     }
     if (digitalRead(BUTTON_LEFT) == LOW) {
       lastDebounceTime = millis();
-      if (nrfCursor == 0) { estadoAtual = MENU_INICIAL; displayMenuInicial(); return; }
+      if (nrfCursor == 0) {
+        estadoAtual = MENU_INICIAL;
+        displayMenuInicial();
+        return;
+      }
       int old = nrfCursor;
       nrfCursor = (nrfCursor - 1 + ATK_COUNT) % ATK_COUNT;
       nrfUpdateItems(old, nrfCursor);
@@ -618,13 +813,17 @@ void handleModoNRF24() {
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
-      if (nrfCursor == 0) { estadoAtual = MENU_INICIAL; displayMenuInicial(); return; }
+      if (nrfCursor == 0) {
+        estadoAtual = MENU_INICIAL;
+        displayMenuInicial();
+        return;
+      }
 
       nrfActiveAtk = nrfCursor;
-      nrfScreen    = NSC_ATTACK;
-      estadoAtual  = TELA_NRF_ATTACK;
-      jamPktCount  = 0;
-      jamCurChan   = 0;
+      nrfScreen = NSC_ATTACK;
+      estadoAtual = TELA_NRF_ATTACK;
+      jamPktCount = 0;
+      jamCurChan = 0;
 
       // Desenha a tela de ataque
       nrfDrawAttackFull();
@@ -633,13 +832,9 @@ void handleModoNRF24() {
       if (!nrfInitDone) {
         nrfInitDone = true;
         nrfInitRunning = true;
-        xTaskCreatePinnedToCore(
-          nrfInitTask, "nrfInit",
-          4096,
-          nullptr,
-          5,
-          nullptr,
-          0  // core 0 — deixa core 1 livre para o TFT
+        xTaskCreatePinnedToCore(nrfInitTask, "nrfInit", 4096, nullptr, 5,
+                                nullptr,
+                                0 // core 0 — deixa core 1 livre para o TFT
         );
       }
       return;
@@ -665,10 +860,8 @@ void handleModoNRF24() {
         // Tenta init novamente se falhou (assíncrono)
         nrfInitRunning = true;
         nrfInitDone = false;
-        xTaskCreatePinnedToCore(
-          nrfInitTask, "nrfInit",
-          4096, nullptr, 5, nullptr, 0
-        );
+        xTaskCreatePinnedToCore(nrfInitTask, "nrfInit", 4096, nullptr, 5,
+                                nullptr, 0);
         return;
       }
       if (jamRunning) {

@@ -69,6 +69,9 @@ void setup() {
   delay(1000);
   Serial.println("\n\n=== INICIANDO SISTEMA ===");
 
+  // Desabilita WDT para as tarefas de Jamming (assim como no original)
+  disableCore0WDT();
+
   // Limpeza forçada do WiFi
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);

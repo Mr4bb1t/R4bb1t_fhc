@@ -159,6 +159,7 @@ void deinitRadio() {
     
     deautherAtivo = false;
     beaconAtivo = false;
+    ctsAtivo = false;
     
     xSemaphoreGive(wifiMutex);
     

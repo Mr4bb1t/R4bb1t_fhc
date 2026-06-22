@@ -744,7 +744,7 @@ void displayAtaqueCtsJammer() {
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
-    tft.print("Envia 'QoS Null Data'");
+    tft.print("Envia QoS Null Data");
     tft.setCursor(4, 62);
     tft.print("Congela o canal (NAV)");
     tft.setCursor(4, 74);
@@ -949,6 +949,60 @@ static const char *kbdUpper =
 static int kbdSel = 0;
 static bool kbdCaps = true;
 
+static void drawKbdKey(int index, bool selected, bool isCaps) {
+  const char *chars = isCaps ? kbdUpper : kbdLower;
+  tft.setTextSize(1);
+  if (index < 48) {
+    int r = index / 8;
+    int c = index % 8;
+    int x = 6 + c * 15;
+    int y = 40 + r * 14;
+
+    if (selected) {
+      tft.fillRect(x - 2, y - 1, 11, 11, C_GOLD_SEL);
+      tft.setTextColor(C_GOLD);
+    } else {
+      tft.fillRect(x - 2, y - 1, 11, 11, C_BG);
+      tft.setTextColor(C_WHITE);
+    }
+    tft.setCursor(x, y + 1);
+    tft.print(chars[index]);
+  } else {
+    int yBtn = 138;
+    if (index == 48) {
+      if (selected) {
+        tft.fillRect(4, yBtn - 2, 35, 12, C_GOLD_SEL);
+        tft.setTextColor(C_GOLD);
+      } else {
+        tft.fillRect(4, yBtn - 2, 35, 12, C_BG);
+        tft.setTextColor(isCaps ? C_GREEN : C_WHITE);
+      }
+      tft.setCursor(6, yBtn);
+      tft.print("SHIFT");
+    } else if (index == 49) {
+      if (selected) {
+        tft.fillRect(45, yBtn - 2, 25, 12, C_GOLD_SEL);
+        tft.setTextColor(C_GOLD);
+      } else {
+        tft.fillRect(45, yBtn - 2, 25, 12, C_BG);
+        tft.setTextColor(C_RED);
+      }
+      tft.setCursor(48, yBtn);
+      tft.print("DEL");
+    } else if (index == 50) {
+      if (selected) {
+        tft.fillRect(75, yBtn - 2, 45, 12, C_GOLD_SEL);
+        tft.setTextColor(C_GOLD);
+      } else {
+        tft.fillRect(75, yBtn - 2, 45, 12, C_BG);
+        tft.setTextColor(C_GREEN);
+      }
+      tft.setCursor(82, yBtn);
+      tft.print("ENTER");
+    }
+  }
+}
+
 void displayAtaqueBeaconCustom() {
   tft.fillScreen(C_BG);
   drawHeader("NOME CUSTOM", true);
@@ -958,52 +1012,9 @@ void displayAtaqueBeaconCustom() {
   tft.setCursor(8, 23);
   tft.print(beaconCustomSSID);
 
-  tft.setTextSize(1);
-  const char *chars = kbdCaps ? kbdUpper : kbdLower;
-  for (int i = 0; i < 48; i++) {
-    int r = i / 8;
-    int c = i % 8;
-    int x = 6 + c * 15;
-    int y = 40 + r * 14;
-
-    if (i == kbdSel) {
-      tft.fillRect(x - 2, y - 1, 11, 11, C_GOLD_SEL);
-      tft.setTextColor(C_GOLD);
-    } else {
-      tft.setTextColor(C_WHITE);
-    }
-    tft.setCursor(x, y + 1);
-    tft.print(chars[i]);
+  for (int i = 0; i <= 50; i++) {
+    drawKbdKey(i, i == kbdSel, kbdCaps);
   }
-
-  int yBtn = 138;
-
-  if (kbdSel == 48) {
-    tft.fillRect(4, yBtn - 2, 35, 12, C_GOLD_SEL);
-    tft.setTextColor(C_GOLD);
-  } else {
-    tft.setTextColor(kbdCaps ? C_GREEN : C_WHITE);
-  }
-  tft.setCursor(6, yBtn);
-  tft.print("SHIFT");
-
-  if (kbdSel == 49) {
-    tft.fillRect(45, yBtn - 2, 25, 12, C_GOLD_SEL);
-    tft.setTextColor(C_GOLD);
-  } else {
-    tft.setTextColor(C_RED);
-  }
-  tft.setCursor(48, yBtn);
-  tft.print("DEL");
-
-  if (kbdSel == 50) {
-    tft.fillRect(75, yBtn - 2, 45, 12, C_GOLD_SEL);
-    tft.setTextColor(C_GOLD);
-  } else {
-    tft.setTextColor(C_GREEN);
-  }
-  tft.setCursor(82, yBtn);
-  tft.print("ENTER");
 
   batteryDraw();
 }
@@ -1011,18 +1022,22 @@ void displayAtaqueBeaconCustom() {
 void handleAtaqueBeaconCustom() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
+      int old = kbdSel;
       kbdSel--;
       if (kbdSel < 0)
         kbdSel = 50;
       lastDebounceTime = millis();
-      displayAtaqueBeaconCustom();
+      drawKbdKey(old, false, kbdCaps);
+      drawKbdKey(kbdSel, true, kbdCaps);
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
+      int old = kbdSel;
       kbdSel++;
       if (kbdSel > 50)
         kbdSel = 0;
       lastDebounceTime = millis();
-      displayAtaqueBeaconCustom();
+      drawKbdKey(old, false, kbdCaps);
+      drawKbdKey(kbdSel, true, kbdCaps);
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
@@ -1030,19 +1045,29 @@ void handleAtaqueBeaconCustom() {
         if (beaconCustomSSID.length() < 32) {
           const char *chars = kbdCaps ? kbdUpper : kbdLower;
           beaconCustomSSID += chars[kbdSel];
+          tft.fillRect(5, 19, 118, 16, C_BG);
+          tft.setTextColor(C_WHITE);
+          tft.setCursor(8, 23);
+          tft.print(beaconCustomSSID);
         }
       } else if (kbdSel == 48) {
         kbdCaps = !kbdCaps;
+        for (int i = 0; i <= 50; i++) {
+          drawKbdKey(i, i == kbdSel, kbdCaps);
+        }
       } else if (kbdSel == 49) {
         if (beaconCustomSSID.length() > 0) {
           beaconCustomSSID.remove(beaconCustomSSID.length() - 1);
+          tft.fillRect(5, 19, 118, 16, C_BG);
+          tft.setTextColor(C_WHITE);
+          tft.setCursor(8, 23);
+          tft.print(beaconCustomSSID);
         }
       } else if (kbdSel == 50) {
         estadoAtual = ATAQUE_BEACON;
         displayAtaqueBeacon();
         return;
       }
-      displayAtaqueBeaconCustom();
     }
   }
 }
@@ -1050,6 +1075,15 @@ void handleAtaqueBeaconCustom() {
 // ═══════════════════════════════════════════════
 //  BEACON SPAM
 // ═══════════════════════════════════════════════
+static void updateBeaconQuantity() {
+  tft.fillRect(40, 48, 48, 22, C_BG);
+  tft.setTextSize(2);
+  int numX = 38 + (52 - (int)(String(beaconQuantidade).length()) * 12) / 2;
+  tft.setTextColor(C_GOLD);
+  tft.setCursor(numX, 53);
+  tft.print(beaconQuantidade);
+  tft.setTextSize(1);
+}
 void displayAtaqueBeacon() {
   tft.fillScreen(C_BG);
   drawHeader("BEACON SPAM", true);
@@ -1141,7 +1175,7 @@ void handleAtaqueBeacon() {
         else if (beaconQuantidade > 1)
           beaconQuantidade -= 1;
         lastDebounceTime = millis();
-        displayAtaqueBeacon();
+        updateBeaconQuantity();
       }
       if (digitalRead(BUTTON_RIGHT) == LOW) {
         if (beaconQuantidade < 10)
@@ -1153,7 +1187,7 @@ void handleAtaqueBeacon() {
         if (beaconQuantidade > 600)
           beaconQuantidade = 600;
         lastDebounceTime = millis();
-        displayAtaqueBeacon();
+        updateBeaconQuantity();
       }
       if (selectPressed && !holdingSelect) {
         holdStart = millis();

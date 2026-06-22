@@ -14,7 +14,7 @@ static String getAuthShort(wifi_auth_mode_t auth) {
     case WIFI_AUTH_WPA2_ENTERPRISE: return "ENT";
     case WIFI_AUTH_WPA3_PSK: return "WP3";
     case WIFI_AUTH_WPA2_WPA3_PSK: return "WP3";
-    case WIFI_AUTH_OWE: return "OWE";
+    // case WIFI_AUTH_OWE: return "OWE"; // Não suportado em versões antigas do ESP-IDF
     default: return "UNK";
   }
 }

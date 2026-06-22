@@ -4,7 +4,8 @@
  *
  * Usa dois mecanismos combinados:
  * 1. Override de ieee80211_raw_frame_sanity_check() — retorna 0 sempre
- * 2. objcopy --weaken-symbol aplicado na libnet80211.a pelo script de build
+ * 2. Override de ieee80211_is_tx_allowed() — retorna 1 sempre
+ * 3. objcopy --weaken-symbol aplicado na libnet80211.a pelo script de build
  *
  * Compatível com arduino-esp32 2.x e 3.x (IDF 4.x e 5.x)
  */
@@ -60,8 +61,9 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record);
 /**
  * @brief Envia frame CTS/NAV Jammer com duration máximo para travar o canal
  * @param target_mac  MAC de destino (ou Broadcast FF:FF:FF:FF:FF:FF)
+ * @return ESP_OK em sucesso, código de erro caso contrário
  */
-void wsl_bypasser_send_cts_frame(const uint8_t *target_mac);
+esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *target_mac);
 
 /**
  * @brief Verifica se o bypass está ativo e funcionando

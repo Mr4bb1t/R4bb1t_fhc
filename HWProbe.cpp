@@ -11,5 +11,6 @@
 // Todas as flags começam como false.
 // Cada menu seta a flag como true assim que a init bem-sucede.
 bool hwNRF24_ok = false;
+bool hwNRF24_2_ok = false;
 bool hwCC1101_ok = false;
 bool hwBLE_ok = false;

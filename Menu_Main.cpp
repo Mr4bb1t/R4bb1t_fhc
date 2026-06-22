@@ -115,7 +115,7 @@ void displayMenuInicial() {
   tft.fillScreen(C_BG);
 
   // ── Header ─────────────────────────────────
-  drawHeader("R4BB1T");
+  drawHeader("R4BB1T FHC");
 
   updateMenuInicialItems();
 

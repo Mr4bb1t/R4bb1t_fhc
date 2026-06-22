@@ -6,7 +6,6 @@
 :: ─────────────────────────────────────────────────────────────────────────────
 setlocal enabledelayedexpansion
 
-set SYMBOL=ieee80211_raw_frame_sanity_check
 echo === R4BB1T FHC - patch_libnet_final.bat ===
 echo.
 
@@ -88,22 +87,42 @@ exit /b 1
 echo Encontrado: %OBJCOPY%
 echo.
 
-:: ── Aplicar weaken-symbol ─────────────────────────────────────────────────────
-echo Aplicando --weaken-symbol=%SYMBOL%...
-"%OBJCOPY%" --weaken-symbol=%SYMBOL% "%LIBPATH%" "%LIBPATH%"
+:: ── Aplicar weaken-symbol nos dois símbolos ──────────────────────────────────
+echo.
+echo Aplicando patches...
+echo.
 
+:: 1) ieee80211_raw_frame_sanity_check — bypass de management frames
+echo [1/2] Weakening: ieee80211_raw_frame_sanity_check
+"%OBJCOPY%" --weaken-symbol=ieee80211_raw_frame_sanity_check "%LIBPATH%" "%LIBPATH%"
 if %errorlevel% neq 0 (
     echo.
-    echo [ERRO] Falha! Tente executar como Administrador.
+    echo [ERRO] Falha ao enfraquecer ieee80211_raw_frame_sanity_check!
     pause
     exit /b 1
 )
+echo       OK
+
+:: 2) ieee80211_is_tx_allowed — bypass de verificacao de permissao TX (control frames)
+echo [2/2] Weakening: ieee80211_is_tx_allowed
+"%OBJCOPY%" --weaken-symbol=ieee80211_is_tx_allowed "%LIBPATH%" "%LIBPATH%"
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERRO] Falha ao enfraquecer ieee80211_is_tx_allowed!
+    pause
+    exit /b 1
+)
+echo       OK
 
 echo.
 echo ============================================================
-echo  SUCESSO! Patch aplicado.
+echo  SUCESSO! Ambos os patches aplicados.
 echo  Lib : %LIBPATH%
 echo  Bkp : %BACKUP%
+echo.
+echo  Símbolos enfraquecidos:
+echo    - ieee80211_raw_frame_sanity_check (management frames)
+echo    - ieee80211_is_tx_allowed (control frames / TX permission)
 echo.
 echo  Compile e grave normalmente no Arduino IDE.
 echo  Para reverter: copy "%BACKUP%" "%LIBPATH%"

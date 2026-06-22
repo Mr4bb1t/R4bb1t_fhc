@@ -52,7 +52,7 @@ bool clientScanRunning = false;
 uint8_t targetClientMac[6] = {0};
 
 // CTS Jammer
-bool ctsAtivo = false;
+volatile bool ctsAtivo = false;
 unsigned long ctsCounter = 0;
 
 // Beacon Spam

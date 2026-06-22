@@ -17,8 +17,12 @@
 
 set -e
 
-SYMBOL="ieee80211_raw_frame_sanity_check"
 BACKUP_SUFFIX=".orig_backup"
+
+SYMBOLS=(
+    "ieee80211_raw_frame_sanity_check"
+    "ieee80211_is_tx_allowed"
+)
 
 # ── Detectar sistema operacional ──────────────────────────────────────────────
 case "$(uname -s)" in
@@ -194,15 +198,38 @@ fi
 
 echo "Usando: $OBJCOPY"
 echo ""
-echo "Aplicando weaken-symbol em: $SYMBOL"
 
-"$OBJCOPY" --weaken-symbol="$SYMBOL" "$LIBPATH" "$LIBPATH"
+# ── Aplicar weaken-symbol em todos os símbolos ────────────────────────────────
+echo "Aplicando patches..."
+echo ""
+
+SUCCESS_COUNT=0
+TOTAL=${#SYMBOLS[@]}
+
+for i in "${!SYMBOLS[@]}"; do
+    SYM="${SYMBOLS[$i]}"
+    NUM=$((i + 1))
+    echo "[$NUM/$TOTAL] Weakening: $SYM"
+
+    "$OBJCOPY" --weaken-symbol="$SYM" "$LIBPATH" "$LIBPATH"
+
+    if [ $? -ne 0 ]; then
+        echo "  [ERRO] Falha ao enfraquecer $SYM!"
+    else
+        echo "  OK"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+    fi
+done
 
 echo ""
-echo "✅ Patch aplicado com sucesso!"
+if [ "$SUCCESS_COUNT" -eq "$TOTAL" ]; then
+    echo "✅ Todos os $TOTAL patches aplicados com sucesso!"
+else
+    echo "⚠️  $SUCCESS_COUNT/$TOTAL patches aplicados."
+fi
+
 echo ""
-echo "Verificando símbolo:"
-# Verificar se o símbolo ficou fraco (w = weak)
+echo "Verificando símbolos:"
 if command -v nm &> /dev/null; then
     nm_cmd="nm"
 elif command -v xtensa-esp32-elf-nm &> /dev/null; then
@@ -212,15 +239,21 @@ else
 fi
 
 if [ -n "$nm_cmd" ]; then
-    RESULT=$("$nm_cmd" "$LIBPATH" 2>/dev/null | grep "$SYMBOL" | head -3)
-    if echo "$RESULT" | grep -q "W\|w"; then
-        echo "  ✅ '$SYMBOL' está WEAK (W) — bypass ativo"
-    else
-        echo "  ⚠️  Não foi possível confirmar (símbolo pode estar em objeto comprimido)"
-    fi
-    echo "  $RESULT"
+    for SYM in "${SYMBOLS[@]}"; do
+        RESULT=$("$nm_cmd" "$LIBPATH" 2>/dev/null | grep "$SYM" | head -3)
+        if echo "$RESULT" | grep -q "W\|w"; then
+            echo "  ✅ '$SYM' está WEAK — bypass ativo"
+        else
+            echo "  ⚠️  '$SYM' — símbolo pode estar em objeto comprimido"
+        fi
+        echo "  $RESULT"
+    done
 fi
 
+echo ""
+echo "Símbolos enfraquecidos:"
+echo "  - ieee80211_raw_frame_sanity_check (management frames)"
+echo "  - ieee80211_is_tx_allowed (control frames / TX permission)"
 echo ""
 echo "Agora compile e grave o r4bb1t_fhc no Arduino IDE."
 echo "Para reverter: ./patch_libnet.sh --restore"
