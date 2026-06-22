@@ -44,7 +44,6 @@
 | **Drone Jammer** | Varredura randômica 0-124 canais |
 | **BLE Adv Jammer** | writeFast nos 3 canais de advertising BLE |
 | **BLE Data Jammer** | Portadora nos canais BLE data (2-80) |
-| **WiFi Jammer** | Todos os 14 canais WiFi com sub-canais (14×23 = 322 pontos) |
 | **Zigbee Jammer** | Canais IEEE 802.15.4 (11-26) mapeados para NRF24 |
 | **Misc Jammer** | Portadora varrendo 0-124 sequencialmente |
 
