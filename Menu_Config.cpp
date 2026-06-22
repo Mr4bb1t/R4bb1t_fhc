@@ -16,15 +16,16 @@
 #include <esp_wifi.h>
 #include <math.h>
 
-
 #define SCR_W 128
 #define SCR_H 160
 
 static const char *configItems[] = {"Voltar",      "Sobre",     "Mudar MAC",
                                     "Brilho",      "Modo Menu", "Armazenamento",
-                                    "Testar Tela", "Desligar"};
+                                    "Descanso Tela", "Desligar"};
 static const int NUM_CONFIG_ITEMS = 8;
 static int opcaoConfig = 0;
+
+static void initScreensaverMenu();
 
 // ═══════════════════════════════════════════════
 //  CONFIGURAÇÕES
@@ -118,6 +119,7 @@ void handleConfiguracoes() {
         displayArmazenamento();
       } else if (opcaoConfig == 6) {
         estadoAtual = TELA_SCREENSAVER_TEST;
+        initScreensaverMenu();
         displayScreensaverTest();
       } else if (opcaoConfig == 7) {
         estadoAtual = TELA_DESLIGAR;
@@ -632,6 +634,16 @@ static void blSet(int v) {
   prefs.putInt("brilho", v); // SALVA NA MEMÓRIA FIXA
 }
 
+static void blDim() {
+  blInit();
+  ledcWrite(BL_CHANNEL, BL_MIN);
+}
+
+static void blRestore() {
+  blInit();
+  ledcWrite(BL_CHANNEL, brilhoAtual);
+}
+
 void blOff() {
   blInit();
   ledcWrite(BL_CHANNEL, 0);
@@ -741,11 +753,11 @@ void handleBrilho() {
 
 // Estados internos da tela de armazenamento
 static int storageState = 0; // 0=donut, 1=lista, 2=viewer txt, 3=viewer bmp
-static int storageOpcao = 0; // 0=ARQUIVOS, 1=VOLTAR
+static int storageOpcao = 1; // 0=VOLTAR, 1=ARQUIVOS
 
 // ── Estado: lista de arquivos ──
 #define FILES_MAX 24
-#define FILES_PER_PAGE 6
+#define FILES_PER_PAGE 8
 static int fileCursor = 0;
 static int fileCount = 0;
 static char fileNames[FILES_MAX][26];
@@ -763,11 +775,10 @@ static int viewTotalLines = 0;
 static int viewScroll = 0;
 
 // Constantes do donut
-#define DONUT_CX 36      // centro X (metade esquerda da tela)
-#define DONUT_CY 72      // centro Y
-#define DONUT_ROUT 34    // raio externo
-#define DONUT_RIN 21     // raio interno
-#define FILES_PER_PAGE 6 // arquivos visíveis por vez na lista
+#define DONUT_CX 36   // centro X (metade esquerda da tela)
+#define DONUT_CY 72   // centro Y
+#define DONUT_ROUT 34 // raio externo
+#define DONUT_RIN 21  // raio interno
 
 // ── Desenha um arco de a0_deg até a1_deg (graus, 0=topo, sentido horário) ──
 static void drawArcSeg(int cx, int cy, int r_out, int r_in, float a0, float a1,
@@ -826,22 +837,22 @@ static void updateArmazenamentoBotoes() {
   const int BTN_H = 16;
   const int BTN_W = 55;
 
-  // [ARQUIVOS]
-  bool selA = (storageOpcao == 0);
-  tft.fillRoundRect(3, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD_SEL : C_BG);
-  tft.drawRoundRect(3, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD : C_GREY);
-  tft.setTextSize(1);
-  tft.setTextColor(selA ? C_GOLD : C_WHITE);
-  tft.setCursor(8, BTN_Y + 5);
-  tft.print("ARQUIVOS");
-
   // [VOLTAR]
-  bool selV = (storageOpcao == 1);
-  tft.fillRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selV ? C_GOLD_SEL : C_BG);
-  tft.drawRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selV ? C_GOLD : C_GREY);
+  bool selV = (storageOpcao == 0);
+  tft.fillRoundRect(3, BTN_Y, BTN_W, BTN_H, 3, selV ? C_GOLD_SEL : C_BG);
+  tft.drawRoundRect(3, BTN_Y, BTN_W, BTN_H, 3, selV ? C_GOLD : C_GREY);
+  tft.setTextSize(1);
   tft.setTextColor(selV ? C_GOLD : C_WHITE);
-  tft.setCursor(82, BTN_Y + 5);
+  tft.setCursor(15, BTN_Y + 5);
   tft.print("VOLTAR");
+
+  // [ARQUIVOS]
+  bool selA = (storageOpcao == 1);
+  tft.fillRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD_SEL : C_BG);
+  tft.drawRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD : C_GREY);
+  tft.setTextColor(selA ? C_GOLD : C_WHITE);
+  tft.setCursor(76, BTN_Y + 5);
+  tft.print("ARQUIVOS");
 }
 
 // ── Tela principal: donut + legenda + botões ──
@@ -860,17 +871,17 @@ void displayArmazenamento() {
   if (flash_tot == 0)
     flash_tot = 4 * 1024 * 1024; // fallback 4MB
 
+  // Livre na flash total (o que resta na pizza)
+  size_t flash_free =
+      flash_tot > (fw_size + sp_used) ? flash_tot - fw_size - sp_used : 0;
+
   // Percentuais sobre a flash total
   float fw_pct = (fw_size * 100.0f) / (float)flash_tot;
   float sp_pct = (sp_used * 100.0f) / (float)flash_tot;
-  float fr_pct = 100.0f - fw_pct - sp_pct;
-  if (fr_pct < 0.0f)
-    fr_pct = 0.0f;
 
   // Ângulos dos arcos
   float a_fw = fw_pct * 3.6f;
   float a_sp = a_fw + sp_pct * 3.6f;
-  // Restante (livre) vai de a_sp até 360°
 
   // ── Desenha arcos ──
   // Livre (cinza) — fundo completo primeiro
@@ -883,7 +894,8 @@ void displayArmazenamento() {
     drawArcSeg(DONUT_CX, DONUT_CY, DONUT_ROUT, DONUT_RIN, a_fw, a_sp, C_GOLD);
   // Buraco central
   tft.fillCircle(DONUT_CX, DONUT_CY, DONUT_RIN - 1, C_BG);
-  // Label central: % total usado (fw + spiffs)
+
+  // Label central: % total usado
   int used_pct = (int)(fw_pct + sp_pct);
   if (used_pct > 100)
     used_pct = 100;
@@ -893,18 +905,18 @@ void displayArmazenamento() {
   char buf_fw[10], buf_sp[10], buf_fr[10], buf_ft[12];
   snprintf(buf_fw, sizeof(buf_fw), "%uKB", (unsigned)(fw_size / 1024));
   snprintf(buf_sp, sizeof(buf_sp), "%uKB", (unsigned)(sp_used / 1024));
-  snprintf(buf_fr, sizeof(buf_fr), "%uKB", (unsigned)(sp_free / 1024));
+  snprintf(buf_fr, sizeof(buf_fr), "%uKB", (unsigned)(flash_free / 1024));
   snprintf(buf_ft, sizeof(buf_ft), "%uMB tot",
            (unsigned)(flash_tot / (1024 * 1024)));
 
   int lx = DONUT_CX + DONUT_ROUT + 8;
-  drawStorLegend(lx, 28, C_ORANGE, "FW", buf_fw);
-  drawStorLegend(lx, 50, C_GOLD, "SPIF", buf_sp);
-  drawStorLegend(lx, 72, C_GREY, "FREE", buf_fr);
+  drawStorLegend(lx, 22, C_ORANGE, "FW", buf_fw);
+  drawStorLegend(lx, 44, C_GOLD, "SPIF", buf_sp);
+  drawStorLegend(lx, 66, C_GREY, "FREE", buf_fr);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(lx, 94);
+  tft.setCursor(lx, 88);
   tft.print(buf_ft);
 
   // ── Botões de ação ──
@@ -949,7 +961,7 @@ static void drawArquivosRow(int i, bool sel) {
     tft.drawFastHLine(0, y - 1, SCR_W, C_GOLD);
     tft.drawFastHLine(0, y + ROW_H, SCR_W, C_GOLD);
   } else {
-    tft.fillRect(0, y - 1, SCR_W, ROW_H + 1, C_BG);
+    tft.fillRect(0, y - 1, SCR_W, ROW_H + 2, C_BG);
     tft.drawFastHLine(4, y + ROW_H, SCR_W - 8, C_GREY_DARK);
   }
 
@@ -1110,8 +1122,10 @@ static void displayFileViewerBMP() {
   drawSeparator(SCR_H - 14, C_GREY);
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(60, SCR_H - 10);
-  tft.print("o=sair");
+  tft.setCursor(4, SCR_H - 10);
+  tft.print("< > galeria");
+  tft.setCursor(80, SCR_H - 10);
+  tft.print("o sair");
   batteryDraw();
 }
 
@@ -1190,8 +1204,8 @@ static void displayFileViewerText() {
   snprintf(pg, sizeof(pg), "L%d/%d", viewScroll + 1, viewTotalLines);
   tft.setCursor(4, SCR_H - 10);
   tft.print(pg);
-  tft.setCursor(60, SCR_H - 10);
-  tft.print("o=sair");
+  tft.setCursor(55, SCR_H - 10);
+  tft.print("hold<> = arq");
   batteryDraw();
 }
 
@@ -1226,6 +1240,18 @@ static void openFileForView(int fi) {
   displayFileViewerText();
 }
 
+static void switchViewerFile(int dir) {
+  if (fileCount <= 1) return;
+  
+  int current = fileCursor - 1;
+  current += dir;
+  if (current < 0) current = fileCount - 1;
+  if (current >= fileCount) current = 0;
+  
+  fileCursor = current + 1;
+  openFileForView(current);
+}
+
 // ── Handlers ──
 void handleArmazenamento() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
@@ -1238,14 +1264,14 @@ void handleArmazenamento() {
       }
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
-        if (storageOpcao == 0) {
+        if (storageOpcao == 1) { // 1 = ARQUIVOS
           spiffsCollect();
           fileCursor = 0;
           storageState = 1;
           displayArquivosSPIFFS();
-        } else {
+        } else { // 0 = VOLTAR
           storageState = 0;
-          storageOpcao = 0;
+          storageOpcao = 1; // Reseta o estado para ARQUIVOS quando voltar a entrar
           estadoAtual = MENU_CONFIGURACOES;
           displayConfiguracoes();
         }
@@ -1285,16 +1311,32 @@ void handleArmazenamento() {
       }
     } else if (storageState == 2) {
       if (digitalRead(BUTTON_RIGHT) == LOW) {
+        unsigned long start = millis();
+        while(digitalRead(BUTTON_RIGHT) == LOW) {
+           if(millis() - start > 400) break;
+           delay(10);
+        }
+        if (millis() - start > 400) {
+           switchViewerFile(1);
+        } else {
+           if (viewScroll < viewTotalLines - VIEWER_LINES) viewScroll++;
+           displayFileViewerText();
+        }
         lastDebounceTime = millis();
-        if (viewScroll < viewTotalLines - VIEWER_LINES)
-          viewScroll++;
-        displayFileViewerText();
       }
       if (digitalRead(BUTTON_LEFT) == LOW) {
+        unsigned long start = millis();
+        while(digitalRead(BUTTON_LEFT) == LOW) {
+           if(millis() - start > 400) break;
+           delay(10);
+        }
+        if (millis() - start > 400) {
+           switchViewerFile(-1);
+        } else {
+           if (viewScroll > 0) viewScroll--;
+           displayFileViewerText();
+        }
         lastDebounceTime = millis();
-        if (viewScroll > 0)
-          viewScroll--;
-        displayFileViewerText();
       }
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
@@ -1302,6 +1344,14 @@ void handleArmazenamento() {
         displayArquivosSPIFFS();
       }
     } else if (storageState == 3) {
+      if (digitalRead(BUTTON_RIGHT) == LOW) {
+        lastDebounceTime = millis();
+        switchViewerFile(1);
+      }
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        lastDebounceTime = millis();
+        switchViewerFile(-1);
+      }
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
         storageState = 1;
@@ -1416,55 +1466,62 @@ static uint16_t pCol(uint8_t speed, int offset) {
   return tft.color565(r, g, b);
 }
 
-// Número de animações (8 normais + 1 Olho + 1 botão voltar)
-#define ANIM_COUNT 10
+// Número de animações (9 normais + 1 Splash + 1 botão voltar)
+#define ANIM_COUNT 11
 
 static int animIndex = 0;
 static const char *animNames[] = {
-    "Matrix Rain", "Cubo 3D", "Plasma",    "Tesseract 4D", "Corredor",
-    "Onda Grade",  "Aneis",   "Quadrados", "Olho Magenta", "<- VOLTAR"};
+    "<- VOLTAR", "Logo R4BB1T", "Matrix Rain", "Cubo 3D", "Plasma", "Tesseract 4D", "Corredor",
+    "Onda Grade",  "Aneis",   "Quadrados", "Olho Magenta"};
 
 static TFT_eSprite *animSpr = nullptr;
 
-// ── Seleção de animação ──────────────────────────────────────
+static void initScreensaverMenu() {
+  animIndex = prefs.getInt("screensaver", 1);
+  if (animIndex == 0 || animIndex >= ANIM_COUNT) animIndex = 1;
+}
+
+static int scrScroll = 0;
+
 void displayScreensaverTest() {
   tft.fillScreen(C_BG);
-  drawHeader("TESTAR TELA", true);
+  drawHeader("DESCANSO TELA", true);
 
-  tft.setTextSize(1);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, 20);
-  tft.print("Animacao:");
-  tft.setTextColor(C_GOLD);
-  tft.setCursor(4, 32);
-  tft.print(animNames[animIndex]);
+  if (animIndex < scrScroll)
+    scrScroll = animIndex;
+  if (animIndex >= scrScroll + 6)
+    scrScroll = animIndex - 6 + 1;
 
-  // Indicadores
-  int dotSpacing = ANIM_W / ANIM_COUNT;
-  for (int i = 0; i < ANIM_COUNT; i++) {
-    int cx = 6 + i * dotSpacing;
-    if (i == animIndex)
-      tft.fillCircle(cx, 50, 3, C_GOLD);
-    else
-      tft.drawCircle(cx, 50, 3, C_GREY);
+  int savedIdx = prefs.getInt("screensaver", 1);
+
+  for (int i = 0; i < 6; i++) {
+    int idx = scrScroll + i;
+    if (idx >= ANIM_COUNT) break;
+
+    String label = String(animNames[idx]);
+    if (idx == savedIdx && idx != 0) label += " [ATIVO]";
+
+    drawMenuItem(0, 16 + i * 19, 125, 19, label.c_str(), idx == animIndex);
   }
 
-  drawSeparator(58, C_GREY);
+  // Barra de rolagem
+  if (ANIM_COUNT > 6) {
+    int barH = (6 * 114) / ANIM_COUNT; 
+    int barY = 16 + (scrScroll * 114) / ANIM_COUNT;
+    tft.drawFastVLine(126, 16, 114, C_GREY);
+    tft.drawFastVLine(127, 16, 114, C_GREY);
+    tft.drawFastVLine(126, barY, barH, C_GOLD);
+    tft.drawFastVLine(127, barY, barH, C_GOLD);
+  }
+
+  drawSeparator(132, C_GREY);
+  tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, 64);
-  tft.print("< >  escolher");
-  tft.setCursor(4, 76);
-  tft.print(" o   executar");
-
-  tft.setTextColor(C_GREY);
-  tft.setCursor(4, 96);
-  tft.print("Durante animacao:");
-  tft.setCursor(4, 108);
-  tft.print("< >  prox/ant");
-  tft.setCursor(4, 120);
-  tft.print(" o   voltar");
-
-  drawFooter();
+  tft.setCursor(4, 136);
+  tft.print("< > mover");
+  tft.setCursor(70, 136);
+  tft.print("o aplicar");
+  
   batteryDraw();
 }
 
@@ -1528,8 +1585,11 @@ static void animFrame(uint32_t now) {
 
   switch (animIndex) {
 
-  // 0: MATRIX RAIN
-  case 0: {
+  // 1: LOGO R4BB1T (Splash) - Não é animado via sprite
+  case 1: break;
+
+  // 2: MATRIX RAIN
+  case 2: {
     for (int i = 0; i < 13; i++) {
       if (now - matCols[i].lastUpdate > matCols[i].speed) {
         matCols[i].y += 10;
@@ -1559,8 +1619,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 1: CUBO 3D ROTATIVO
-  case 1: {
+  // 3: CUBO 3D ROTATIVO
+  case 3: {
     float cube[8][3] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
                         {-1, -1, 1},  {1, -1, 1},  {1, 1, 1},  {-1, 1, 1}};
     int edges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
@@ -1590,8 +1650,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 2: PLASMA FLUINDO
-  case 2: {
+  // 4: PLASMA FLUINDO
+  case 4: {
     uint32_t t = now + 50000;
     for (int x = 0; x < ANIM_W; x += 10) {
       for (int y = 0; y < ANIM_H; y += 10) {
@@ -1604,8 +1664,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 3: TESSERACT 4D
-  case 3: {
+  // 5: TESSERACT 4D
+  case 5: {
     float nd[16][4] = {
         {-1, -1, -1, -1}, {1, -1, -1, -1}, {1, 1, -1, -1}, {-1, 1, -1, -1},
         {-1, -1, 1, -1},  {1, -1, 1, -1},  {1, 1, 1, -1},  {-1, 1, 1, -1},
@@ -1639,8 +1699,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 4: CORREDOR (tuneel infinito)
-  case 4: {
+  // 6: CORREDOR (tuneel infinito)
+  case 6: {
     float spd = now / 250.0f;
     const int NS = 12;
     float spacing = 1.0f;
@@ -1696,8 +1756,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 5: ONDA GRADE
-  case 5: {
+  // 7: ONDA GRADE
+  case 7: {
     for (int x = 0; x < ANIM_W; x += 12) {
       for (int y = 0; y < ANIM_H; y += 12) {
         float v = aSin(x + now / 16.0f) + aSin(y + now / 12.0f);
@@ -1708,8 +1768,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 6: ANEIS PULSANTES
-  case 6: {
+  // 8: ANEIS PULSANTES
+  case 8: {
     for (int i = 0; i < 8; i++) {
       int br = (aSin(now / 8.0f) + 150) * 30 / 127;
       animSpr->drawCircle(ANIM_CX, ANIM_CY, br + i * 8, pCol(10, i * 15));
@@ -1717,8 +1777,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 7: QUADRADOS EXPANSIVOS
-  case 7: {
+  // 9: QUADRADOS EXPANSIVOS
+  case 9: {
     for (int i = 0; i < 10; i++) {
       int sz = (now / 10 + i * 20) % 160;
       animSpr->drawRect(ANIM_CX - sz / 2, ANIM_CY - sz / 2, sz, sz,
@@ -1727,8 +1787,8 @@ static void animFrame(uint32_t now) {
     break;
   }
 
-  // 8: OLHO MAGENTA
-  case 8: {
+  // 10: OLHO MAGENTA
+  case 10: {
     int irX = ANIM_CX + (int)((eyeX - ANIM_CX) * 0.35f);
     int irY = ANIM_CY + (int)((eyeY - ANIM_CY) * 0.35f);
     int puX = ANIM_CX + (int)((eyeX - ANIM_CX) * 0.6f);
@@ -1747,51 +1807,99 @@ static void animFrame(uint32_t now) {
   animSpr->pushSprite(0, 0);
 }
 
+// ── Iniciar o Screensaver de fora (idle na tela inicial) ───────────
+static bool animStartedFromIdle = false;
+
+void startScreensaver(bool fromIdle) {
+  animStartedFromIdle = fromIdle;
+  estadoAtual = TELA_SCREENSAVER_TEST; // reaproveita o estado
+  
+  if (fromIdle) {
+    animIndex = prefs.getInt("screensaver", 1);
+    if (animIndex == 0 || animIndex >= ANIM_COUNT) animIndex = 1;
+  }
+
+  if (animIndex == 1) {
+    tft.fillScreen(TFT_BLACK);
+    extern void displaySplash(unsigned long delayMs);
+    displaySplash(0);
+    animRunning = true;
+  } else {
+    animInitLUT();
+    if (!animSpr) {
+      animSpr = new TFT_eSprite(&tft);
+      animSpr->createSprite(ANIM_W, ANIM_H);
+    }
+    if (animIndex == 2) {
+      for (int i = 0; i < 13; i++) matInitCol(i);
+    }
+    eyeX = ANIM_CX;
+    eyeY = ANIM_CY;
+    eyeTX = ANIM_CX;
+    eyeTY = ANIM_CY;
+    eyeNextMove = millis() + 800;
+    eyeMoving = false;
+    animRunning = true;
+  }
+  
+  // Escurece a tela apenas se for a partir do repouso
+  if (fromIdle) {
+    blDim();
+  }
+}
+
 // ── Handler da tela de teste ─────────────────────────────────
 void handleScreensaverTest() {
   if (!animRunning) {
     // Modo seleção
     if ((millis() - lastDebounceTime) > debounceDelay) {
       if (digitalRead(BUTTON_LEFT) == LOW) {
+        int old = animIndex;
         animIndex = (animIndex - 1 + ANIM_COUNT) % ANIM_COUNT;
         lastDebounceTime = millis();
-        displayScreensaverTest();
+        if (animIndex >= scrScroll && animIndex < scrScroll + 6 && old >= scrScroll && old < scrScroll + 6) {
+          int savedIdx = prefs.getInt("screensaver", 1);
+          String labelOld = String(animNames[old]);
+          if (old == savedIdx && old != 0) labelOld += " [ATIVO]";
+          drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19, labelOld.c_str(), false);
+          
+          String labelNew = String(animNames[animIndex]);
+          if (animIndex == savedIdx && animIndex != 0) labelNew += " [ATIVO]";
+          drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19, labelNew.c_str(), true);
+        } else {
+          displayScreensaverTest();
+        }
       }
       if (digitalRead(BUTTON_RIGHT) == LOW) {
+        int old = animIndex;
         animIndex = (animIndex + 1) % ANIM_COUNT;
         lastDebounceTime = millis();
-        displayScreensaverTest();
+        if (animIndex >= scrScroll && animIndex < scrScroll + 6 && old >= scrScroll && old < scrScroll + 6) {
+          int savedIdx = prefs.getInt("screensaver", 1);
+          String labelOld = String(animNames[old]);
+          if (old == savedIdx && old != 0) labelOld += " [ATIVO]";
+          drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19, labelOld.c_str(), false);
+          
+          String labelNew = String(animNames[animIndex]);
+          if (animIndex == savedIdx && animIndex != 0) labelNew += " [ATIVO]";
+          drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19, labelNew.c_str(), true);
+        } else {
+          displayScreensaverTest();
+        }
       }
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
 
-        // Se for a última opção ("<- VOLTAR")
-        if (animIndex == ANIM_COUNT - 1) {
+        // Se for a primeira opção ("<- VOLTAR")
+        if (animIndex == 0) {
           estadoAtual = MENU_CONFIGURACOES;
           displayConfiguracoes();
           return;
         }
 
-        // Inicia animação
-        animInitLUT();
-
-        if (!animSpr) {
-          animSpr = new TFT_eSprite(&tft);
-          animSpr->createSprite(ANIM_W, ANIM_H);
-        }
-
-        // Inicializa estado de each anim
-        if (animIndex == 0) {
-          for (int i = 0; i < 13; i++)
-            matInitCol(i);
-        }
-        eyeX = ANIM_CX;
-        eyeY = ANIM_CY;
-        eyeTX = ANIM_CX;
-        eyeTY = ANIM_CY;
-        eyeNextMove = millis() + 800;
-        eyeMoving = false;
-        animRunning = true;
+        // Salva a escolha do screensaver
+        prefs.putInt("screensaver", animIndex);
+        startScreensaver(false);
       }
     }
   } else {
@@ -1801,7 +1909,9 @@ void handleScreensaverTest() {
 
     // Verifica botões para trocar/sair
     if ((now - lastDebounceTime) > 150) {
-      if (digitalRead(BUTTON_SELECT) == LOW) {
+      if (digitalRead(BUTTON_SELECT) == LOW || 
+         (animStartedFromIdle && (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW))) {
+        
         lastDebounceTime = now;
         animRunning = false;
 
@@ -1811,31 +1921,47 @@ void handleScreensaverTest() {
           animSpr = nullptr;
         }
 
-        displayScreensaverTest();
-      }
-      if (digitalRead(BUTTON_LEFT) == LOW) {
-        lastDebounceTime = now;
-        // Pula a opção "VOLTAR" durante a execução (por isso ANIM_COUNT - 1)
-        animIndex = (animIndex - 1 + (ANIM_COUNT - 1)) % (ANIM_COUNT - 1);
-        if (animIndex == 0)
-          for (int i = 0; i < 13; i++)
-            matInitCol(i);
-        eyeX = ANIM_CX;
-        eyeY = ANIM_CY;
-        eyeNextMove = now + 800;
-        eyeMoving = false;
-      }
-      if (digitalRead(BUTTON_RIGHT) == LOW) {
-        lastDebounceTime = now;
-        // Pula a opção "VOLTAR" durante a execução
-        animIndex = (animIndex + 1) % (ANIM_COUNT - 1);
-        if (animIndex == 0)
-          for (int i = 0; i < 13; i++)
-            matInitCol(i);
-        eyeX = ANIM_CX;
-        eyeY = ANIM_CY;
-        eyeNextMove = now + 800;
-        eyeMoving = false;
+        // Restaura o brilho original apenas se estava escurecido
+        if (animStartedFromIdle) {
+          blRestore();
+        }
+
+        if (animStartedFromIdle) {
+          extern void displayMenuInicial();
+          estadoAtual = MENU_INICIAL;
+          displayMenuInicial();
+        } else {
+          displayScreensaverTest();
+        }
+      } else if (!animStartedFromIdle) {
+        if (digitalRead(BUTTON_LEFT) == LOW) {
+          lastDebounceTime = now;
+          // Pula a opção "VOLTAR" (index 0) durante a execução
+          animIndex = animIndex - 1;
+          if (animIndex <= 0) animIndex = ANIM_COUNT - 1;
+          
+          if (animIndex == 2)
+            for (int i = 0; i < 13; i++)
+              matInitCol(i);
+          eyeX = ANIM_CX;
+          eyeY = ANIM_CY;
+          eyeNextMove = now + 800;
+          eyeMoving = false;
+        }
+        if (digitalRead(BUTTON_RIGHT) == LOW) {
+          lastDebounceTime = now;
+          // Pula a opção "VOLTAR" (index 0) durante a execução
+          animIndex = animIndex + 1;
+          if (animIndex >= ANIM_COUNT) animIndex = 1;
+          
+          if (animIndex == 2)
+            for (int i = 0; i < 13; i++)
+              matInitCol(i);
+          eyeX = ANIM_CX;
+          eyeY = ANIM_CY;
+          eyeNextMove = now + 800;
+          eyeMoving = false;
+        }
       }
     }
   }

@@ -24,5 +24,6 @@ void handleDesligar();
 
 void displayScreensaverTest();
 void handleScreensaverTest();
+void startScreensaver(bool fromIdle = false);
 
 #endif

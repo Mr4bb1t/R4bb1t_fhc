@@ -129,9 +129,8 @@ void displayMenuInicial() {
 // ──────────────────────────────────────────────
 void handleMenuInicial() {
   if ((millis() - lastActivityTime) >= IDLE_TIMEOUT_MS) {
-    lastActivityTime = 0;
-    estadoAtual = TELA_SCREENSAVER;
-    displaySplash(0);
+    lastActivityTime = millis();
+    startScreensaver(true);
     return;
   }
 

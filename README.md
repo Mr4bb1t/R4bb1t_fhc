@@ -52,7 +52,8 @@
 - Persistência de configurações via NVRAM
 - Storage UI com visualizador de arquivos (.txt, .csv, .bmp)
 - Splash screen BMP colorida via SPIFFS
-- Screensaver anti burn-in
+- Galeria de Descanso de Tela (Animações e Splash Screen) customizável e acionamento automático por inatividade
+- Screensaver anti burn-in dinâmico
 
 ---
 
