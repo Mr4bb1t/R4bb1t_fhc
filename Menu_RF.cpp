@@ -76,7 +76,7 @@ static bool saveRFSignal(unsigned long val, int bits, int proto, float freq) {
   File f = SPIFFS.open(RF_SIGNALS_FILE, FILE_APPEND);
   if (!f)
     return false;
-  f.printf("%lu,%d,%d,%.2f\n", val, bits, proto, freq);
+  f.printf("%lX,%d,%d,%.2f\n", val, bits, proto, freq);
   f.close();
   return true;
 }
@@ -96,7 +96,7 @@ static int loadRFSignals(RFSignal *out, int maxCount) {
     int c2 = line.indexOf(',', c1 + 1);
     if (c1 < 0 || c2 < 0)
       continue;
-    out[count].value = strtoul(line.substring(0, c1).c_str(), nullptr, 10);
+    out[count].value = strtoul(line.substring(0, c1).c_str(), nullptr, 16);
     out[count].bits = line.substring(c1 + 1, c2).toInt();
 
     int c3 = line.indexOf(',', c2 + 1);
@@ -127,7 +127,7 @@ static bool deleteRFSignal(int index) {
   for (int i = 0; i < count; i++) {
     if (i == index)
       continue;
-    f.printf("%lu,%d,%d,%.2f\n", buf[i].value, buf[i].bits, buf[i].protocol,
+    f.printf("%lX,%d,%d,%.2f\n", buf[i].value, buf[i].bits, buf[i].protocol,
              buf[i].freq);
   }
   f.close();
@@ -274,8 +274,7 @@ static bool replayHasSig = false;
 void displayRF_Replay() {
   rfHeader("REPLAY");
 
-  // Frequência detectada no topo
-  drawDetectedFreq(17);
+  // Frequência agora exibida junto com os dados capturados
 
   tft.setTextSize(1);
   if (!replayHasSig) {
@@ -293,11 +292,18 @@ void displayRF_Replay() {
     tft.print("Capturado:");
     tft.setTextColor(TFT_GREEN);
     char buf[32];
-    snprintf(buf, sizeof(buf), "Val: %lX", replayVal);
+    snprintf(buf, sizeof(buf), "Val: %lu", replayVal);
     tft.setCursor(4, 46);
+    tft.print(buf);
+    snprintf(buf, sizeof(buf), "Hex: 0x%lX", replayVal);
+    tft.setCursor(70, 46);
     tft.print(buf);
     snprintf(buf, sizeof(buf), "Bits:%d  Proto:%d", replayBits, replayProtocol);
     tft.setCursor(4, 58);
+    tft.print(buf);
+    float txFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+    snprintf(buf, sizeof(buf), "Freq: %.2f", txFreq);
+    tft.setCursor(4, 70);
     tft.print(buf);
 
     tft.setTextColor(TFT_CYAN);
@@ -400,9 +406,6 @@ static bool rawListening = true;
 void displayRF_Raw() {
   rfHeader("RAW  RX");
 
-  // Frequência detectada
-  drawDetectedFreq(17);
-
   tft.setTextColor(TFT_YELLOW);
   tft.setTextSize(1);
   tft.setCursor(4, 30);
@@ -457,9 +460,9 @@ void handleRF_Raw() {
     Serial.printf("[RF][RAW]   Barras  : %d/10\n",
                   constrain(map(dbm, -45, -20, 1, 10), 1, 10));
 
-    // Partial redraw: limpa as 3 linhas de texto (Y=40 até 74) e a linha do
+    // Partial redraw: limpa as 3 linhas de texto (Y=40 até 82) e a linha do
     // Sinal/Barras (Y=82 até 90)
-    tft.fillRect(0, 40, SCR_W, 34, TFT_BLACK);
+    tft.fillRect(0, 40, SCR_W, 42, TFT_BLACK);
     tft.fillRect(0, 82, SCR_W, 8, TFT_BLACK);
 
     tft.setTextSize(1);
@@ -473,6 +476,11 @@ void handleRF_Raw() {
     tft.print(buf);
     snprintf(buf, sizeof(buf), "Bits: %d   Proto: %d", bits, proto);
     tft.setCursor(4, 64);
+    tft.print(buf);
+
+    float txFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+    snprintf(buf, sizeof(buf), "Freq: %.2f", txFreq);
+    tft.setCursor(4, 74);
     tft.print(buf);
 
     tft.setTextColor(TFT_DARKGREY);
@@ -510,10 +518,10 @@ void handleRF_Raw() {
 
 // Frequências comuns a varrer (MHz) — faixas do CC1101
 static const float SCAN_FREQS[] = {
-    300.00, 303.87, 310.00, 315.00, 318.00, 330.00, 390.00, 418.00, 430.00, 
-    431.00, 432.00, 433.00, 433.42, 433.92, 434.42, 435.00, 436.00, 438.00, 
-    440.00, 450.00, 868.00, 868.35, 868.95, 869.50, 915.00, 916.00, 920.00, 
-    925.00};
+    300.00, 303.87, 310.00, 315.00, 318.00, 330.00, 390.00,
+    418.00, 430.00, 431.00, 432.00, 433.00, 433.42, 433.92,
+    434.42, 435.00, 436.00, 438.00, 440.00, 450.00, 868.00,
+    868.35, 868.95, 869.50, 915.00, 916.00, 920.00, 925.00};
 #define SCAN_FREQ_COUNT (sizeof(SCAN_FREQS) / sizeof(SCAN_FREQS[0]))
 
 static int scanIdx = 0;          // índice atual na varredura
@@ -572,6 +580,12 @@ static bool rfScanStep() {
   return false;
 }
 
+#define WF_Y 20
+#define WF_H 120
+#define WF_CX                                                                  \
+  (128 /                                                                       \
+   2) // Usando valor fixo 128 para SCR_W temporariamente ou calculando direto
+
 // Helper: desenha a frequência detectada em qualquer tela
 // y = posição Y para desenhar, clearW = largura para limpar
 static void drawDetectedFreq(int y) {
@@ -585,9 +599,15 @@ static void drawDetectedFreq(int y) {
              rfDetectedRSSI);
     tft.print(buf);
   } else {
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(2, y);
-    tft.print("Freq: buscando...");
+    // Escala clássica enquanto escaneia
+    tft.setTextColor(0x528A);
+    tft.setCursor(0, y + 3);
+    tft.print("431");
+    tft.setCursor(50, y + 3);
+    tft.print("433.9");
+    tft.setCursor(104, y + 3);
+    tft.print("436");
+    tft.drawFastVLine(WF_CX, y, 3, TFT_YELLOW);
   }
 }
 
@@ -608,8 +628,6 @@ static void drawDetectedFreq(int y) {
 
 #define WF_Y 20
 #define WF_H 120
-#define WF_CX (SCR_W / 2)
-
 #define WF_DBM_MIN -45
 #define WF_DBM_MAX -20
 
@@ -708,14 +726,16 @@ void displayRF_Analyser() {
   tft.print(hdrBuf);
   tft.drawFastHLine(0, 14, SCR_W, TFT_DARKGREY);
 
-  // Barra de frequência no rodapé — mostra frequência real detectada
+  // Barra separadora entre o gráfico e o rodapé
   int axisY = WF_Y + WF_H + 1;
-  drawDetectedFreq(axisY);
-  tft.drawFastHLine(0, axisY + 10, SCR_W, 0x2945);
+  tft.drawFastHLine(0, axisY, SCR_W, TFT_DARKGREY);
 
-  tft.drawFastHLine(0, SCR_H - 16, SCR_W, TFT_DARKGREY);
+  // Barra de frequência no rodapé (fica entre a linha e o limite inferior)
+  drawDetectedFreq(axisY + 2);
+
+  // Ícone de voltar no canto inferior esquerdo
   tft.setTextColor(TFT_YELLOW);
-  tft.setCursor(5, SCR_H - 10);
+  tft.setCursor(5, SCR_H - 9);
   tft.print("<");
 
   memset(wfBuf, 0, sizeof(wfBuf));
@@ -758,9 +778,9 @@ void handleRF_Analyser() {
         snprintf(hBuf, sizeof(hBuf), "scan...");
       tft.print(hBuf);
 
-      // Atualiza barra de frequência no rodapé
+      // Atualiza barra de frequência no rodapé (preservando a linha separadora)
       int axisY = WF_Y + WF_H + 1;
-      drawDetectedFreq(axisY);
+      drawDetectedFreq(axisY + 2);
 
       // Re-habilita o rcSwitch na frequência detectada
       rcSwitch.enableReceive(RF_GDO2);
@@ -1045,47 +1065,51 @@ static RFSignal savedSignals[MAX_RF_SIGNALS];
 static int savedCount = 0;
 static int savedIndex = 0; // sinal selecionado atualmente
 
-// Linhas visíveis na tela (de y=22 a y=130, 15px por linha → 7 linhas)
-#define SAVED_VISIBLE 6
+// Linhas visíveis na tela (de y=16 a y=160, 18px por linha → 8 linhas)
+#define SAVED_VISIBLE 8
 static int savedScroll = 0; // primeiro índice visível
 
 static void drawSavedItem(int idx, bool sel) {
   if (idx < savedScroll || idx >= savedScroll + SAVED_VISIBLE ||
-      idx >= savedCount)
+      idx > savedCount)
     return;
 
   int i = idx - savedScroll;
-  int y = 30 + i * 16;
+  int h = 18;
+  int y = 16 + i * h;
 
-  tft.fillRect(0, y - 2, SCR_W, 16, TFT_BLACK);
+  if (idx == 0) {
+    // Virtual item for "Voltar" no topo usando o padrão do sistema
+    drawMenuItem(0, y, SCR_W, h, "< VOLTAR", sel, false);
+  } else {
+    tft.fillRect(0, y, SCR_W, h, TFT_BLACK);
+    tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
+    tft.setCursor(4, y + 4);
+    int sIdx = idx - 1;
+    char buf[28];
+    float f = (savedSignals[sIdx].freq > 0) ? savedSignals[sIdx].freq : 433.92f;
+    snprintf(buf, sizeof(buf), "#%02d %lu %.2f", sIdx + 1,
+             savedSignals[sIdx].value, f);
+    tft.print(sel ? ">" : " ");
+    tft.print(buf);
+  }
 
-  tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
-  tft.setCursor(4, y);
-
-  char buf[28];
-  float f = (savedSignals[idx].freq > 0) ? savedSignals[idx].freq : 433.92f;
-  // Ex: "#01 14FD58 433.92"
-  snprintf(buf, sizeof(buf), "#%02d %lX %.2f", idx + 1,
-           savedSignals[idx].value, f);
-  tft.print(sel ? ">" : " ");
-  tft.print(buf);
-
-  // Redesenha os indicadores de scroll (pois o fillRect apagou a linha inteira)
+  // Redesenha os indicadores de scroll
   if (i == 0 && savedScroll > 0) {
     tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(SCR_W - 10, y);
+    tft.setCursor(SCR_W - 10, y + 4);
     tft.print("^");
   }
-  if (i == SAVED_VISIBLE - 1 && savedScroll + SAVED_VISIBLE < savedCount) {
+  if (i == SAVED_VISIBLE - 1 && savedScroll + SAVED_VISIBLE < savedCount + 1) {
     tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(SCR_W - 10, y);
+    tft.setCursor(SCR_W - 10, y + 4);
     tft.print("v");
   }
 }
 
 static void drawSavedList() {
-  // Limpa área da lista (começa em y=28 pra não apagar a freq detectada)
-  tft.fillRect(0, 28, SCR_W, SCR_H - 46, TFT_BLACK);
+  // Limpa área da lista
+  tft.fillRect(0, 16, SCR_W, SCR_H - 16, TFT_BLACK);
   tft.setTextSize(1);
 
   if (savedCount == 0) {
@@ -1101,7 +1125,7 @@ static void drawSavedList() {
 
   for (int i = 0; i < SAVED_VISIBLE; i++) {
     int idx = savedScroll + i;
-    if (idx >= savedCount)
+    if (idx > savedCount)
       break;
 
     drawSavedItem(idx, idx == savedIndex);
@@ -1118,8 +1142,12 @@ void displayRF_Saved() {
   savedScroll = 0;
 
   drawSavedList();
-  rfFooter();
+  // Sem footer para aproveitar o espaço da tela
   batteryDraw();
+
+  // Previne o disparo automático se o botão SELECT ainda estiver pressionado do menu anterior
+  while (digitalRead(BUTTON_SELECT) == LOW)
+    vTaskDelay(10 / portTICK_PERIOD_MS);
 
   // Sintoniza na frequência detectada para TX
   if (rfReady && rfDetectedMHz > 0) {
@@ -1128,99 +1156,189 @@ void displayRF_Saved() {
   }
 }
 
-void handleRF_Saved() {
-  static unsigned long leftPressStart = 0;
-  static bool leftHeld = false;
+static void openSavedActionMenu(int signalIdx) {
+  // Modal de opções flutuante (desfoca/fundo escuro pseudo-modal)
+  int px = 14, py = 40, pw = 100, ph = 64;
+  tft.fillRect(px, py, pw, ph, 0x2104);   // Fundo escuro acinzentado
+  tft.drawRect(px, py, pw, ph, TFT_CYAN); // Borda
+  tft.setTextSize(1);
+  tft.setTextColor(TFT_WHITE);
+  tft.setCursor(px + 4, py + 6);
+  tft.print("Acoes:");
 
-  if ((millis() - lastDebounceTime) > debounceDelay) {
+  const char *opts[] = {"Transmitir", "Excluir", "Voltar"};
+  int numOpts = 3;
+  int selOpt = 0;
 
-    // RIGHT → próximo sinal
-    if (digitalRead(BUTTON_RIGHT) == LOW) {
-      lastDebounceTime = millis();
-      if (savedCount > 0) {
-        int oldIndex = savedIndex;
-        int oldScroll = savedScroll;
-        savedIndex = (savedIndex + 1) % savedCount;
+  auto drawPopupOpts = [&]() {
+    for (int i = 0; i < numOpts; i++) {
+      tft.fillRect(px + 2, py + 18 + i * 14, pw - 4, 14, 0x2104);
+      tft.setTextColor(i == selOpt ? TFT_GREEN : TFT_WHITE);
+      tft.setCursor(px + 6, py + 21 + i * 14);
+      tft.print(i == selOpt ? "> " : "  ");
+      tft.print(opts[i]);
+    }
+  };
 
-        // Ajusta scroll
-        if (savedIndex < savedScroll)
-          savedScroll = savedIndex;
-        if (savedIndex >= savedScroll + SAVED_VISIBLE)
-          savedScroll = savedIndex - SAVED_VISIBLE + 1;
+  drawPopupOpts();
 
-        if (savedScroll != oldScroll) {
-          drawSavedList();
-        } else {
-          drawSavedItem(oldIndex, false);
-          drawSavedItem(savedIndex, true);
+  // Espera soltar o botão da pressão longa, exibindo o popup imediatamente
+  while (digitalRead(BUTTON_SELECT) == LOW)
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+
+  unsigned long modalDebounce = millis();
+  while (true) {
+    vTaskDelay(10 / portTICK_PERIOD_MS); // watchdog feed
+
+    if (millis() - modalDebounce > 150) {
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        modalDebounce = millis();
+        selOpt = (selOpt - 1 + numOpts) % numOpts;
+        drawPopupOpts();
+      }
+      if (digitalRead(BUTTON_RIGHT) == LOW) {
+        modalDebounce = millis();
+        selOpt = (selOpt + 1) % numOpts;
+        drawPopupOpts();
+      }
+      if (digitalRead(BUTTON_SELECT) == LOW) {
+        modalDebounce = millis();
+        while (digitalRead(BUTTON_SELECT) == LOW)
+          vTaskDelay(10); // espera soltar
+
+        if (selOpt == 0) { // Transmitir
+          float txFreq = (savedSignals[signalIdx].freq > 0)
+                             ? savedSignals[signalIdx].freq
+                             : 433.92f;
+          ELECHOUSE_cc1101.setMHZ(txFreq);
+          ELECHOUSE_cc1101.SetTx();
+          rcSwitch.send(savedSignals[signalIdx].value,
+                        savedSignals[signalIdx].bits);
+          ELECHOUSE_cc1101.SetRx();
+
+          tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
+          tft.setTextColor(TFT_ORANGE);
+          tft.setCursor(px + 4, py + ph + 2);
+          tft.print(">> ENVIADO!");
+          delay(600);
+          break;                  // sai do modal
+        } else if (selOpt == 1) { // Excluir
+          deleteRFSignal(signalIdx);
+
+          tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
+          tft.setTextColor(TFT_RED);
+          tft.setCursor(px + 4, py + ph + 2);
+          tft.print("Sinal Deletado");
+          delay(600);
+          // Recarrega
+          savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
+          savedIndex = 0;
+          savedScroll = 0;
+          break;                  // sai do modal
+        } else if (selOpt == 2) { // Cancelar/Voltar
+          break;                  // sai do modal
         }
       }
     }
+  }
 
-    // SELECT → transmite sinal selecionado
-    if (digitalRead(BUTTON_SELECT) == LOW && savedCount > 0 && rfReady) {
+  // Restaura a tela ao fechar o pop-up
+  drawSavedList();
+}
+
+void handleRF_Saved() {
+  static unsigned long selectPressStart = 0;
+  static bool selectHeld = false;
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    // RIGHT → pra baixo
+    if (digitalRead(BUTTON_RIGHT) == LOW) {
       lastDebounceTime = millis();
+      int totalItems = savedCount + 1; // +1 é o Voltar
+      int oldIndex = savedIndex;
+      int oldScroll = savedScroll;
+      savedIndex = (savedIndex + 1) % totalItems;
 
-      float txFreq = (savedSignals[savedIndex].freq > 0)
-                         ? savedSignals[savedIndex].freq
-                         : 433.92f;
-      Serial.printf("[RF][SAVED] Transmitindo sinal #%d na %.2fMHz -> Val:%lu "
-                    "Bits:%d Proto:%d\n",
-                    savedIndex + 1, txFreq, savedSignals[savedIndex].value,
-                    savedSignals[savedIndex].bits,
-                    savedSignals[savedIndex].protocol);
-      ELECHOUSE_cc1101.setMHZ(txFreq);
-      ELECHOUSE_cc1101.SetTx();
-      rcSwitch.send(savedSignals[savedIndex].value,
-                    savedSignals[savedIndex].bits);
-      ELECHOUSE_cc1101.SetRx();
-      Serial.println("[RF][SAVED] TX concluido.");
+      if (savedIndex < savedScroll)
+        savedScroll = savedIndex;
+      if (savedIndex >= savedScroll + SAVED_VISIBLE)
+        savedScroll = savedIndex - SAVED_VISIBLE + 1;
 
-      // Feedback visual
-      tft.fillRect(4, SCR_H - 42, SCR_W - 8, 12, TFT_BLACK);
-      tft.setTextColor(TFT_ORANGE);
-      tft.setCursor(4, SCR_H - 42);
-      tft.print(">>> ENVIADO! <<<");
-      delay(700);
+      if (savedScroll != oldScroll) {
+        drawSavedList();
+      } else {
+        drawSavedItem(oldIndex, false);
+        drawSavedItem(savedIndex, true);
+      }
+    }
 
-      // Restaura hint
-      tft.fillRect(4, SCR_H - 42, SCR_W - 8, 12, TFT_BLACK);
+    // LEFT → pra cima
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      lastDebounceTime = millis();
+      int totalItems = savedCount + 1;
+      int oldIndex = savedIndex;
+      int oldScroll = savedScroll;
+      savedIndex = (savedIndex - 1 + totalItems) % totalItems;
+
+      if (savedIndex < savedScroll)
+        savedScroll = savedIndex;
+      if (savedIndex >= savedScroll + SAVED_VISIBLE)
+        savedScroll = savedIndex - SAVED_VISIBLE + 1;
+
+      if (savedScroll != oldScroll) {
+        drawSavedList();
+      } else {
+        drawSavedItem(oldIndex, false);
+        drawSavedItem(savedIndex, true);
+      }
     }
   }
 
-  // Botão LEFT: pressão curta = voltar, pressão longa (>1s) = deletar
-  if (digitalRead(BUTTON_LEFT) == LOW) {
-    if (!leftHeld) {
-      leftHeld = true;
-      leftPressStart = millis();
-    } else if (millis() - leftPressStart > 1000 && savedCount > 0) {
-      // Pressão longa → deletar
+  // Botão SELECT: pressão curta = executa, pressão longa (>600ms) = Abre Modal
+  if (digitalRead(BUTTON_SELECT) == LOW) {
+    if (!selectHeld) {
+      selectHeld = true;
+      selectPressStart = millis();
+    } else if (millis() - selectPressStart > 600) {
+      // Pressão longa → Modal
+      selectHeld = false;
       lastDebounceTime = millis();
-      leftHeld = false;
 
-      bool ok = deleteRFSignal(savedIndex);
-      tft.fillRect(4, SCR_H - 42, SCR_W - 8, 12, TFT_BLACK);
-      tft.setTextColor(ok ? TFT_RED : TFT_DARKGREY);
-      tft.setCursor(4, SCR_H - 42);
-      tft.print(ok ? "Sinal deletado!" : "Erro ao deletar");
-      delay(900);
-
-      // Recarrega lista
-      savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
-      if (savedIndex >= savedCount)
-        savedIndex = max(0, savedCount - 1);
-      savedScroll = 0;
-      drawSavedList();
-      batteryDraw();
+      if (savedIndex > 0 && savedIndex <= savedCount) {
+        openSavedActionMenu(savedIndex - 1);
+      }
     }
   } else {
-    if (leftHeld && (millis() - leftPressStart) < 600) {
-      // Pressão curta solta → Voltar
-      leftHeld = false;
+    if (selectHeld && (millis() - selectPressStart) < 600) {
+      // Pressão curta solta → Transmite ou Volta
+      selectHeld = false;
       lastDebounceTime = millis();
-      estadoAtual = MENU_RF;
-      displayRF();
+
+      if (savedIndex == 0) {
+        // Item Voltar
+        estadoAtual = MENU_RF;
+        displayRF();
+      } else {
+        int sIdx = savedIndex - 1;
+        // Transmitir rápido
+        float txFreq = (savedSignals[sIdx].freq > 0)
+                           ? savedSignals[sIdx].freq
+                           : 433.92f;
+        ELECHOUSE_cc1101.setMHZ(txFreq);
+        ELECHOUSE_cc1101.SetTx();
+        rcSwitch.send(savedSignals[sIdx].value,
+                      savedSignals[sIdx].bits);
+        ELECHOUSE_cc1101.SetRx();
+
+        // Feedback visual
+        tft.fillRect(4, SCR_H - 22, SCR_W - 8, 12, TFT_BLACK);
+        tft.setTextColor(TFT_ORANGE);
+        tft.setCursor(4, SCR_H - 22);
+        tft.print(">> ENVIADO!");
+        delay(500);
+        tft.fillRect(4, SCR_H - 22, SCR_W - 8, 12, TFT_BLACK);
+      }
     }
-    leftHeld = false;
+    selectHeld = false;
   }
 }
