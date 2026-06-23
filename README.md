@@ -232,7 +232,7 @@ Verifique se `User_Setup.h` está configurado corretamente para o seu display (S
 
 ## Créditos
 
-- **ESP32-third-eye**: Animações de teste de tela — [@Jekyllz](https://github.com/Jekyllz/ESP32-third-eye)
+- **ESP32-third-eye**: Animações de descanso de tela — [@Jekyllz](https://github.com/Jekyllz/ESP32-third-eye)
 - **nRF24_jammer**: Lógica de jamming NRF24 — [@W0rthlessS0ul](https://github.com/W0rthlessS0ul/nRF24_jammer)
 
 ---
