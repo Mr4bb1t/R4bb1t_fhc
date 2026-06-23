@@ -22,6 +22,7 @@
 
 #include "Battery.h"
 #include "HWProbe.h"
+#include "Language.h"
 #include "Menu_Config.h"
 #include "Menu_Main.h"
 #include "Menu_NRF24.h"
@@ -72,7 +73,7 @@ static void showLowBatteryShutdown() {
   // ── Título Superior ────────────────────────────
   tft.setTextSize(1);
   tft.setTextColor(TFT_RED);
-  const char *t1 = "BATERIA CRITICA";
+  const char *t1 = lang->sys_bat_critica;
   tft.setCursor((128 - strlen(t1) * 6) / 2, 20);
   tft.print(t1);
 
@@ -96,13 +97,13 @@ static void showLowBatteryShutdown() {
   // ── Mensagem Inferior ──────────────────────────
   tft.setTextSize(1);
   tft.setTextColor(TFT_LIGHTGREY);
-  const char *t2 = "Conecte ao carregador";
+  const char *t2 = lang->sys_bat_conecte;
   tft.setCursor((128 - strlen(t2) * 6) / 2, 84);
   tft.print(t2);
 
   // ── Percentual ─────────────────────────────────
   char pctBuf[16];
-  snprintf(pctBuf, sizeof(pctBuf), "[ %d%% ]", batteryPercent());
+  snprintf(pctBuf, sizeof(pctBuf), lang->sys_bat_pct, batteryPercent());
   tft.setTextColor(TFT_ORANGE);
   tft.setCursor((128 - strlen(pctBuf) * 6) / 2, 102);
   tft.print(pctBuf);
@@ -111,7 +112,7 @@ static void showLowBatteryShutdown() {
   for (int i = 5; i >= 1; i--) {
     tft.fillRect(0, 130, 128, 16, TFT_BLACK);
     char cbuf[32];
-    snprintf(cbuf, sizeof(cbuf), "Desligando em %ds...", i);
+    snprintf(cbuf, sizeof(cbuf), lang->sys_bat_desligando, i);
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor((128 - strlen(cbuf) * 6) / 2, 134);
     tft.print(cbuf);
@@ -152,7 +153,7 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_RED);
     tft.setCursor(10, 70);
-    tft.println("ERRO: MUTEX");
+    tft.println(lang->sys_err_mutex);
     while (1) {
       delay(1000);
     }
@@ -184,7 +185,7 @@ void setup() {
     Serial.println("ERRO: Falha ao montar SPIFFS");
     tft.setTextColor(TFT_RED);
     tft.setCursor(20, 70);
-    tft.println("SPIFFS FAIL");
+    tft.println(lang->sys_err_spiffs);
     delay(2000);
   } else {
     Serial.println("✓ SPIFFS montado");
@@ -356,6 +357,10 @@ void loop() {
 
   case TELA_SCREENSAVER_TEST:
     handleScreensaverTest();
+    break;
+
+  case TELA_IDIOMA:
+    handleIdioma();
     break;
   }
 

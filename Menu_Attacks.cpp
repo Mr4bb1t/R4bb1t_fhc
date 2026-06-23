@@ -4,6 +4,7 @@
 #include "Captive.h"
 #include "Config.h"
 #include "Globals.h"
+#include "Language.h"
 #include "Menu_Networks.h"
 #include "Radio.h"
 #include "UI.h"
@@ -28,7 +29,7 @@ void displayMenuAtaques() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
 
-  drawHeader("WIFI ATTACKS", true);
+  drawHeader(lang->atk_hdr_wifi, true);
 
   tft.setTextColor(C_GOLD_DIM);
   String ssid = truncSSID(ssidSelecionado, 21);
@@ -36,8 +37,8 @@ void displayMenuAtaques() {
   tft.print(ssid);
   tft.drawFastHLine(0, 25, 128, C_GREY);
 
-  const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "NAV Jammer",
-                         "Beacon Spam"};
+  const char *items[] = {lang->atk_itm_back, lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_navjammer,
+                         lang->atk_itm_beaconspam};
   for (int i = 0; i < 5; i++) {
     drawMenuItem(0, 27 + i * 20, 128, 19, items[i],
                  opcaoAtaqueSelecionada == i);
@@ -52,7 +53,7 @@ void handleMenuAtaques() {
       int old = opcaoAtaqueSelecionada;
       opcaoAtaqueSelecionada = (opcaoAtaqueSelecionada > 0) ? opcaoAtaqueSelecionada - 1 : 4;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "NAV Jammer", "Beacon Spam"};
+      const char *items[] = {lang->atk_itm_back, lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_navjammer, lang->atk_itm_beaconspam};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
@@ -60,7 +61,7 @@ void handleMenuAtaques() {
       int old = opcaoAtaqueSelecionada;
       opcaoAtaqueSelecionada = (opcaoAtaqueSelecionada < 4) ? opcaoAtaqueSelecionada + 1 : 0;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Captive Portal", "Deauther", "NAV Jammer", "Beacon Spam"};
+      const char *items[] = {lang->atk_itm_back, lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_navjammer, lang->atk_itm_beaconspam};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
@@ -98,16 +99,16 @@ void handleMenuAtaques() {
 // ═══════════════════════════════════════════════
 void displayAtaqueCaptivePortal() {
   tft.fillScreen(C_BG);
-  drawHeader("CAPTIVE PORTAL", true);
+  drawHeader(lang->atk_hdr_captive, true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_RED);
   tft.setCursor(40, 20);
-  tft.print("[ ATIVO ]");
+  tft.print(lang->atk_cp_ativo);
 
   tft.setTextColor(C_GOLD);
   tft.setCursor(4, 33);
-  tft.print("Portal: 192.168.4.1");
+  tft.print(lang->atk_cp_portal);
   drawSeparator(43, C_GREY);
 
   tft.setTextColor(C_GOLD);
@@ -116,13 +117,13 @@ void displayAtaqueCaptivePortal() {
 
   tft.setTextColor(C_RED);
   tft.setCursor(4, 64);
-  tft.print("+ Deauther Ativo");
+  tft.print(lang->atk_cp_deauth);
 
   drawSeparator(78, C_GREY);
 
-  drawMenuItem(0, 80, 128, 19, "< VOLTAR", opcaoSubMenuAtaque == 0);
-  drawMenuItem(0, 100, 128, 19, "Apagar dados", opcaoSubMenuAtaque == 1);
-  drawMenuItem(0, 120, 128, 19, "Credenciais", opcaoSubMenuAtaque == 2);
+  drawMenuItem(0, 80, 128, 19, lang->atk_itm_back, opcaoSubMenuAtaque == 0);
+  drawMenuItem(0, 100, 128, 19, lang->atk_cp_apagar, opcaoSubMenuAtaque == 1);
+  drawMenuItem(0, 120, 128, 19, lang->atk_cp_credenciais, opcaoSubMenuAtaque == 2);
 
   batteryDraw();
 }
@@ -134,7 +135,7 @@ void handleAtaqueCaptivePortal() {
       int old = opcaoSubMenuAtaque;
       opcaoSubMenuAtaque = (opcaoSubMenuAtaque > 0) ? opcaoSubMenuAtaque - 1 : 2;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Apagar dados", "Credenciais"};
+      const char *items[] = {lang->atk_itm_back, lang->atk_cp_apagar, lang->atk_cp_credenciais};
       drawMenuItem(0, 80 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 80 + opcaoSubMenuAtaque * 20, 128, 19, items[opcaoSubMenuAtaque], true);
     }
@@ -142,7 +143,7 @@ void handleAtaqueCaptivePortal() {
       int old = opcaoSubMenuAtaque;
       opcaoSubMenuAtaque = (opcaoSubMenuAtaque < 2) ? opcaoSubMenuAtaque + 1 : 0;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Apagar dados", "Credenciais"};
+      const char *items[] = {lang->atk_itm_back, lang->atk_cp_apagar, lang->atk_cp_credenciais};
       drawMenuItem(0, 80 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 80 + opcaoSubMenuAtaque * 20, 128, 19, items[opcaoSubMenuAtaque], true);
     }
@@ -175,21 +176,21 @@ static int confirmaApagarSel = 0;
 
 void displayConfirmaApagar() {
   tft.fillScreen(C_BG);
-  drawHeader("APAGAR DADOS", true);
+  drawHeader(lang->atk_hdr_apagar, true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_WHITE);
   tft.setCursor(4, 30);
-  tft.print("Deseja mesmo apagar?");
+  tft.print(lang->atk_ap_msg);
 
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 45);
-  tft.print("Isso e irreversivel.");
+  tft.print(lang->atk_ap_irreversivel);
 
   drawSeparator(60, C_GREY);
 
-  drawMenuItem(0, 70, 128, 19, "< CANCELAR", confirmaApagarSel == 0);
-  drawMenuItem(0, 90, 128, 19, "[ APAGAR ]", confirmaApagarSel == 1);
+  drawMenuItem(0, 70, 128, 19, lang->atk_ap_cancelar, confirmaApagarSel == 0);
+  drawMenuItem(0, 90, 128, 19, lang->atk_ap_confirmar, confirmaApagarSel == 1);
 
   batteryDraw();
 }
@@ -202,7 +203,7 @@ void handleConfirmaApagar() {
       int old = confirmaApagarSel;
       confirmaApagarSel = (confirmaApagarSel > 0) ? confirmaApagarSel - 1 : 1;
       lastDebounceTime = millis();
-      const char *items[] = {"< CANCELAR", "[ APAGAR ]"};
+      const char *items[] = {lang->atk_ap_cancelar, lang->atk_ap_confirmar};
       drawMenuItem(0, 70 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 70 + confirmaApagarSel * 20, 128, 19, items[confirmaApagarSel], true);
     }
@@ -210,7 +211,7 @@ void handleConfirmaApagar() {
       int old = confirmaApagarSel;
       confirmaApagarSel = (confirmaApagarSel < 1) ? confirmaApagarSel + 1 : 0;
       lastDebounceTime = millis();
-      const char *items[] = {"< CANCELAR", "[ APAGAR ]"};
+      const char *items[] = {lang->atk_ap_cancelar, lang->atk_ap_confirmar};
       drawMenuItem(0, 70 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 70 + confirmaApagarSel * 20, 128, 19, items[confirmaApagarSel], true);
     }
@@ -221,10 +222,10 @@ void handleConfirmaApagar() {
       } else {
         EraseData();
         tft.fillScreen(C_BG);
-        drawHeader("APAGAR DADOS", true);
+        drawHeader(lang->atk_hdr_apagar, true);
         tft.setTextColor(C_GREEN);
         tft.setCursor(5, 80);
-        tft.print("Credenciais apagadas!");
+        tft.print(lang->atk_ap_cred_apagadas);
         delay(1500);
         confirmaApagarSel = 0;
         estadoAtual = ATAQUE_CAPTIVE_PORTAL;
@@ -270,7 +271,7 @@ static void drawDeautherPulse() {
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 104);
-  tft.print("PKT:");
+  tft.print(lang->atk_lbl_pkt);
   tft.setTextColor(C_WHITE);
   tft.fillRect(30, 104, 60, 8, C_BG);
   tft.setCursor(30, 104);
@@ -279,7 +280,7 @@ static void drawDeautherPulse() {
 
 void displayAtaqueDeauther() {
   tft.fillScreen(C_BG);
-  drawHeader("DEAUTHER", true);
+  drawHeader(lang->atk_hdr_deauther, true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD);
@@ -288,7 +289,7 @@ void displayAtaqueDeauther() {
   drawSeparator(26, C_GREY);
 
   if (!deautherAtivo) {
-    const char *ditems[] = {"< VOLTAR", "Broadcast", "Targeted"};
+    const char *ditems[] = {lang->atk_da_back, lang->atk_da_broadcast, lang->atk_da_targeted};
     for (int i = 0; i < 3; i++) {
       drawMenuItem(0, 29 + i * 20, 128, 19, ditems[i], deauthMenuSel == i);
     }
@@ -300,7 +301,7 @@ void displayAtaqueDeauther() {
       tft.drawRect(15, 119, 98, 20, C_GOLD_DIM);
       tft.setTextColor(C_GOLD);
       tft.setCursor(29, 125);
-      tft.print("[  INICIAR  ]");
+      tft.print(lang->atk_da_iniciar);
     } else {
       tft.fillRect(14, 118, 100, 22, C_BG);
     }
@@ -308,25 +309,25 @@ void displayAtaqueDeauther() {
     drawSeparator(145, C_GREY);
     tft.setTextColor(C_GREY);
     tft.setCursor(3, 150);
-    tft.print("<         o         >");
+    tft.print(lang->atk_da_hint);
 
   } else {
     tft.setTextColor(C_RED);
     tft.setCursor(41, 33);
-    tft.print("[ ATIVO ]");
+    tft.print(lang->atk_cp_ativo);
 
     drawDeautherPulse();
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(93, 104);
-    tft.print(deauthTipo == 0 ? "BCAST" : "TRGD");
+    tft.print(deauthTipo == 0 ? lang->atk_da_bcast : lang->atk_da_trgd);
 
     drawSeparator(116, C_GREY);
     tft.fillRect(14, 120, 100, 20, C_GOLD_SEL);
     tft.drawRect(14, 120, 100, 20, C_RED);
     tft.setTextColor(C_RED);
     tft.setCursor(34, 127);
-    tft.print("[  PARAR  ]");
+    tft.print(lang->atk_da_parar);
   }
 
   batteryDraw();
@@ -342,7 +343,7 @@ void handleAtaqueDeauther() {
         int old = deauthMenuSel;
         deauthMenuSel = (deauthMenuSel > 0) ? deauthMenuSel - 1 : 2;
         lastDebounceTime = millis();
-        const char *items[] = {"< VOLTAR", "Broadcast", "Targeted"};
+        const char *items[] = {lang->atk_da_back, lang->atk_da_broadcast, lang->atk_da_targeted};
         drawMenuItem(0, 29 + old * 20, 128, 19, items[old], false);
         drawMenuItem(0, 29 + deauthMenuSel * 20, 128, 19, items[deauthMenuSel], true);
         return;
@@ -351,7 +352,7 @@ void handleAtaqueDeauther() {
         int old = deauthMenuSel;
         deauthMenuSel = (deauthMenuSel < 2) ? deauthMenuSel + 1 : 0;
         lastDebounceTime = millis();
-        const char *items[] = {"< VOLTAR", "Broadcast", "Targeted"};
+        const char *items[] = {lang->atk_da_back, lang->atk_da_broadcast, lang->atk_da_targeted};
         drawMenuItem(0, 29 + old * 20, 128, 19, items[old], false);
         drawMenuItem(0, 29 + deauthMenuSel * 20, 128, 19, items[deauthMenuSel], true);
         return;
@@ -402,10 +403,10 @@ void handleAtaqueDeauther() {
           displayAtaqueDeauther();
         } else {
           tft.fillScreen(C_BG);
-          drawHeader("DEAUTHER", true);
+          drawHeader(lang->atk_hdr_deauther, true);
           tft.setTextColor(C_RED);
           tft.setCursor(20, 80);
-          tft.println("ERRO: Radio!");
+          tft.println(lang->atk_da_erro_radio);
           delay(1500);
           displayAtaqueDeauther();
         }
@@ -424,13 +425,13 @@ void handleAtaqueDeauther() {
           attackTaskHandle = NULL;
         }
         tft.fillScreen(C_BG);
-        drawHeader("DEAUTHER", true);
+        drawHeader(lang->atk_hdr_deauther, true);
         tft.setTextColor(C_GOLD);
         tft.setCursor(34, 75);
-        tft.print("ATAQUE PARADO");
+        tft.print(lang->atk_da_parado);
         tft.setTextColor(C_GOLD_DIM);
         tft.setCursor(16, 90);
-        tft.printf("Enviados: %lu", deauthCounter);
+        tft.printf(lang->atk_da_enviados, deauthCounter);
         delay(1200);
         displayAtaqueDeauther();
         lastDebounceTime = millis();
@@ -510,7 +511,7 @@ static String macShort(const uint8_t *m) {
 void displayAtaqueDeautherScan(bool init) {
   if (init) {
     tft.fillScreen(C_BG);
-    drawHeader("CLIENTES", true);
+    drawHeader(lang->atk_hdr_clientes, true);
 
     tft.setTextSize(1);
     tft.setTextColor(C_GOLD_DIM);
@@ -529,13 +530,13 @@ void displayAtaqueDeautherScan(bool init) {
     tft.drawRect(4, 29, 120, 16, C_RED);
     tft.setTextColor(scanBtnActive ? C_WHITE : C_RED);
     tft.setCursor(22, 34);
-    tft.print("[ PARAR SCAN ]");
+    tft.print(lang->atk_ds_parar_scan);
   } else {
     tft.fillRect(4, 29, 120, 16, scanBtnActive ? C_GOLD_SEL : C_BG);
     tft.drawRect(4, 29, 120, 16, C_GOLD);
     tft.setTextColor(scanBtnActive ? C_GOLD : C_GOLD_DIM);
     tft.setCursor(22, 34);
-    tft.print("[ ESCANEAR ]");
+    tft.print(lang->atk_ds_escanear);
   }
 
   // Botão 2: VOLTAR (selecionável com scanBtnSel == 1)
@@ -544,7 +545,7 @@ void displayAtaqueDeautherScan(bool init) {
   tft.drawRect(4, 47, 120, 16, C_GREY);
   tft.setTextColor(voltarBtnActive ? C_GOLD : C_GREY);
   tft.setCursor(34, 52);
-  tft.print("< VOLTAR");
+  tft.print(lang->atk_ds_voltar);
 
   drawSeparator(65, C_GREY);
 
@@ -555,15 +556,15 @@ void displayAtaqueDeautherScan(bool init) {
       int dotPos = (millis() / 400) % 4;
       tft.setTextColor(C_GREEN);
       tft.setCursor(4, 68);
-      tft.print("Scan");
+      tft.print(lang->atk_ds_scan);
       for (int i = 0; i < dotPos; i++)
         tft.print(".");
     } else {
       tft.setTextColor(C_GREY);
       tft.setCursor(16, 80);
-      tft.print("Nenhum cliente");
+      tft.print(lang->atk_ds_nenhum);
       tft.setCursor(24, 92);
-      tft.print("encontrado...");
+      tft.print(lang->atk_ds_encontrado);
     }
   } else {
     const int MAX_VIS = 4;
@@ -597,12 +598,12 @@ void displayAtaqueDeautherScan(bool init) {
   if (clientCount > 0) {
     int listSel = clientScanBtnSel - 2;
     if (listSel >= 0) {
-      tft.printf("MAC %d/%d  SEL=Atacar", listSel + 1, clientCount);
+      tft.printf(lang->atk_ds_mac_fmt, listSel + 1, clientCount);
     } else {
-      tft.printf("%d cliente(s)", clientCount);
+      tft.printf(lang->atk_ds_clientes_fmt, clientCount);
     }
   } else {
-    tft.print("<> navegar  SEL=acao");
+    tft.print(lang->atk_ds_hint);
   }
 
   batteryDraw();
@@ -709,10 +710,10 @@ void handleAtaqueDeautherScan() {
             displayAtaqueDeauther();
           } else {
             tft.fillScreen(C_BG);
-            drawHeader("DEAUTHER", true);
+            drawHeader(lang->atk_hdr_deauther, true);
             tft.setTextColor(C_RED);
             tft.setCursor(20, 80);
-            tft.println("ERRO: Radio!");
+            tft.println(lang->atk_da_erro_radio);
             delay(1500);
             displayAtaqueDeautherScan();
           }
@@ -729,7 +730,7 @@ static int ctsMenuSel = 1;
 
 void displayAtaqueCtsJammer() {
   tft.fillScreen(C_BG);
-  drawHeader("NAV JAMMER", true);
+  drawHeader(lang->atk_hdr_navjammer, true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
@@ -740,37 +741,37 @@ void displayAtaqueCtsJammer() {
   if (!ctsAtivo) {
     tft.setTextColor(C_WHITE);
     tft.setCursor(4, 35);
-    tft.print("Mantem conexao ativa");
+    tft.print(lang->atk_cts_desc1);
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
-    tft.print("Congela canal (NAV)");
+    tft.print(lang->atk_cts_desc2);
     tft.setCursor(4, 62);
-    tft.print("Mata velocidade/ping");
+    tft.print(lang->atk_cts_desc3);
     tft.setCursor(4, 74);
-    tft.print("BSSID forjado do AP");
+    tft.print(lang->atk_cts_desc4);
 
     drawSeparator(95, C_GREY);
     
-    const char *items[] = {"< VOLTAR", "Iniciar Ataque"};
+    const char *items[] = {lang->atk_da_back, lang->atk_cts_iniciar};
     for (int i = 0; i < 2; i++) {
       drawMenuItem(0, 102 + i * 20, 128, 19, items[i], ctsMenuSel == i);
     }
   } else {
     tft.setTextColor(C_RED);
     tft.setCursor(38, 40);
-    tft.print("[ ATIVO ]");
+    tft.print(lang->atk_cp_ativo);
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 60);
-    tft.print("Canal travado:");
+    tft.print(lang->atk_cts_canal);
     tft.setTextColor(C_WHITE);
     tft.setCursor(90, 60);
     tft.print(apRecordSelecionado.primary);
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 75);
-    tft.print("NAV Flood:");
+    tft.print(lang->atk_cts_navflood);
     tft.setTextColor(C_WHITE);
     tft.setCursor(68, 75);
     tft.printf("%lu", ctsCounter);
@@ -780,7 +781,7 @@ void displayAtaqueCtsJammer() {
     tft.drawRect(14, 120, 100, 20, C_RED);
     tft.setTextColor(C_RED);
     tft.setCursor(34, 127);
-    tft.print("[  PARAR  ]");
+    tft.print(lang->atk_da_parar);
   }
 
   batteryDraw();
@@ -796,7 +797,7 @@ void handleAtaqueCtsJammer() {
         int old = ctsMenuSel;
         ctsMenuSel = (ctsMenuSel > 0) ? ctsMenuSel - 1 : 1;
         lastDebounceTime = millis();
-        const char *items[] = {"< VOLTAR", "Iniciar Ataque"};
+        const char *items[] = {lang->atk_da_back, lang->atk_cts_iniciar};
         drawMenuItem(0, 102 + old * 20, 128, 19, items[old], false);
         drawMenuItem(0, 102 + ctsMenuSel * 20, 128, 19, items[ctsMenuSel], true);
         return;
@@ -805,7 +806,7 @@ void handleAtaqueCtsJammer() {
         int old = ctsMenuSel;
         ctsMenuSel = (ctsMenuSel < 1) ? ctsMenuSel + 1 : 0;
         lastDebounceTime = millis();
-        const char *items[] = {"< VOLTAR", "Iniciar Ataque"};
+        const char *items[] = {lang->atk_da_back, lang->atk_cts_iniciar};
         drawMenuItem(0, 102 + old * 20, 128, 19, items[old], false);
         drawMenuItem(0, 102 + ctsMenuSel * 20, 128, 19, items[ctsMenuSel], true);
         return;
@@ -834,10 +835,10 @@ void handleAtaqueCtsJammer() {
             displayAtaqueCtsJammer();
           } else {
             tft.fillScreen(C_BG);
-            drawHeader("CTS JAMMER", true);
+            drawHeader(lang->atk_hdr_navjammer, true);
             tft.setTextColor(C_RED);
             tft.setCursor(20, 80);
-            tft.println("ERRO: Radio!");
+            tft.println(lang->atk_da_erro_radio);
             delay(1500);
             displayAtaqueCtsJammer();
           }
@@ -859,7 +860,7 @@ void handleAtaqueCtsJammer() {
           attackTaskHandle = NULL;
         }
         tft.fillScreen(C_BG);
-        drawHeader("CTS JAMMER", true);
+        drawHeader(lang->atk_hdr_navjammer, true);
         tft.setTextColor(C_GOLD);
         tft.setCursor(28, 80);
         tft.println("ATAQUE PARADO");
@@ -890,10 +891,10 @@ static int beaconModoSel = 1;
 
 void displayAtaqueBeaconModo() {
   tft.fillScreen(C_BG);
-  drawHeader("BEACON MODO", true);
+  drawHeader(lang->atk_hdr_beaconmodo, true);
 
   tft.setTextSize(1);
-  const char *itens[] = {"< VOLTAR", "Copia", "Aleatorio", "Personalizado"};
+  const char *itens[] = {lang->atk_bm_back, lang->atk_bm_copia, lang->atk_bm_aleatorio, lang->atk_bm_personalizado};
 
   for (int i = 0; i < 4; i++) {
     drawMenuItem(0, 27 + i * 20, 128, 19, itens[i], beaconModoSel == i);
@@ -908,7 +909,7 @@ void handleAtaqueBeaconModo() {
       int old = beaconModoSel;
       beaconModoSel = (beaconModoSel > 0) ? beaconModoSel - 1 : 3;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Copia", "Aleatorio", "Personalizado"};
+      const char *items[] = {lang->atk_bm_back, lang->atk_bm_copia, lang->atk_bm_aleatorio, lang->atk_bm_personalizado};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + beaconModoSel * 20, 128, 19, items[beaconModoSel], true);
     }
@@ -916,7 +917,7 @@ void handleAtaqueBeaconModo() {
       int old = beaconModoSel;
       beaconModoSel = (beaconModoSel < 3) ? beaconModoSel + 1 : 0;
       lastDebounceTime = millis();
-      const char *items[] = {"< VOLTAR", "Copia", "Aleatorio", "Personalizado"};
+      const char *items[] = {lang->atk_bm_back, lang->atk_bm_copia, lang->atk_bm_aleatorio, lang->atk_bm_personalizado};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + beaconModoSel * 20, 128, 19, items[beaconModoSel], true);
     }
@@ -978,7 +979,7 @@ static void drawKbdKey(int index, bool selected, bool isCaps) {
         tft.setTextColor(isCaps ? C_GREEN : C_WHITE);
       }
       tft.setCursor(6, yBtn);
-      tft.print("SHIFT");
+      tft.print(lang->atk_kbd_shift);
     } else if (index == 49) {
       if (selected) {
         tft.fillRect(45, yBtn - 2, 25, 12, C_GOLD_SEL);
@@ -988,7 +989,7 @@ static void drawKbdKey(int index, bool selected, bool isCaps) {
         tft.setTextColor(C_RED);
       }
       tft.setCursor(48, yBtn);
-      tft.print("DEL");
+      tft.print(lang->atk_kbd_del);
     } else if (index == 50) {
       if (selected) {
         tft.fillRect(75, yBtn - 2, 45, 12, C_GOLD_SEL);
@@ -998,14 +999,14 @@ static void drawKbdKey(int index, bool selected, bool isCaps) {
         tft.setTextColor(C_GREEN);
       }
       tft.setCursor(82, yBtn);
-      tft.print("ENTER");
+      tft.print(lang->atk_kbd_enter);
     }
   }
 }
 
 void displayAtaqueBeaconCustom() {
   tft.fillScreen(C_BG);
-  drawHeader("NOME CUSTOM", true);
+  drawHeader(lang->atk_hdr_nomecustom, true);
 
   tft.drawRect(4, 18, 120, 18, C_GOLD);
   tft.setTextColor(C_WHITE);
@@ -1086,7 +1087,7 @@ static void updateBeaconQuantity() {
 }
 void displayAtaqueBeacon() {
   tft.fillScreen(C_BG);
-  drawHeader("BEACON SPAM", true);
+  drawHeader(lang->atk_hdr_beaconspam, true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
@@ -1095,7 +1096,7 @@ void displayAtaqueBeacon() {
   if (beaconModo == 0) {
     tft.print(truncSSID(ssidSelecionado, 21));
   } else if (beaconModo == 1) {
-    tft.print("[ Aleatorio ]");
+    tft.print(lang->atk_bs_aleatorio);
   } else {
     tft.print(truncSSID(beaconCustomSSID, 21));
   }
@@ -1105,7 +1106,7 @@ void displayAtaqueBeacon() {
   if (!beaconAtivo) {
     tft.setTextColor(C_WHITE);
     tft.setCursor(8, 34);
-    tft.print("Pool de redes:");
+    tft.print(lang->atk_bs_pool);
 
     tft.drawRect(38, 46, 52, 26, C_GOLD);
     tft.drawRect(39, 47, 50, 24, C_GOLD_SEL);
@@ -1119,26 +1120,26 @@ void displayAtaqueBeacon() {
     drawSeparator(78, C_GREY);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(8, 84);
-    tft.print("< > Tamanho pool");
+    tft.print(lang->atk_bs_hint_pool);
     tft.setCursor(8, 96);
-    tft.print("SEL = Iniciar");
+    tft.print(lang->atk_bs_hint_iniciar);
     tft.setCursor(8, 108);
-    tft.print("HOLD SEL = Voltar");
+    tft.print(lang->atk_bs_hint_voltar);
   } else {
     tft.setTextColor(C_RED);
     tft.setCursor(38, 32);
-    tft.print("[ ATIVO ]");
+    tft.print(lang->atk_cp_ativo);
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
-    tft.print("Pool:");
+    tft.print(lang->atk_bs_pool_lbl);
     tft.setTextColor(C_GOLD);
     tft.setCursor(50, 50);
     tft.print(beaconQuantidade);
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 65);
-    tft.print("Beacons:");
+    tft.print(lang->atk_bs_beacons);
     tft.setTextColor(C_WHITE);
     tft.setCursor(56, 65);
     tft.printf("%lu", beaconCounter);
@@ -1154,7 +1155,7 @@ void displayAtaqueBeacon() {
     drawSeparator(92, C_GREY);
     tft.setTextColor(C_RED);
     tft.setCursor(34, 96);
-    tft.print("SEL = PARAR");
+    tft.print(lang->atk_bs_parar);
   }
 
   batteryDraw();
@@ -1215,10 +1216,10 @@ void handleAtaqueBeacon() {
             displayAtaqueBeacon();
           } else {
             tft.fillScreen(C_BG);
-            drawHeader("BEACON SPAM", true);
+            drawHeader(lang->atk_hdr_beaconspam, true);
             tft.setTextColor(C_RED);
             tft.setCursor(20, 80);
-            tft.println("ERRO: Radio!");
+            tft.println(lang->atk_da_erro_radio);
             delay(1500);
             displayAtaqueBeacon();
           }
@@ -1237,7 +1238,7 @@ void handleAtaqueBeacon() {
           attackTaskHandle = NULL;
         }
         tft.fillScreen(C_BG);
-        drawHeader("BEACON SPAM", true);
+        drawHeader(lang->atk_hdr_beaconspam, true);
         tft.setTextColor(C_GOLD);
         tft.setCursor(28, 80);
         tft.println("ATAQUE PARADO");
@@ -1285,7 +1286,7 @@ void handleAtaqueBeacon() {
 // ═══════════════════════════════════════════════
 void displayCredenciais() {
   tft.fillScreen(C_BG);
-  drawHeader("CREDENCIAIS", true);
+  drawHeader(lang->atk_hdr_credenciais, true);
   tft.setTextSize(1);
 
   int startY = 18;
@@ -1320,7 +1321,7 @@ void displayCredenciais() {
   } else {
     tft.setTextColor(C_GREY);
     tft.setCursor(20, 70);
-    tft.println("Nenhuma credencial");
+    tft.println(lang->atk_cr_nenhuma);
   }
 
   drawSeparator(138, C_GREY);

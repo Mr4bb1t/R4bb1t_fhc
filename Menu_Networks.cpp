@@ -3,6 +3,7 @@
 #include "UI.h"
 #include "Menu_Main.h"
 #include "Menu_Attacks.h"
+#include "Language.h"
 
 static String getAuthShort(wifi_auth_mode_t auth) {
   switch (auth) {
@@ -24,7 +25,7 @@ const int MAX_VISIBLE = 7;
 
 static void drawNetworkItem(int i, bool sel) {
   if (i == 0) {
-    drawMenuItem(0, 16, 128, 18, "< VOLTAR", sel, false);
+    drawMenuItem(0, 16, 128, 18, lang->net_itm_back, sel, false);
   } else {
     int listIndex = i - 1;
     if (listIndex >= scrollOffset && listIndex < scrollOffset + MAX_VISIBLE && listIndex < numRedes) {
@@ -42,7 +43,7 @@ static void drawNetworkItem(int i, bool sel) {
 void displayNetworks() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
-  drawHeader("REDES WIFI", true);
+  drawHeader(lang->net_hdr_wifi, true);
 
   if (redeSelecionada == 0) {
     scrollOffset = 0;

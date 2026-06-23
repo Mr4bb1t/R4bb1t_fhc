@@ -9,6 +9,7 @@
 #include "Battery.h"
 #include "Config.h"
 #include "HWProbe.h"
+#include "Language.h"
 #include "UI.h"
 #include <ELECHOUSE_CC1101_SRC_DRV.h>
 #include <RCSwitch.h>
@@ -40,8 +41,20 @@ static const int RF_ITEMS = 6;
 static int rfOpcao = 0;
 
 // Cor e label de cada item
-static const char *rfLabels[] = {"< Voltar", "Capturar", "Sniffer",
+static const char *rfLabels_raw[] = {"< Voltar", "Capturar", "Sniffer",
                                  "Grafico",  "Jammer",   "Salvos"};
+
+static const char* getRFLabel(int i) {
+    switch(i) {
+        case 0: return lang->rf_itm_voltar;
+        case 1: return lang->rf_itm_capturar;
+        case 2: return lang->rf_itm_sniffer;
+        case 3: return lang->rf_itm_grafico;
+        case 4: return lang->rf_itm_jammer;
+        case 5: return lang->rf_itm_salvos;
+        default: return rfLabels_raw[i];
+    }
+}
 static const uint16_t rfColors[] = {TFT_WHITE,  TFT_GREEN, TFT_CYAN,
                                     TFT_YELLOW, TFT_RED,   TFT_MAGENTA};
 
@@ -186,13 +199,13 @@ void displayRF() {
 
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
-  drawHeader("SUB GHZ", true);
+  drawHeader(lang->rf_hdr_subghz, true);
 
   tft.drawFastHLine(0, 26, SCR_W, C_GREY);
 
   // Lista de itens com drawMenuItem
   for (int i = 0; i < RF_ITEMS; i++) {
-    drawMenuItem(0, 28 + i * 19, 128, 18, rfLabels[i], i == rfOpcao);
+    drawMenuItem(0, 28 + i * 19, 128, 18, getRFLabel(i), i == rfOpcao);
   }
 
   drawFooter();
@@ -207,8 +220,8 @@ void handleRF() {
       int old = rfOpcao;
       rfOpcao = (rfOpcao + 1) % RF_ITEMS;
       lastDebounceTime = millis();
-      drawMenuItem(0, 28 + old * 19, 128, 18, rfLabels[old], false);
-      drawMenuItem(0, 28 + rfOpcao * 19, 128, 18, rfLabels[rfOpcao], true);
+      drawMenuItem(0, 28 + old * 19, 128, 18, getRFLabel(old), false);
+      drawMenuItem(0, 28 + rfOpcao * 19, 128, 18, getRFLabel(rfOpcao), true);
     }
 
     // LEFT → item anterior (ou atalho direto para voltar ao menu principal
@@ -223,8 +236,8 @@ void handleRF() {
       } else {
         int old = rfOpcao;
         rfOpcao = (rfOpcao - 1 + RF_ITEMS) % RF_ITEMS;
-        drawMenuItem(0, 28 + old * 19, 128, 18, rfLabels[old], false);
-        drawMenuItem(0, 28 + rfOpcao * 19, 128, 18, rfLabels[rfOpcao], true);
+        drawMenuItem(0, 28 + old * 19, 128, 18, getRFLabel(old), false);
+        drawMenuItem(0, 28 + rfOpcao * 19, 128, 18, getRFLabel(rfOpcao), true);
       }
     }
 
@@ -272,7 +285,7 @@ static int replayProtocol = 0;
 static bool replayHasSig = false;
 
 void displayRF_Replay() {
-  rfHeader("REPLAY");
+  rfHeader(lang->rf_hdr_replay);
 
   // Frequência agora exibida junto com os dados capturados
 
@@ -280,16 +293,16 @@ void displayRF_Replay() {
   if (!replayHasSig) {
     tft.setTextColor(TFT_YELLOW);
     tft.setCursor(4, 32);
-    tft.print("Aguardando sinal...");
+    tft.print(lang->rf_rpl_aguardando);
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, 48);
-    tft.print("Aponte o controle e");
+    tft.print(lang->rf_rpl_hint1);
     tft.setCursor(4, 60);
-    tft.print("pressione o botao.");
+    tft.print(lang->rf_rpl_hint2);
   } else {
     tft.setTextColor(TFT_WHITE);
     tft.setCursor(4, 32);
-    tft.print("Capturado:");
+    tft.print(lang->rf_rpl_capturado);
     tft.setTextColor(TFT_GREEN);
     char buf[32];
     snprintf(buf, sizeof(buf), "Val: %lu", replayVal);
@@ -308,13 +321,13 @@ void displayRF_Replay() {
 
     tft.setTextColor(TFT_CYAN);
     tft.setCursor(4, 76);
-    tft.print("o=TX  v=Salvar  ^=Vol");
+    tft.print(lang->rf_rpl_hint_tx);
   }
 
   if (!replayHasSig) {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, SCR_H - 28);
-    tft.print("^ = Voltar");
+    tft.print(lang->rf_hint_voltar);
   }
   rfFooter();
   batteryDraw();
@@ -369,7 +382,7 @@ void handleRF_Replay() {
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(TFT_ORANGE);
       tft.setCursor(4, 92);
-      tft.print(">>> ENVIADO! <<<");
+      tft.print(lang->rf_rpl_enviado);
       delay(700);
       displayRF_Replay();
     }
@@ -383,7 +396,7 @@ void handleRF_Replay() {
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
       tft.setCursor(4, 92);
-      tft.print(ok ? "Salvo no SPIFFS!" : "Erro ao salvar!");
+      tft.print(ok ? lang->rf_rpl_salvo : lang->rf_rpl_erro_salvar);
       delay(1000);
       displayRF_Replay();
     }
@@ -404,12 +417,12 @@ void handleRF_Replay() {
 static bool rawListening = true;
 
 void displayRF_Raw() {
-  rfHeader("RAW  RX");
+  rfHeader(lang->rf_hdr_raw);
 
   tft.setTextColor(TFT_YELLOW);
   tft.setTextSize(1);
   tft.setCursor(4, 30);
-  tft.print("Escutando pulsos...");
+  tft.print(lang->rf_raw_escutando);
   tft.setTextColor(TFT_DARKGREY);
   tft.setCursor(4, SCR_H - 28);
   tft.print("^ = Voltar");
@@ -713,7 +726,7 @@ void displayRF_Analyser() {
   tft.setTextSize(1);
   tft.setTextColor(TFT_CYAN);
   tft.setCursor(2, 4);
-  tft.print("ANALISADOR");
+  tft.print(lang->rf_hdr_analyser);
 
   // Mostra frequência no header (detectada ou padrão)
   tft.setTextColor(rfDetectedMHz > 0 ? TFT_GREEN : TFT_DARKGREY);
@@ -722,7 +735,7 @@ void displayRF_Analyser() {
   if (rfDetectedMHz > 0)
     snprintf(hdrBuf, sizeof(hdrBuf), "%.2f", rfDetectedMHz);
   else
-    snprintf(hdrBuf, sizeof(hdrBuf), "scan...");
+    snprintf(hdrBuf, sizeof(hdrBuf), "%s", lang->rf_anl_scan);
   tft.print(hdrBuf);
   tft.drawFastHLine(0, 14, SCR_W, TFT_DARKGREY);
 
@@ -912,13 +925,13 @@ static unsigned long jammerPackets = 0;
 static unsigned long jammerLastDraw = 0;
 
 void displayRF_Random() {
-  rfHeader("JAMMER 433");
+  rfHeader(lang->rf_hdr_jammer);
   tft.setTextSize(1);
 
   if (!rfReady) {
     tft.setTextColor(TFT_RED);
     tft.setCursor(4, 50);
-    tft.print("CC1101 indisponivel!");
+    tft.print(lang->rf_jam_indisponivel);
     rfFooter();
     batteryDraw();
     return;
@@ -937,24 +950,24 @@ void displayRF_Random() {
 
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, 48);
-    tft.print("Inunda o canal RF com");
+    tft.print(lang->rf_jam_desc1);
     tft.setCursor(4, 60);
-    tft.print("sinais aleatorios,");
+    tft.print(lang->rf_jam_desc2);
     tft.setCursor(4, 72);
-    tft.print("bloqueando recepcao.");
+    tft.print(lang->rf_jam_desc3);
 
     tft.setTextColor(TFT_RED);
     tft.setCursor(4, 96);
-    tft.print("o = INICIAR JAMMER");
+    tft.print(lang->rf_jam_hint_start);
 
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, SCR_H - 28);
-    tft.print("^ = Voltar");
+    tft.print(lang->rf_hint_voltar);
   } else {
     // Status ATIVO
     tft.setTextColor(TFT_RED);
     tft.setCursor(4, 30);
-    tft.print("\xB7\xB7 JAMMER ATIVO \xB7\xB7");
+    tft.print(lang->rf_jam_ativo);
 
     tft.setTextColor(TFT_YELLOW);
     tft.setCursor(4, 48);
@@ -973,7 +986,7 @@ void displayRF_Random() {
 
     tft.setTextColor(TFT_RED);
     tft.setCursor(4, 96);
-    tft.print("o = PARAR");
+    tft.print(lang->rf_jam_hint_stop);
   }
 
   rfFooter();
@@ -1080,7 +1093,7 @@ static void drawSavedItem(int idx, bool sel) {
 
   if (idx == 0) {
     // Virtual item for "Voltar" no topo usando o padrão do sistema
-    drawMenuItem(0, y, SCR_W, h, "< VOLTAR", sel, false);
+    drawMenuItem(0, y, SCR_W, h, lang->rf_svd_back, sel, false);
   } else {
     tft.fillRect(0, y, SCR_W, h, TFT_BLACK);
     tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
@@ -1115,11 +1128,11 @@ static void drawSavedList() {
   if (savedCount == 0) {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(8, 50);
-    tft.print("Nenhum sinal salvo.");
+    tft.print(lang->rf_svd_nenhum);
     tft.setCursor(8, 66);
-    tft.print("Capture em Replay");
+    tft.print(lang->rf_svd_hint1);
     tft.setCursor(8, 78);
-    tft.print("e pressione v");
+    tft.print(lang->rf_svd_hint2);
     return;
   }
 
@@ -1135,7 +1148,7 @@ static void drawSavedList() {
 }
 
 void displayRF_Saved() {
-  rfHeader("SAVED RF");
+  rfHeader(lang->rf_hdr_saved);
 
   savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
   savedIndex = 0;
@@ -1164,9 +1177,9 @@ static void openSavedActionMenu(int signalIdx) {
   tft.setTextSize(1);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor(px + 4, py + 6);
-  tft.print("Acoes:");
+  tft.print(lang->rf_svd_acoes);
 
-  const char *opts[] = {"Transmitir", "Excluir", "Voltar"};
+  const char *opts[] = {lang->rf_svd_transmitir, lang->rf_svd_excluir, lang->rf_svd_voltar};
   int numOpts = 3;
   int selOpt = 0;
 
@@ -1219,7 +1232,7 @@ static void openSavedActionMenu(int signalIdx) {
           tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
           tft.setTextColor(TFT_ORANGE);
           tft.setCursor(px + 4, py + ph + 2);
-          tft.print(">> ENVIADO!");
+          tft.print(lang->rf_svd_enviado);
           delay(600);
           break;                  // sai do modal
         } else if (selOpt == 1) { // Excluir
@@ -1228,7 +1241,7 @@ static void openSavedActionMenu(int signalIdx) {
           tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
           tft.setTextColor(TFT_RED);
           tft.setCursor(px + 4, py + ph + 2);
-          tft.print("Sinal Deletado");
+          tft.print(lang->rf_svd_deletado);
           delay(600);
           // Recarrega
           savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);

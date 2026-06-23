@@ -45,7 +45,8 @@ enum EstadoTela {
   MENU_NRF24,
   TELA_NRF_ATTACK,
   TELA_DESLIGAR,
-  TELA_SCREENSAVER_TEST
+  TELA_SCREENSAVER_TEST,
+  TELA_IDIOMA
 };
 
 // Task handles e mutex

@@ -10,6 +10,7 @@
 #include "Splash.h"
 #include "UI.h"
 #include "Battery.h"
+#include "Language.h"
 
 // ──────────────────────────────────────────────
 // Layout constants  (display 128 × 160)
@@ -41,7 +42,17 @@ static const int labelY[4] = {
   cells[2].y + 46, cells[3].y + 46,
 };
 
-static const char *labels[4] = {"WiFi", "2.4GHz", "Sub GHz", "Config"};
+static const char *labels_raw[4] = {"WiFi", "2.4GHz", "Sub GHz", "Config"};
+
+static const char* getMainMenuLabel(int i) {
+    switch(i) {
+        case 0: return lang->main_lbl_wifi;
+        case 1: return lang->main_lbl_24ghz;
+        case 2: return lang->main_lbl_subghz;
+        case 3: return lang->main_lbl_config;
+        default: return labels_raw[i];
+    }
+}
 
 // ── Timer de inatividade (screensaver) ─────────
 #define IDLE_TIMEOUT_MS 30000UL
@@ -70,7 +81,7 @@ static void drawMenuInicialItem(int i, bool sel) {
     else             drawSettingsIconSmall(4, y, iconColor, sel ? C_GOLD_SEL : C_BG);
 
     tft.setCursor(34, y + (h - 8) / 2 + 1);
-    tft.print(labels[i]);
+    tft.print(getMainMenuLabel(i));
 
     tft.setTextColor(sel ? C_GOLD : C_GREY);
     tft.setCursor(128 - 9, y + (h - 8) / 2 + 1);
@@ -96,11 +107,11 @@ static void drawMenuInicialItem(int i, bool sel) {
     else if (i == 2) drawRFIcon(iconX[i], iconY[i], iconColor);
     else drawSettingsIcon(iconX[i], iconY[i], iconColor, C_BG);
 
-    int lx = c.x + (c.w - (int)strlen(labels[i]) * 6) / 2;
+    int lx = c.x + (c.w - (int)strlen(getMainMenuLabel(i)) * 6) / 2;
     tft.setTextSize(1);
     tft.setTextColor(textColor);
     tft.setCursor(lx, labelY[i]);
-    tft.print(labels[i]);
+    tft.print(getMainMenuLabel(i));
   }
 }
 
@@ -115,7 +126,7 @@ void displayMenuInicial() {
   tft.fillScreen(C_BG);
 
   // ── Header ─────────────────────────────────
-  drawHeader("R4BB1T FHC");
+  drawHeader(lang->main_hdr_home);
 
   updateMenuInicialItems();
 
@@ -157,11 +168,11 @@ void handleMenuInicial() {
 
       if (opcaoMenuInicial == 0) {
         tft.fillScreen(C_BG);
-        drawHeader("WIFI", true);
+        drawHeader(lang->main_hdr_wifi, true);
         tft.setTextSize(1);
         tft.setTextColor(C_GOLD);
         tft.setCursor(30, 80);
-        tft.println("Escaneando...");
+        tft.println(lang->main_scanning);
         estadoAtual = SELECAO_REDES;
         scanNetworks();
         displayNetworks();

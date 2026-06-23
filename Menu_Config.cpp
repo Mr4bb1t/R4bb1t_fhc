@@ -7,6 +7,7 @@
 #include "Menu_NRF24.h"
 #include "Menu_RF.h"
 #include "UI.h"
+#include "Language.h"
 
 #include <SPI.h>
 #include <SPIFFS.h>
@@ -19,10 +20,25 @@
 #define SCR_W 128
 #define SCR_H 160
 
-static const char *configItems[] = {"Voltar",      "Sobre",     "Mudar MAC",
+static const char *configItems_raw[] = {"Voltar",      "Sobre",     "Mudar MAC",
                                     "Brilho",      "Modo Menu", "Armazenamento",
-                                    "Descanso Tela", "Desligar"};
-static const int NUM_CONFIG_ITEMS = 8;
+                                    "Descanso Tela", "Idioma", "Desligar"};
+
+static const char* getConfigItem(int i) {
+    switch(i) {
+        case 0: return lang->cfg_itm_voltar;
+        case 1: return lang->cfg_itm_sobre;
+        case 2: return lang->cfg_itm_mac;
+        case 3: return lang->cfg_itm_brilho;
+        case 4: return lang->cfg_itm_modomenu;
+        case 5: return lang->cfg_itm_storage;
+        case 6: return lang->cfg_itm_saver;
+        case 7: return lang->cfg_itm_idioma;
+        case 8: return lang->cfg_itm_desligar;
+        default: return configItems_raw[i];
+    }
+}
+static const int NUM_CONFIG_ITEMS = 9;
 static int opcaoConfig = 0;
 
 static void initScreensaverMenu();
@@ -35,7 +51,7 @@ static int configScroll = 0;
 
 void displayConfiguracoes() {
   tft.fillScreen(C_BG);
-  drawHeader("SETTINGS", true);
+  drawHeader(lang->cfg_hdr_settings, true);
 
   if (opcaoConfig < configScroll)
     configScroll = opcaoConfig;
@@ -46,7 +62,7 @@ void displayConfiguracoes() {
     int idx = configScroll + i;
     if (idx >= NUM_CONFIG_ITEMS)
       break;
-    drawMenuItem(0, 16 + i * 20, 128, 19, configItems[idx], idx == opcaoConfig);
+    drawMenuItem(0, 16 + i * 20, 128, 19, getConfigItem(idx), idx == opcaoConfig);
   }
 
   if (configScroll > 0) {
@@ -76,9 +92,9 @@ void handleConfiguracoes() {
         displayConfiguracoes();
       } else {
         drawMenuItem(0, 16 + (old - configScroll) * 20, 128, 19,
-                     configItems[old], false);
+                     getConfigItem(old), false);
         drawMenuItem(0, 16 + (opcaoConfig - configScroll) * 20, 128, 19,
-                     configItems[opcaoConfig], true);
+                     getConfigItem(opcaoConfig), true);
       }
     }
     if (digitalRead(BUTTON_RIGHT) == LOW) {
@@ -91,9 +107,9 @@ void handleConfiguracoes() {
         displayConfiguracoes();
       } else {
         drawMenuItem(0, 16 + (old - configScroll) * 20, 128, 19,
-                     configItems[old], false);
+                     getConfigItem(old), false);
         drawMenuItem(0, 16 + (opcaoConfig - configScroll) * 20, 128, 19,
-                     configItems[opcaoConfig], true);
+                     getConfigItem(opcaoConfig), true);
       }
     }
     if (digitalRead(BUTTON_SELECT) == LOW) {
@@ -122,6 +138,9 @@ void handleConfiguracoes() {
         initScreensaverMenu();
         displayScreensaverTest();
       } else if (opcaoConfig == 7) {
+        estadoAtual = TELA_IDIOMA;
+        displayIdioma();
+      } else if (opcaoConfig == 8) {
         estadoAtual = TELA_DESLIGAR;
         displayDesligar();
       }
@@ -160,7 +179,7 @@ static void drawModoMenuBlock(int i, bool hover, bool active) {
   tft.setTextSize(1);
   tft.setTextColor(hover ? C_GOLD : C_WHITE);
   tft.setCursor(bx + 46, y + 20);
-  tft.print(i == 0 ? "BLOCO" : "LISTA");
+  tft.print(i == 0 ? lang->cfg_mm_bloco : lang->cfg_mm_lista);
 
   int rx = bx + bw - 16;
   int ry = y + bh / 2;
@@ -174,7 +193,7 @@ static void drawModoMenuBlock(int i, bool hover, bool active) {
 
 void displayModoMenu() {
   tft.fillScreen(C_BG);
-  drawHeader("MODO MENU", true);
+  drawHeader(lang->cfg_hdr_modomenu, true);
 
   for (int i = 0; i < 2; i++) {
     drawModoMenuBlock(i, modoMenuTemp == i, menuStyle == i);
@@ -226,8 +245,63 @@ void initConfig() {
   }
   // (se não houver, macBuf fica {0} e o MAC nativo do chip é usado)
 
+  // Carrega Idioma
+  int langId = prefs.getInt("idioma", 0);
+  setLanguage(langId);
+
   // Aplica o brilho salvo
   blInit();
+}
+
+// ═══════════════════════════════════════════════
+//  IDIOMA
+// ═══════════════════════════════════════════════
+static int idiomaTemp = 0; // 0 = PT, 1 = EN
+
+void displayIdioma() {
+  tft.fillScreen(C_BG);
+  drawHeader(lang->cfg_hdr_idioma, true);
+
+  // Inicializa o cursor temporário com o valor atual salvo na EEPROM
+  idiomaTemp = prefs.getInt("idioma", 0);
+
+  drawMenuItem(0, 40, SCR_W, 19, lang->cfg_lang_pt, idiomaTemp == 0);
+  drawMenuItem(0, 60, SCR_W, 19, lang->cfg_lang_en, idiomaTemp == 1);
+
+  drawSeparator(SCR_H - 24, C_GREY);
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, SCR_H - 18);
+  tft.print(lang->cfg_lang_hint);
+
+  batteryDraw();
+}
+
+void handleIdioma() {
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
+      lastDebounceTime = millis();
+      idiomaTemp = (idiomaTemp == 0) ? 1 : 0;
+      drawMenuItem(0, 40, SCR_W, 19, lang->cfg_lang_pt, idiomaTemp == 0);
+      drawMenuItem(0, 60, SCR_W, 19, lang->cfg_lang_en, idiomaTemp == 1);
+    }
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      // Salva e aplica a alteração
+      setLanguage(idiomaTemp);
+      prefs.putInt("idioma", idiomaTemp);
+      
+      // Feedback rápido
+      tft.fillRect(0, 85, SCR_W, 12, C_BG);
+      tft.setTextColor(C_GREEN);
+      tft.setCursor(30, 85);
+      tft.print(lang->cfg_lang_salvo);
+      delay(600);
+
+      estadoAtual = MENU_CONFIGURACOES;
+      displayConfiguracoes();
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -236,12 +310,12 @@ void initConfig() {
 
 void displayMudarMAC() {
   tft.fillScreen(C_BG);
-  drawHeader("MAC CHANGER", true);
+  drawHeader(lang->cfg_hdr_mac, true);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 18);
-  tft.print("MAC atual:");
+  tft.print(lang->cfg_mac_atual);
   tft.setTextColor(C_WHITE);
   tft.setCursor(4, 28);
   tft.print(WiFi.macAddress());
@@ -250,38 +324,38 @@ void displayMudarMAC() {
   if (macState == 0) {
     tft.setTextColor(C_GOLD);
     tft.setCursor(8, 60);
-    tft.print("Gerar MAC aleatorio");
+    tft.print(lang->cfg_mac_gerar);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(32, 76);
-    tft.print("SEL = Gerar");
+    tft.print(lang->cfg_mac_sel_gerar);
   } else if (macState == 1) {
     char buf[18];
     snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0],
              macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 48);
-    tft.print("Novo MAC:");
+    tft.print(lang->cfg_mac_novo);
     tft.setTextColor(C_GOLD);
     tft.setCursor(4, 60);
     tft.print(buf);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(28, 80);
-    tft.print("SEL = Aplicar");
+    tft.print(lang->cfg_mac_sel_aplicar);
   } else if (macState == 2) {
     char buf[18];
     snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0],
              macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 48);
-    tft.print("Novo MAC:");
+    tft.print(lang->cfg_mac_novo);
     tft.setTextColor(C_GREEN);
     tft.setCursor(4, 60);
     tft.print(buf);
     tft.setCursor(20, 76);
-    tft.print(">>> Aplicado! <<<");
+    tft.print(lang->cfg_mac_aplicado);
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(32, 96);
-    tft.print("SEL = Voltar");
+    tft.print(lang->cfg_mac_sel_voltar);
   }
 
   batteryDraw();
@@ -381,17 +455,17 @@ static void displaySobre_p0() {
     y += LH;
   };
 
-  row("Chip:", model);
-  row("Cores:", String(chip.cores));
-  row("Rev:", String(chip.revision));
-  row("Flash:", String(ESP.getFlashChipSize() / (1024 * 1024)) + " MB");
-  row("Heap:", String(ESP.getFreeHeap() / 1024) + " KB", C_GREEN);
-  row("SDK:", String(ESP.getSdkVersion()).substring(0, 10));
-  row("FW:", "v1.0.0", C_GOLD);
+  row(lang->cfg_lbl_chip, model);
+  row(lang->cfg_lbl_cores, String(chip.cores));
+  row(lang->cfg_lbl_rev, String(chip.revision));
+  row(lang->cfg_lbl_flash, String(ESP.getFlashChipSize() / (1024 * 1024)) + " MB");
+  row(lang->cfg_lbl_heap, String(ESP.getFreeHeap() / 1024) + " KB", C_GREEN);
+  row(lang->cfg_lbl_sdk, String(ESP.getSdkVersion()).substring(0, 10));
+  row(lang->cfg_lbl_fw, "v1.0.0", C_GOLD);
 
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, y);
-  tft.print("MAC:");
+  tft.print(lang->cfg_lbl_mac);
   tft.setTextColor(C_WHITE);
   tft.setCursor(4, y + 10);
   tft.print(WiFi.macAddress());
@@ -417,14 +491,14 @@ static void displaySobre_p1() {
     y += LH;
   };
 
-  row("Status:", hwNRF24_ok ? "Conectado" : "Nao detectado",
+  row("Status:", hwNRF24_ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect,
       hwNRF24_ok ? C_GREEN : C_RED);
-  row("Bus:", "HSPI", C_GOLD_DIM);
-  row("CE:", "GPIO 22");
-  row("CSN:", "GPIO 4");
-  row("SCK:", "GPIO 33");
-  row("MISO:", "GPIO 19");
-  row("MOSI:", "GPIO 13");
+  row(lang->cfg_lbl_bus, lang->cfg_val_hspi, C_GOLD_DIM);
+  row(lang->cfg_lbl_ce, "GPIO 22");
+  row(lang->cfg_lbl_csn, "GPIO 4");
+  row(lang->cfg_lbl_sck, "GPIO 33");
+  row(lang->cfg_lbl_miso, "GPIO 19");
+  row(lang->cfg_lbl_mosi, "GPIO 13");
 
   sobreFooter(1);
 }
@@ -447,14 +521,14 @@ static void displaySobre_p2() {
     y += LH;
   };
 
-  row("Status:", hwNRF24_2_ok ? "Conectado" : "Nao detectado",
+  row("Status:", hwNRF24_2_ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect,
       hwNRF24_2_ok ? C_GREEN : C_RED);
-  row("Bus:", "HSPI", C_GOLD_DIM);
-  row("CE:", "GPIO 12");
-  row("CSN:", "GPIO 15");
-  row("SCK:", "GPIO 33");
-  row("MISO:", "GPIO 19");
-  row("MOSI:", "GPIO 13");
+  row(lang->cfg_lbl_bus, lang->cfg_val_hspi, C_GOLD_DIM);
+  row(lang->cfg_lbl_ce, "GPIO 12");
+  row(lang->cfg_lbl_csn, "GPIO 15");
+  row(lang->cfg_lbl_sck, "GPIO 33");
+  row(lang->cfg_lbl_miso, "GPIO 19");
+  row(lang->cfg_lbl_mosi, "GPIO 13");
 
   sobreFooter(2);
 }
@@ -477,12 +551,12 @@ static void displaySobre_p3() {
     y += LH;
   };
 
-  row("Status:", ok ? "Conectado" : "Nao detectado", ok ? C_GREEN : C_RED);
-  row("Freq:", "433.92 MHz", C_GOLD);
-  row("CS:", "GPIO 25");
-  row("GDO0:", "GPIO 2");
-  row("GDO2:", "GPIO 32");
-  row("Bus:", "HSPI", C_GOLD_DIM);
+  row("Status:", ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect, ok ? C_GREEN : C_RED);
+  row(lang->cfg_lbl_freq, "433.92 MHz", C_GOLD);
+  row(lang->cfg_lbl_cs, "GPIO 25");
+  row(lang->cfg_lbl_gdo0, "GPIO 2");
+  row(lang->cfg_lbl_gdo2, "GPIO 32");
+  row(lang->cfg_lbl_bus, lang->cfg_val_hspi, C_GOLD_DIM);
 
   sobreFooter(3);
 }
@@ -520,11 +594,18 @@ static void displaySobre_p4() {
   tft.setTextSize(1);
   tft.setTextColor(TFT_BLACK);
   if (fill > 20) {
-    static const char *lvl[] = {"CRITICO", "BAIXO", "MEDIO", "BOM", "CHEIO"};
     int li = pct < 10 ? 0 : pct < 25 ? 1 : pct < 50 ? 2 : pct < 80 ? 3 : 4;
-    int lw = (int)strlen(lvl[li]) * 6;
+    const char* lvlStr;
+    switch(li) {
+      case 0: lvlStr = lang->cfg_bat_critico; break;
+      case 1: lvlStr = lang->cfg_bat_baixo; break;
+      case 2: lvlStr = lang->cfg_bat_medio; break;
+      case 3: lvlStr = lang->cfg_bat_bom; break;
+      default: lvlStr = lang->cfg_bat_cheio; break;
+    }
+    int lw = (int)strlen(lvlStr) * 6;
     tft.setCursor(BX + (fill - lw) / 2, BY + 7);
-    tft.print(lvl[li]);
+    tft.print(lvlStr);
   }
 
   // Detalhes
@@ -532,7 +613,7 @@ static void displaySobre_p4() {
   const int LH = 13;
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, y);
-  tft.print("Tensao:");
+  tft.print(lang->cfg_lbl_tensao);
   char vbuf[12];
   dtostrf(vbat, 4, 2, vbuf);
   tft.setTextColor(col);
@@ -542,7 +623,7 @@ static void displaySobre_p4() {
   y += LH;
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, y);
-  tft.print("ADC PIN:");
+  tft.print(lang->cfg_lbl_adcpin);
   tft.setTextColor(C_WHITE);
   tft.setCursor(54, y);
   tft.print("GPIO 36");
@@ -690,7 +771,7 @@ static void drawBrilhoSlider() {
 
 void displayBrilho() {
   tft.fillScreen(C_BG);
-  drawHeader("BRILHO", true);
+  drawHeader(lang->cfg_hdr_brilho, true);
 
   drawBrilhoSlider();
 
@@ -700,16 +781,16 @@ void displayBrilho() {
   tft.setTextSize(1);
   tft.setTextColor(C_GREY);
   tft.setCursor(slX0, slY + 10);
-  tft.print("min");
+  tft.print(lang->cfg_bl_min);
   tft.setCursor(slX1 - 12, slY + 10);
-  tft.print("max");
+  tft.print(lang->cfg_bl_max);
 
   drawSeparator(110, C_GREY);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(10, 116);
-  tft.print("< / >  ajusta brilho");
+  tft.print(lang->cfg_bl_hint1);
   tft.setCursor(10, 128);
-  tft.print("  o    salva e volta");
+  tft.print(lang->cfg_bl_hint2);
 
   drawFooter();
   batteryDraw();
@@ -815,7 +896,7 @@ static void drawDonutCenter(int cx, int cy, int pct) {
   tft.setTextColor(C_GOLD_DIM);
   int ux = cx - 9;
   tft.setCursor(ux, cy + 5);
-  tft.print("used");
+  tft.print(lang->cfg_st_used);
 }
 
 // ── Item de legenda: quadrado colorido + nome + valor ──
@@ -844,7 +925,7 @@ static void updateArmazenamentoBotoes() {
   tft.setTextSize(1);
   tft.setTextColor(selV ? C_GOLD : C_WHITE);
   tft.setCursor(15, BTN_Y + 5);
-  tft.print("VOLTAR");
+  tft.print(lang->cfg_st_voltar);
 
   // [ARQUIVOS]
   bool selA = (storageOpcao == 1);
@@ -852,13 +933,13 @@ static void updateArmazenamentoBotoes() {
   tft.drawRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD : C_GREY);
   tft.setTextColor(selA ? C_GOLD : C_WHITE);
   tft.setCursor(76, BTN_Y + 5);
-  tft.print("ARQUIVOS");
+  tft.print(lang->cfg_st_arquivos);
 }
 
 // ── Tela principal: donut + legenda + botões ──
 void displayArmazenamento() {
   tft.fillScreen(C_BG);
-  drawHeader("STORAGE", true);
+  drawHeader(lang->cfg_hdr_storage, true);
 
   // Coleta dados SPIFFS
   size_t sp_total = SPIFFS.totalBytes();
@@ -927,7 +1008,7 @@ void displayArmazenamento() {
   // Dica de controles
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(14, 140);
-  tft.print("< >  sel    o  ok");
+  tft.print(lang->cfg_st_hint);
 
   batteryDraw();
 }
@@ -969,7 +1050,7 @@ static void drawArquivosRow(int i, bool sel) {
     tft.setTextSize(1);
     tft.setTextColor(sel ? C_GOLD : C_GREY);
     tft.setCursor(4, y + 3);
-    tft.print("< VOLTAR");
+    tft.print(lang->cfg_st_back);
   } else {
     int fi = i - 1;
     char sname[17];
@@ -1022,7 +1103,7 @@ static void displayArquivosSPIFFS() {
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, SCR_H - 10);
-  tft.print("< > navegar   o abrir");
+  tft.print(lang->cfg_st_hint2);
   batteryDraw();
 }
 
@@ -1123,9 +1204,9 @@ static void displayFileViewerBMP() {
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, SCR_H - 10);
-  tft.print("< > galeria");
+  tft.print(lang->cfg_st_galeria);
   tft.setCursor(80, SCR_H - 10);
-  tft.print("o sair");
+  tft.print(lang->cfg_st_sair);
   batteryDraw();
 }
 
@@ -1205,7 +1286,7 @@ static void displayFileViewerText() {
   tft.setCursor(4, SCR_H - 10);
   tft.print(pg);
   tft.setCursor(55, SCR_H - 10);
-  tft.print("hold<> = arq");
+  tft.print(lang->cfg_st_hint3);
   batteryDraw();
 }
 
@@ -1367,7 +1448,7 @@ void handleArmazenamento() {
 
 void displayDesligar() {
   tft.fillScreen(C_BG);
-  drawHeader("DESLIGAR", true);
+  drawHeader(lang->cfg_hdr_desligar, true);
 
   // ── Símbolo Power (Círculo aberto com traço) ──
   int px = 64;
@@ -1387,17 +1468,17 @@ void displayDesligar() {
 
   tft.setTextSize(1);
   tft.setTextColor(C_WHITE);
-  const char* t = "Deseja desligar?";
+  const char* t = lang->cfg_dl_msg;
   tft.setCursor((128 - strlen(t) * 6) / 2, 82);
   tft.print(t);
 
   drawSeparator(95, C_GREY);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(14, 106);
-  tft.print("<  CANCELAR");
+  tft.print(lang->cfg_dl_cancelar);
   tft.setTextColor(C_GOLD);
   tft.setCursor(14, 120);
-  tft.print("o  CONFIRMAR");
+  tft.print(lang->cfg_dl_confirmar);
 
   drawFooter();
   batteryDraw();
@@ -1433,14 +1514,14 @@ void handleDesligar() {
 
       tft.setTextSize(1);
       tft.setTextColor(TFT_RED);
-      const char* tMsg = "DESLIGANDO SISTEMA";
+      const char* tMsg = lang->cfg_dl_sistema;
       tft.setCursor((128 - strlen(tMsg) * 6) / 2, 95);
       tft.print(tMsg);
 
       for (int i = 3; i >= 1; i--) {
         tft.fillRect(0, 110, 128, 16, TFT_BLACK);
         char cbuf[16];
-        snprintf(cbuf, sizeof(cbuf), "Aguarde %d...", i);
+        snprintf(cbuf, sizeof(cbuf), lang->cfg_dl_aguarde, i);
         tft.setTextColor(TFT_DARKGREY);
         tft.setCursor((128 - strlen(cbuf) * 6) / 2, 114);
         tft.print(cbuf);
@@ -1497,6 +1578,23 @@ static const char *animNames[] = {
     "<- VOLTAR", "Logo R4BB1T", "Matrix Rain", "Cubo 3D", "Plasma", "Tesseract 4D", "Corredor",
     "Onda Grade",  "Aneis",   "Quadrados", "Olho Magenta"};
 
+static const char* getAnimName(int i) {
+    switch(i) {
+        case 0: return lang->cfg_sv_voltar;
+        case 1: return lang->sv_name_logo;
+        case 2: return lang->sv_name_matrix;
+        case 3: return lang->sv_name_cubo;
+        case 4: return lang->sv_name_plasma;
+        case 5: return lang->sv_name_tesseract;
+        case 6: return lang->sv_name_corredor;
+        case 7: return lang->sv_name_ondagrade;
+        case 8: return lang->sv_name_aneis;
+        case 9: return lang->sv_name_quadrados;
+        case 10: return lang->sv_name_olho;
+        default: return "";
+    }
+}
+
 static TFT_eSprite *animSpr = nullptr;
 
 static void initScreensaverMenu() {
@@ -1508,7 +1606,7 @@ static int scrScroll = 0;
 
 void displayScreensaverTest() {
   tft.fillScreen(C_BG);
-  drawHeader("DESCANSO TELA", true);
+  drawHeader(lang->cfg_hdr_saver, true);
 
   if (animIndex < scrScroll)
     scrScroll = animIndex;
@@ -1521,8 +1619,8 @@ void displayScreensaverTest() {
     int idx = scrScroll + i;
     if (idx >= ANIM_COUNT) break;
 
-    String label = String(animNames[idx]);
-    if (idx == savedIdx && idx != 0) label += " [ATIVO]";
+    String label = String(getAnimName(idx));
+    if (idx == savedIdx && idx != 0) label += lang->cfg_sv_ativo;
 
     drawMenuItem(0, 16 + i * 19, 125, 19, label.c_str(), idx == animIndex);
   }
@@ -1541,9 +1639,9 @@ void displayScreensaverTest() {
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 136);
-  tft.print("< > mover");
+  tft.print(lang->cfg_sv_hint1);
   tft.setCursor(70, 136);
-  tft.print("o aplicar");
+  tft.print(lang->cfg_sv_hint2);
   
   batteryDraw();
 }
@@ -1891,12 +1989,12 @@ void handleScreensaverTest() {
         lastDebounceTime = millis();
         if (animIndex >= scrScroll && animIndex < scrScroll + 6 && old >= scrScroll && old < scrScroll + 6) {
           int savedIdx = prefs.getInt("screensaver", 1);
-          String labelOld = String(animNames[old]);
-          if (old == savedIdx && old != 0) labelOld += " [ATIVO]";
+          String labelOld = String(getAnimName(old));
+          if (old == savedIdx && old != 0) labelOld += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19, labelOld.c_str(), false);
           
-          String labelNew = String(animNames[animIndex]);
-          if (animIndex == savedIdx && animIndex != 0) labelNew += " [ATIVO]";
+          String labelNew = String(getAnimName(animIndex));
+          if (animIndex == savedIdx && animIndex != 0) labelNew += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19, labelNew.c_str(), true);
         } else {
           displayScreensaverTest();
@@ -1908,12 +2006,12 @@ void handleScreensaverTest() {
         lastDebounceTime = millis();
         if (animIndex >= scrScroll && animIndex < scrScroll + 6 && old >= scrScroll && old < scrScroll + 6) {
           int savedIdx = prefs.getInt("screensaver", 1);
-          String labelOld = String(animNames[old]);
-          if (old == savedIdx && old != 0) labelOld += " [ATIVO]";
+          String labelOld = String(getAnimName(old));
+          if (old == savedIdx && old != 0) labelOld += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19, labelOld.c_str(), false);
           
-          String labelNew = String(animNames[animIndex]);
-          if (animIndex == savedIdx && animIndex != 0) labelNew += " [ATIVO]";
+          String labelNew = String(getAnimName(animIndex));
+          if (animIndex == savedIdx && animIndex != 0) labelNew += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19, labelNew.c_str(), true);
         } else {
           displayScreensaverTest();

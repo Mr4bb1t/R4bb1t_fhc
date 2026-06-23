@@ -19,6 +19,9 @@ void blOff(); // apaga o backlight (LEDC → duty 0)
 void displayArmazenamento();
 void handleArmazenamento();
 
+void displayIdioma();
+void handleIdioma();
+
 void displayDesligar();
 void handleDesligar();
 

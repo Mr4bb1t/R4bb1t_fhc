@@ -1,0 +1,631 @@
+#include "Language.h"
+
+const LangPack langPT PROGMEM = {
+    // ── Menu Principal ──
+    "WiFi",
+    "2.4GHz",
+    "Sub GHz",
+    "AJUSTES",
+    "R4BB1T FHC",
+    "WIFI",
+    "Escaneando...",
+
+    // ── Menu Config ──
+    "Voltar",
+    "Sobre",
+    "Mudar MAC",
+    "Brilho",
+    "Modo Menu",
+    "Armazenamento",
+    "Descanso Tela",
+    "Idioma",
+    "Desligar",
+    "SETTINGS",
+    "MODO MENU",
+    "BLOCO",
+    "LISTA",
+    "IDIOMA / LANG",
+    "Portugues (PT-BR)",
+    "English (EN)",
+    "v/^=Nav  [O]=Salvar",
+    "Idioma salvo!",
+    "MAC CHANGER",
+    "MAC atual:",
+    "Gerar MAC aleatorio",
+    "SEL = Gerar",
+    "Novo MAC:",
+    "SEL = Aplicar",
+    ">>> Aplicado! <<<",
+    "SEL = Voltar",
+
+    // ── Sobre ──
+    "Chip:",
+    "Cores:",
+    "Rev:",
+    "Flash:",
+    "Heap:",
+    "SDK:",
+    "FW:",
+    "MAC:",
+    "Conectado",
+    "Nao detectado",
+    "NRF24L01",
+    "Bus:",
+    "CE:",
+    "CSN:",
+    "SCK:",
+    "MISO:",
+    "MOSI:",
+    "HSPI",
+    "NRF24L01 #2",
+    "CC1101",
+    "Freq:",
+    "CS:",
+    "GDO0:",
+    "GDO2:",
+    "BATERIA",
+    "Tensao:",
+    "ADC PIN:",
+    "%",
+
+    // ── Brilho ──
+    "BRILHO",
+    "min",
+    "max",
+    "< / >  ajusta brilho",
+    "  o    salva e volta",
+
+    // ── Armazenamento ──
+    "STORAGE",
+    "used",
+    "VOLTAR",
+    "ARQUIVOS",
+    "< >  sel    o  ok",
+    "< VOLTAR",
+    "< > navegar   o abrir",
+    "< > galeria",
+    "o sair",
+    "hold<> = arq",
+
+    // ── Desligar ──
+    "DESLIGAR",
+    "Deseja desligar?",
+    "<  CANCELAR",
+    "o  CONFIRMAR",
+    "DESLIGANDO SISTEMA",
+    "Aguarde %d...",
+
+    // ── Descanso Tela ──
+    "DESCANSO TELA",
+    "<- VOLTAR",
+    " [ATIVO]",
+    "< > mover",
+    "o aplicar",
+
+    // ── Bateria Niveis ──
+    "CRITICO",
+    "BAIXO",
+    "MEDIO",
+    "BOM",
+    "CHEIO",
+
+    // ── Menu RF ──
+    "< Voltar",
+    "Capturar",
+    "Sniffer",
+    "Grafico",
+    "Jammer",
+    "Salvos",
+    "SUB GHZ",
+
+    // ── RF Replay ──
+    "REPLAY",
+    "Aguardando sinal...",
+    "Aponte o controle e",
+    "pressione o botao.",
+    "Capturado:",
+    "o=TX  v=Salvar  ^=Vol",
+    "^ = Voltar",
+    ">>> ENVIADO! <<<",
+    "Salvo no SPIFFS!",
+    "Erro ao salvar!",
+
+    // ── RF Raw ──
+    "RAW  RX",
+    "Escutando pulsos...",
+
+    // ── RF Analyser ──
+    "ANALISADOR",
+    "scan...",
+
+    // ── RF Jammer ──
+    "JAMMER 433",
+    "CC1101 indisponivel!",
+    "Inunda o canal RF com",
+    "sinais aleatorios,",
+    "bloqueando recepcao.",
+    "o = INICIAR JAMMER",
+    "\xB7\xB7 JAMMER ATIVO \xB7\xB7",
+    "o = PARAR",
+
+    // ── RF Saved ──
+    "SAVED RF",
+    "Nenhum sinal salvo.",
+    "Capture em Replay",
+    "e pressione v",
+    "< VOLTAR",
+    "Acoes:",
+    "Transmitir",
+    "Excluir",
+    "Voltar",
+    ">> ENVIADO!",
+    "Sinal Deletado",
+
+    // ── Menu Ataques ──
+    "WIFI ATTACKS",
+    "< VOLTAR",
+    "Captive Portal",
+    "Deauther",
+    "NAV Jammer",
+    "Beacon Spam",
+
+    // ── Captive Portal ──
+    "CAPTIVE PORTAL",
+    "[ ATIVO ]",
+    "Portal: 192.168.4.1",
+    "+ Deauther Ativo",
+    "Apagar dados",
+    "Credenciais",
+
+    // ── Apagar Dados ──
+    "APAGAR DADOS",
+    "Deseja mesmo apagar?",
+    "Isso e irreversivel.",
+    "< CANCELAR",
+    "[ APAGAR ]",
+    "Credenciais apagadas!",
+
+    // ── Deauther ──
+    "DEAUTHER",
+    "< VOLTAR",
+    "Broadcast",
+    "Targeted",
+    "[  INICIAR  ]",
+    "<         o         >",
+    "BCAST",
+    "TRGD",
+    "[  PARAR  ]",
+    "ATAQUE PARADO",
+    "Enviados: %lu",
+    "ERRO: Radio!",
+
+    // ── Deauther Scan ──
+    "CLIENTES",
+    "[ PARAR SCAN ]",
+    "[ ESCANEAR ]",
+    "< VOLTAR",
+    "Scan",
+    "Nenhum cliente",
+    "encontrado...",
+    "MAC %d/%d  SEL=Atacar",
+    "%d cliente(s)",
+    "<> navegar  SEL=acao",
+
+    // ── CTS Jammer ──
+    "NAV JAMMER",
+    "Mantem conexao ativa",
+    "Congela canal (NAV)",
+    "Mata velocidade/ping",
+    "BSSID forjado do AP",
+    "Iniciar Ataque",
+    "Canal travado:",
+    "NAV Flood:",
+    "[  PARAR  ]",
+
+    // ── Beacon Modo ──
+    "BEACON MODO",
+    "< VOLTAR",
+    "Copia",
+    "Aleatorio",
+    "Personalizado",
+
+    // ── Beacon Custom ──
+    "NOME CUSTOM",
+
+    // ── Beacon Spam ──
+    "BEACON SPAM",
+    "[ Aleatorio ]",
+    "Pool de redes:",
+    "< > Tamanho pool",
+    "SEL = Iniciar",
+    "HOLD SEL = Voltar",
+    "[ ATIVO ]",
+    "Beacons:",
+    "SEL = PARAR",
+
+    // ── Credenciais ──
+    "CREDENCIAIS",
+    "Nenhuma credencial",
+
+    // ── Menu NRF24 ──
+    "< Voltar",
+    "BT Jammer",
+    "Bluetooth Classic",
+    "Drone Jammer",
+    "Drones 2.4GHz",
+    "BLE Adv Jammer",
+    "BLE Adv Channels",
+    "BLE Data Jammer",
+    "BLE Data Channels",
+    "Zigbee Jammer",
+    "IEEE 802.15.4",
+    "Misc Jammer",
+    "Canal livre 0-124",
+    "2.4GHz JAMMER",
+    "2.4GHz ATTACK",
+    "Modulos:",
+    "init...",
+    "  [ ATIVO ]  ",
+    "  [INATIVO]  ",
+    "Canal:",
+    "Pacotes:",
+    "o = Iniciar/Parar",
+    "< = Voltar",
+
+    // ── Menu Networks ──
+    "REDES WIFI",
+    "< VOLTAR",
+
+    // ── Main (low battery / errors) ──
+    "BATERIA CRITICA",
+    "Conecte ao carregador",
+    "[ %d%% ]",
+    "Desligando em %ds...",
+    "ERRO: MUTEX",
+    "SPIFFS FAIL",
+
+    // ── Splash ──
+    "nao encontrado",
+    "BMP: must be 24-bit",
+    "uncompressed",
+    "Splash: sem memoria",
+
+    // ── Misc ──
+    "PKT:",
+    "SHIFT",
+    "DEL",
+    "ENTER",
+    "Pool:",
+
+    // ── Screensaver anim names ──
+    "Logo R4BB1T",
+    "Matrix Rain",
+    "Cubo 3D",
+    "Plasma",
+    "Tesseract 4D",
+    "Corredor",
+    "Onda Grade",
+    "Aneis",
+    "Quadrados",
+    "Olho Magenta",
+};
+
+const LangPack langEN PROGMEM = {
+    // ── Menu Principal ──
+    "WiFi",
+    "2.4GHz",
+    "Sub GHz",
+    "SETTINGS",
+    "R4BB1T FHC",
+    "WIFI",
+    "Scanning...",
+
+    // ── Menu Config ──
+    "Back",
+    "About",
+    "Change MAC",
+    "Brightness",
+    "Menu Style",
+    "Storage",
+    "Screensaver",
+    "Language",
+    "Power Off",
+    "SETTINGS",
+    "MENU STYLE",
+    "GRID",
+    "LIST",
+    "LANGUAGE / LANG",
+    "Portugues (PT-BR)",
+    "English (EN)",
+    "v/^=Nav  [O]=Save",
+    "Language saved!",
+    "MAC CHANGER",
+    "Current MAC:",
+    "Generate random MAC",
+    "SEL = Generate",
+    "New MAC:",
+    "SEL = Apply",
+    ">>> Applied! <<<",
+    "SEL = Back",
+
+    // ── Sobre ──
+    "Chip:",
+    "Cores:",
+    "Rev:",
+    "Flash:",
+    "Heap:",
+    "SDK:",
+    "FW:",
+    "MAC:",
+    "Connected",
+    "Not detected",
+    "NRF24L01",
+    "Bus:",
+    "CE:",
+    "CSN:",
+    "SCK:",
+    "MISO:",
+    "MOSI:",
+    "HSPI",
+    "NRF24L01 #2",
+    "CC1101",
+    "Freq:",
+    "CS:",
+    "GDO0:",
+    "GDO2:",
+    "BATTERY",
+    "Voltage:",
+    "ADC PIN:",
+    "%",
+
+    // ── Brilho ──
+    "BRIGHTNESS",
+    "min",
+    "max",
+    "< / >  adjust",
+    "  o    save & back",
+
+    // ── Armazenamento ──
+    "STORAGE",
+    "used",
+    "BACK",
+    "FILES",
+    "< >  sel    o  ok",
+    "< BACK",
+    "< > navigate  o open",
+    "< > gallery",
+    "o exit",
+    "hold<> = file",
+
+    // ── Desligar ──
+    "POWER OFF",
+    "Turn off device?",
+    "<  CANCEL",
+    "o  CONFIRM",
+    "SHUTTING DOWN",
+    "Wait %d...",
+
+    // ── Descanso Tela ──
+    "SCREENSAVER",
+    "<- BACK",
+    " [ACTIVE]",
+    "< > move",
+    "o apply",
+
+    // ── Bateria Niveis ──
+    "CRITICAL",
+    "LOW",
+    "MED",
+    "GOOD",
+    "FULL",
+
+    // ── Menu RF ──
+    "< Back",
+    "Capture",
+    "Sniffer",
+    "Graph",
+    "Jammer",
+    "Saved",
+    "SUB GHZ",
+
+    // ── RF Replay ──
+    "REPLAY",
+    "Waiting for signal...",
+    "Point remote and",
+    "press button.",
+    "Captured:",
+    "o=TX  v=Save  ^=Back",
+    "^ = Back",
+    ">>> SENT! <<<",
+    "Saved to SPIFFS!",
+    "Error saving!",
+
+    // ── RF Raw ──
+    "RAW  RX",
+    "Listening pulses...",
+
+    // ── RF Analyser ──
+    "ANALYZER",
+    "scan...",
+
+    // ── RF Jammer ──
+    "JAMMER 433",
+    "CC1101 unavailable!",
+    "Floods RF channel with",
+    "random signals,",
+    "blocking reception.",
+    "o = START JAMMER",
+    "JAMMER ACTIVE",
+    "o = STOP",
+
+    // ── RF Saved ──
+    "SAVED RF",
+    "No saved signals.",
+    "Capture in Replay",
+    "and press v",
+    "< BACK",
+    "Actions:",
+    "Transmit",
+    "Delete",
+    "Back",
+    ">> SENT!",
+    "Signal Deleted",
+
+    // ── Menu Ataques ──
+    "WIFI ATTACKS",
+    "< BACK",
+    "Captive Portal",
+    "Deauther",
+    "NAV Jammer",
+    "Beacon Spam",
+
+    // ── Captive Portal ──
+    "CAPTIVE PORTAL",
+    "[ ACTIVE ]",
+    "Portal: 192.168.4.1",
+    "+ Deauther Active",
+    "Clear data",
+    "Credentials",
+
+    // ── Apagar Dados ──
+    "CLEAR DATA",
+    "Delete all data?",
+    "This is irreversible.",
+    "< CANCEL",
+    "[ DELETE ]",
+    "Data cleared!",
+
+    // ── Deauther ──
+    "DEAUTHER",
+    "< BACK",
+    "Broadcast",
+    "Targeted",
+    "[  START  ]",
+    "<         o         >",
+    "BCAST",
+    "TARG",
+    "[  STOP  ]",
+    "ATTACK STOPPED",
+    "Sent: %lu",
+    "ERROR: Radio!",
+
+    // ── Deauther Scan ──
+    "CLIENTS",
+    "[ STOP SCAN ]",
+    "[ SCAN ]",
+    "< BACK",
+    "Scan",
+    "No clients",
+    "found...",
+    "MAC %d/%d  SEL=Attack",
+    "%d client(s)",
+    "<> nav  SEL=action",
+
+    // ── CTS Jammer ──
+    "NAV JAMMER",
+    "Maintains active conn",
+    "Freezes channel (NAV)",
+    "Kills speed/ping",
+    "Forged AP BSSID",
+    "Start Attack",
+    "Locked channel:",
+    "NAV Flood:",
+    "[  STOP  ]",
+
+    // ── Beacon Modo ──
+    "BEACON MODE",
+    "< BACK",
+    "Clone",
+    "Random",
+    "Custom",
+
+    // ── Beacon Custom ──
+    "CUSTOM NAME",
+
+    // ── Beacon Spam ──
+    "BEACON SPAM",
+    "[ Random ]",
+    "Network pool:",
+    "< > Pool size",
+    "SEL = Start",
+    "HOLD SEL = Back",
+    "[ ACTIVE ]",
+    "Beacons:",
+    "SEL = STOP",
+
+    // ── Credenciais ──
+    "CREDENTIALS",
+    "No credentials",
+
+    // ── Menu NRF24 ──
+    "< Back",
+    "BT Jammer",
+    "Bluetooth Classic",
+    "Drone Jammer",
+    "Drones 2.4GHz",
+    "BLE Adv Jammer",
+    "BLE Adv Channels",
+    "BLE Data Jammer",
+    "BLE Data Channels",
+    "Zigbee Jammer",
+    "IEEE 802.15.4",
+    "Misc Jammer",
+    "Free ch 0-124",
+    "2.4GHz JAMMER",
+    "2.4GHz ATTACK",
+    "Modules:",
+    "init...",
+    "  [ ACTIVE ]  ",
+    "  [INACTIVE]  ",
+    "Channel:",
+    "Packets:",
+    "o = Start/Stop",
+    "< = Back",
+
+    // ── Menu Networks ──
+    "WIFI NETWORKS",
+    "< BACK",
+
+    // ── Main (low battery / errors) ──
+    "LOW BATTERY",
+    "Connect charger",
+    "[ %d%% ]",
+    "Shutting down in %ds...",
+    "ERROR: MUTEX",
+    "SPIFFS FAIL",
+
+    // ── Splash ──
+    "not found",
+    "BMP: must be 24-bit",
+    "uncompressed",
+    "Splash: out of memory",
+
+    // ── Misc ──
+    "PKT:",
+    "SHIFT",
+    "DEL",
+    "ENTER",
+    "Pool:",
+
+    // ── Screensaver anim names ──
+    "Logo R4BB1T",
+    "Matrix Rain",
+    "3D Cube",
+    "Plasma",
+    "Tesseract 4D",
+    "Corridor",
+    "Wave Grid",
+    "Rings",
+    "Squares",
+    "Magenta Eye",
+};
+
+const LangPack* lang = &langPT;
+
+void setLanguage(int langId) {
+    if (langId == 1) {
+        lang = &langEN;
+    } else {
+        lang = &langPT;
+    }
+}

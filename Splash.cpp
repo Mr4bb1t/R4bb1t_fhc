@@ -7,6 +7,7 @@
 #include "Splash.h"
 #include "Globals.h"
 #include "Config.h"
+#include "Language.h"
 #include <SPIFFS.h>
 
 // ── Helpers para ler little-endian do SPIFFS ──────
@@ -148,7 +149,7 @@ void displaySplash(unsigned long delayMs) {
     tft.setCursor(4, 72);
     tft.print("SPIFFS: r4bb1t.bmp");
     tft.setCursor(4, 84);
-    tft.print("nao encontrado");
+    tft.print(lang->spl_bmp_nao);
     delay(delayMs);
     return;
   }
@@ -173,9 +174,9 @@ void displaySplash(unsigned long delayMs) {
     tft.setTextColor(C_GOLD);
     tft.setTextSize(1);
     tft.setCursor(4, 72);
-    tft.print("BMP: must be 24-bit");
+    tft.print(lang->spl_bmp_formato);
     tft.setCursor(4, 84);
-    tft.print("uncompressed");
+    tft.print(lang->spl_bmp_uncompressed);
     f.close();
     delay(delayMs);
     return;
@@ -215,7 +216,7 @@ void displaySplash(unsigned long delayMs) {
     tft.setTextColor(C_RED);
     tft.setTextSize(1);
     tft.setCursor(4, 72);
-    tft.print("Splash: sem memoria");
+    tft.print(lang->spl_memoria);
     delay(delayMs);
     return;
   }

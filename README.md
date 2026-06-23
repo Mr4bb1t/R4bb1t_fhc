@@ -36,6 +36,7 @@
 | **Raw Capture** | Captura de sinal bruto (sintoniza na freq detectada) |
 | **RF Analyser** | Análise em tempo real do espectro com **Detecção Automática de Frequência** (varre o espectro CC1101 para achar o alvo) |
 | **Random Transmit** | Jammer com transmissão de dados aleatórios no canal detectado |
+| **Saved Signals** | UI avançada com visualização Decimal/Hexadecimal, navegação rápida, menu modal interativo (DOM-like) para deletar e re-transmitir |
 
 ### 2.4 GHz — NRF24L01
 | Ferramenta | Descrição |
@@ -48,6 +49,7 @@
 | **Misc Jammer** | Portadora varrendo 0-124 sequencialmente |
 
 ### Sistema
+- **Internacionalização (i18n):** Suporte nativo e otimizado (PROGMEM) a Português (PT-BR) e Inglês (EN) com troca em tempo real.
 - Monitoramento de bateria com desligamento automático ≤5%
 - Persistência de configurações via NVRAM
 - Storage UI com visualizador de arquivos (.txt, .csv, .bmp)

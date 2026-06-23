@@ -7,6 +7,7 @@
 #include "Battery.h"
 #include "Globals.h"
 #include "HWProbe.h"
+#include "Language.h"
 #include "Menu_Main.h"
 #include "Menu_RF.h" // Necessário para controlar RF_CS
 #include "UI.h"
@@ -79,6 +80,31 @@ static const NrfAttack ATTACKS[] = {
     {"Misc Jammer", "Canal livre 0-124", 0x967F},
 };
 static const int ATK_COUNT = (int)(sizeof(ATTACKS) / sizeof(ATTACKS[0]));
+
+static const char* nrfGetLabel(int idx) {
+    switch(idx) {
+        case 0: return lang->nrf_itm_back;
+        case 1: return lang->nrf_itm_btjammer;
+        case 2: return lang->nrf_itm_dronejammer;
+        case 3: return lang->nrf_itm_bleadvjammer;
+        case 4: return lang->nrf_itm_bledatajammer;
+        case 5: return lang->nrf_itm_zigbeejammer;
+        case 6: return lang->nrf_itm_miscjammer;
+        default: return ATTACKS[idx].label;
+    }
+}
+
+static const char* nrfGetDesc(int idx) {
+    switch(idx) {
+        case 1: return lang->nrf_desc_bt;
+        case 2: return lang->nrf_desc_drone;
+        case 3: return lang->nrf_desc_bleadv;
+        case 4: return lang->nrf_desc_bledata;
+        case 5: return lang->nrf_desc_zigbee;
+        case 6: return lang->nrf_desc_misc;
+        default: return ATTACKS[idx].desc;
+    }
+}
 
 // ── Cursor / scroll do menu ───────────────────────────
 static int nrfCursor = 0;
@@ -599,7 +625,7 @@ static void nrfDrawItem(int idx, bool sel) {
   int slot = idx - nrfScroll;
   if (slot < 0 || slot >= MAX_VIS)
     return;
-  drawMenuItem(0, ITEM_Y0 + slot * ITEM_H, SCR_W, ITEM_H, ATTACKS[idx].label,
+  drawMenuItem(0, ITEM_Y0 + slot * ITEM_H, SCR_W, ITEM_H, nrfGetLabel(idx),
                sel, idx > 0);
 }
 
@@ -639,7 +665,7 @@ static void nrfUpdateItems(int oldC, int newC) {
 void displayModoNRF24() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
-  drawHeader("2.4GHz JAMMER", false);
+  drawHeader(lang->nrf_hdr_jammer, false);
   drawProhibitedRFIcon(64, 27, 9, C_RED);
   tft.drawFastHLine(0, 37, SCR_W, C_GREY);
 
@@ -674,46 +700,48 @@ void displayModoNRF24() {
 // ─────────────────────────────────────────────────────
 static void nrfDrawAttackFull() {
   tft.fillScreen(C_BG);
-  drawHeader("2.4GHz ATTACK", true);
+  drawHeader(lang->nrf_hdr_attack, true);
   tft.setTextSize(1);
 
-  const NrfAttack &atk = ATTACKS[nrfActiveAtk];
+  const char* atkLabel = nrfGetLabel(nrfActiveAtk);
+  const char* atkDesc = nrfGetDesc(nrfActiveAtk);
+  uint16_t atkColor = ATTACKS[nrfActiveAtk].color;
 
   // Nome
-  tft.setTextColor(atk.color);
-  int tx = (SCR_W - (int)strlen(atk.label) * 6) / 2;
+  tft.setTextColor(atkColor);
+  int tx = (SCR_W - (int)strlen(atkLabel) * 6) / 2;
   tft.setCursor(tx < 0 ? 0 : tx, 17);
-  tft.print(atk.label);
+  tft.print(atkLabel);
 
   // Desc
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(2, 27);
-  tft.print(atk.desc);
+  tft.print(atkDesc);
 
   tft.drawFastHLine(0, 37, SCR_W, C_GREY);
 
   // Módulos
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(2, 40);
-  tft.print("Modulos:");
+  tft.print(lang->nrf_lbl_modulos);
   tft.setTextColor(nrfReady ? C_GREEN : C_RED);
   char mbuf[12];
   snprintf(mbuf, sizeof(mbuf), "%d detect.", radioCount);
   tft.setCursor(56, 40);
-  tft.print(nrfReady ? mbuf : "init...");
+  tft.print(nrfReady ? mbuf : lang->nrf_st_init);
 
   // Banner status (y=52..64)
   tft.fillRect(0, 52, SCR_W, 14, jamRunning ? C_RED : 0x18C3);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor((SCR_W - 78) / 2, 55);
-  tft.print(jamRunning ? "  [ ATIVO ]  " : "  [INATIVO]  ");
+  tft.print(jamRunning ? lang->nrf_st_ativo : lang->nrf_st_inativo);
 
   // Etiquetas fixas
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(2, 72);
-  tft.print("Canal:");
+  tft.print(lang->nrf_lbl_canal);
   tft.setCursor(2, 86);
-  tft.print("Pacotes:");
+  tft.print(lang->nrf_lbl_pacotes);
 
   // Valores dinâmicos
   tft.fillRect(50, 70, 78, 10, C_BG);
@@ -731,9 +759,9 @@ static void nrfDrawAttackFull() {
   // Instruções
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(2, 108);
-  tft.print("o = Iniciar/Parar");
+  tft.print(lang->nrf_hint_startstop);
   tft.setCursor(2, 120);
-  tft.print("< = Voltar");
+  tft.print(lang->nrf_hint_back);
 
   drawFooter();
   batteryDraw();
@@ -745,7 +773,7 @@ static void nrfUpdateAttackDyn() {
   tft.fillRect(0, 52, SCR_W, 14, jamRunning ? C_RED : 0x18C3);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor((SCR_W - 78) / 2, 55);
-  tft.print(jamRunning ? "  [ ATIVO ]  " : "  [INATIVO]  ");
+  tft.print(jamRunning ? lang->nrf_st_ativo : lang->nrf_st_inativo);
 
   // Canal
   tft.fillRect(50, 70, 78, 10, C_BG);
