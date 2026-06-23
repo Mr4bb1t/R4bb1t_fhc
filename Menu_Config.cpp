@@ -22,7 +22,7 @@
 
 static const char *configItems_raw[] = {"Voltar",      "Sobre",     "Mudar MAC",
                                     "Brilho",      "Modo Menu", "Armazenamento",
-                                    "Descanso Tela", "Idioma", "Desligar"};
+                                    "Descanso Tela", "Idioma", "Hard Reset", "Desligar"};
 
 static const char* getConfigItem(int i) {
     switch(i) {
@@ -34,11 +34,12 @@ static const char* getConfigItem(int i) {
         case 5: return lang->cfg_itm_storage;
         case 6: return lang->cfg_itm_saver;
         case 7: return lang->cfg_itm_idioma;
-        case 8: return lang->cfg_itm_desligar;
+        case 8: return lang->cfg_itm_hardreset;
+        case 9: return lang->cfg_itm_desligar;
         default: return configItems_raw[i];
     }
 }
-static const int NUM_CONFIG_ITEMS = 9;
+static const int NUM_CONFIG_ITEMS = 10;
 static int opcaoConfig = 0;
 
 static void initScreensaverMenu();
@@ -141,6 +142,9 @@ void handleConfiguracoes() {
         estadoAtual = TELA_IDIOMA;
         displayIdioma();
       } else if (opcaoConfig == 8) {
+        estadoAtual = TELA_HARDRESET;
+        displayHardReset();
+      } else if (opcaoConfig == 9) {
         estadoAtual = TELA_DESLIGAR;
         displayDesligar();
       }
@@ -2082,5 +2086,148 @@ void handleScreensaverTest() {
         }
       }
     }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  HARD RESET
+// ═══════════════════════════════════════════════
+static int hrStep = 0;
+
+void displayHardReset() {
+  tft.fillScreen(C_BG);
+  drawHeader(lang->hr_hdr_reset, false);
+  tft.setTextSize(1);
+  
+  if (hrStep == 0) {
+    tft.setTextColor(C_RED);
+    tft.setCursor(5, 30); tft.print(lang->hr_conf1_msg1);
+    tft.setTextColor(TFT_WHITE);
+    tft.setCursor(5, 45); tft.print(lang->hr_conf1_msg2);
+    tft.setCursor(5, 60); tft.print(lang->hr_conf1_msg3);
+    
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(5, 120); tft.print(lang->hr_btn_cancelar);
+    tft.setCursor(75, 120); tft.print(lang->hr_btn_proximo);
+  } else if (hrStep == 1) {
+    tft.setTextColor(C_RED);
+    tft.setCursor(5, 40); tft.print(lang->hr_conf2_msg1);
+    tft.setCursor(5, 55); tft.print(lang->hr_conf2_msg2);
+    
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(5, 120); tft.print(lang->hr_btn_cancelar);
+    
+    tft.setTextColor(C_RED);
+    tft.setCursor(10, 140); tft.print(lang->hr_btn_confirmar);
+  } else if (hrStep == 2) {
+    tft.setTextColor(C_RED);
+    tft.setCursor(10, 70); tft.print(lang->hr_msg_apagando);
+  }
+}
+
+void handleHardReset() {
+  if (hrStep == 2) return;
+  
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (hrStep == 0) {
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        lastDebounceTime = millis();
+        estadoAtual = MENU_CONFIGURACOES;
+        displayConfiguracoes();
+      } else if (digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
+        lastDebounceTime = millis();
+        hrStep = 1;
+        displayHardReset();
+      }
+    } else if (hrStep == 1) {
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        lastDebounceTime = millis();
+        hrStep = 0;
+        displayHardReset();
+      } else if (digitalRead(BUTTON_SELECT) == LOW) {
+        lastDebounceTime = millis();
+        hrStep = 2;
+        displayHardReset();
+        
+        // Limpa arquivos
+        File f = SPIFFS.open("/rf_signals.txt", FILE_WRITE);
+        if(f) f.close();
+        f = SPIFFS.open("/credenciais.txt", FILE_WRITE);
+        if(f) f.close();
+        
+        // Limpa EEPROM/NVRAM
+        prefs.clear();
+        
+        delay(1000);
+        ESP.restart();
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  PRIMEIRO BOOT (SELEÇÃO DE IDIOMA)
+// ═══════════════════════════════════════════════
+static int fbLangId = 0;
+
+void displayPrimeiroBoot() {
+  tft.fillScreen(C_BG);
+  drawHeader("R4BB1T FHC", false);
+
+  setLanguage(fbLangId);
+  
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(5, 25);
+  tft.print(lang->fb_sel_idioma);
+
+  drawMenuItem(0, 50, SCR_W, 20, "Portugues (PT-BR)", fbLangId == 0);
+  drawMenuItem(0, 75, SCR_W, 20, "English (EN)", fbLangId == 1);
+
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, SCR_H - 18);
+  tft.print("v/^=Nav  [O]=Sel");
+}
+
+void handlePrimeiroBoot() {
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
+      lastDebounceTime = millis();
+      fbLangId = !fbLangId;
+      displayPrimeiroBoot();
+    }
+    if (digitalRead(BUTTON_SELECT) == LOW) {
+      lastDebounceTime = millis();
+      setLanguage(fbLangId);
+      prefs.putInt("idioma", fbLangId);
+      
+      estadoAtual = TELA_BEM_VINDO;
+      displayBemVindo();
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  TELA BEM VINDO
+// ═══════════════════════════════════════════════
+static uint32_t startWelcome = 0;
+
+void displayBemVindo() {
+  tft.fillScreen(C_BG);
+  tft.setTextColor(C_GREEN);
+  tft.setTextSize(1);
+  
+  int16_t w = tft.textWidth(lang->fb_bemvindo);
+  tft.setCursor((SCR_W - w) / 2, SCR_H / 2 - 10);
+  tft.print(lang->fb_bemvindo);
+  
+  startWelcome = millis();
+}
+
+void handleBemVindo() {
+  if (millis() - startWelcome > 2000) {
+    extern void displayMenuInicial();
+    estadoAtual = MENU_INICIAL;
+    displayMenuInicial();
   }
 }

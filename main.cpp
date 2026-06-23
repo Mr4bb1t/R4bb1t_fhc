@@ -233,7 +233,15 @@ void setup() {
   // Exibe splash screen com a imagem do SPIFFS
   displaySplash(2500); // 2,5 segundos
 
-  displayMenuInicial();
+  // Verifica se é o primeiro boot (nenhum idioma salvo na NVRAM)
+  if (!prefs.isKey("idioma")) {
+    estadoAtual = TELA_PRIMEIRO_BOOT;
+    displayPrimeiroBoot();
+  } else {
+    estadoAtual = MENU_INICIAL;
+    displayMenuInicial();
+  }
+  
   Serial.println("=== SISTEMA PRONTO ===\n");
 }
 
@@ -361,6 +369,18 @@ void loop() {
 
   case TELA_IDIOMA:
     handleIdioma();
+    break;
+
+  case TELA_HARDRESET:
+    handleHardReset();
+    break;
+
+  case TELA_PRIMEIRO_BOOT:
+    handlePrimeiroBoot();
+    break;
+
+  case TELA_BEM_VINDO:
+    handleBemVindo();
     break;
   }
 

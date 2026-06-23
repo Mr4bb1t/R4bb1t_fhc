@@ -297,6 +297,21 @@ const LangPack langPT PROGMEM = {
     "ENTER",
     "Pool:",
 
+    // ── Hard Reset & First Boot ──
+    "Hard Reset",
+    "HARD RESET",
+    "ATENCAO! Isso ira",
+    "apagar TODOS os",
+    "sinais e configuracoes.",
+    "Tem certeza absoluta?",
+    "Acao IRREVERSIVEL.",
+    "< CANCELAR",
+    "PROXIMO >",
+    "[ CONFIRMAR RESET ]",
+    "Apagando sistema...",
+    "Selecione o Idioma:",
+    "BEM-VINDO AO R4BB1T",
+
     // ── Screensaver anim names ──
     "Logo R4BB1T",
     "Matrix Rain",
@@ -606,6 +621,21 @@ const LangPack langEN PROGMEM = {
     "DEL",
     "ENTER",
     "Pool:",
+
+    // ── Hard Reset & First Boot ──
+    "Factory Reset",
+    "HARD RESET",
+    "WARNING! This will",
+    "erase ALL signals,",
+    "creds and settings.",
+    "Are you absolutely sure?",
+    "NO going back.",
+    "< CANCEL",
+    "NEXT >",
+    "[ CONFIRM RESET ]",
+    "Wiping system...",
+    "Select Language:",
+    "WELCOME TO R4BB1T",
 
     // ── Screensaver anim names ──
     "Logo R4BB1T",

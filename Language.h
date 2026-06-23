@@ -298,6 +298,21 @@ struct LangPack {
     const char* atk_kbd_enter;
     const char* atk_bs_pool_lbl;
 
+    // ── Hard Reset & First Boot ──
+    const char* cfg_itm_hardreset;
+    const char* hr_hdr_reset;
+    const char* hr_conf1_msg1;
+    const char* hr_conf1_msg2;
+    const char* hr_conf1_msg3;
+    const char* hr_conf2_msg1;
+    const char* hr_conf2_msg2;
+    const char* hr_btn_cancelar;
+    const char* hr_btn_proximo;
+    const char* hr_btn_confirmar;
+    const char* hr_msg_apagando;
+    const char* fb_sel_idioma;
+    const char* fb_bemvindo;
+
     // ── Screensaver anim names ──
     const char* sv_name_logo;
     const char* sv_name_matrix;

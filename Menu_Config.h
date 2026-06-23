@@ -22,6 +22,15 @@ void handleArmazenamento();
 void displayIdioma();
 void handleIdioma();
 
+void displayHardReset();
+void handleHardReset();
+
+void displayPrimeiroBoot();
+void handlePrimeiroBoot();
+
+void displayBemVindo();
+void handleBemVindo();
+
 void displayDesligar();
 void handleDesligar();
 
