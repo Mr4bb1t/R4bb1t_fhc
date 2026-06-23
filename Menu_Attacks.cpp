@@ -740,15 +740,15 @@ void displayAtaqueCtsJammer() {
   if (!ctsAtivo) {
     tft.setTextColor(C_WHITE);
     tft.setCursor(4, 35);
-    tft.print("Eficaz contra WPA3");
+    tft.print("Mantem conexao ativa");
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 50);
-    tft.print("Envia QoS Null Data");
+    tft.print("Congela canal (NAV)");
     tft.setCursor(4, 62);
-    tft.print("Congela o canal (NAV)");
+    tft.print("Mata velocidade/ping");
     tft.setCursor(4, 74);
-    tft.print("Ignora 802.11w / WPA3");
+    tft.print("BSSID forjado do AP");
 
     drawSeparator(95, C_GREY);
     
@@ -770,9 +770,9 @@ void displayAtaqueCtsJammer() {
 
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor(4, 75);
-    tft.print("Frames QoS:");
+    tft.print("NAV Flood:");
     tft.setTextColor(C_WHITE);
-    tft.setCursor(76, 75);
+    tft.setCursor(68, 75);
     tft.printf("%lu", ctsCounter);
 
     drawSeparator(116, C_GREY);
@@ -874,9 +874,9 @@ void handleAtaqueCtsJammer() {
     if (millis() - lastUpdate > 200) {
       lastUpdate = millis();
       tft.setTextSize(1);
-      tft.fillRect(76, 75, 50, 8, C_BG);
+      tft.fillRect(68, 75, 58, 8, C_BG);
       tft.setTextColor(C_WHITE);
-      tft.setCursor(76, 75);
+      tft.setCursor(68, 75);
       tft.printf("%lu", ctsCounter);
       batteryDraw();
     }

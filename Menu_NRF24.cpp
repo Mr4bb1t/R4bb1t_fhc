@@ -639,7 +639,7 @@ static void nrfUpdateItems(int oldC, int newC) {
 void displayModoNRF24() {
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
-  drawHeader("NRF24 JAMMER", false);
+  drawHeader("2.4GHz JAMMER", false);
   drawProhibitedRFIcon(64, 27, 9, C_RED);
   tft.drawFastHLine(0, 37, SCR_W, C_GREY);
 
@@ -674,7 +674,7 @@ void displayModoNRF24() {
 // ─────────────────────────────────────────────────────
 static void nrfDrawAttackFull() {
   tft.fillScreen(C_BG);
-  drawHeader("NRF24 ATTACK", true);
+  drawHeader("2.4GHz ATTACK", true);
   tft.setTextSize(1);
 
   const NrfAttack &atk = ATTACKS[nrfActiveAtk];

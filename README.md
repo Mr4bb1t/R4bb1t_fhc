@@ -29,15 +29,15 @@
 | **MAC Changer** | Alteração dinâmica do endereço MAC (via menu de Configurações) |
 
 
-### RF — CC1101
+### Sub GHz — CC1101
 | Ferramenta | Descrição |
 |---|---|
-| **Replay Attack** | Gravação e repetição de sinais RF |
-| **Raw Capture** | Captura de sinal bruto |
-| **RF Analyser** | Análise em tempo real do espectro |
-| **Random Transmit** | Transmissão de dados aleatórios |
+| **Replay Attack** | Gravação e repetição de sinais RF (sintoniza na freq detectada) |
+| **Raw Capture** | Captura de sinal bruto (sintoniza na freq detectada) |
+| **RF Analyser** | Análise em tempo real do espectro com **Detecção Automática de Frequência** (varre o espectro CC1101 para achar o alvo) |
+| **Random Transmit** | Jammer com transmissão de dados aleatórios no canal detectado |
 
-### NRF24L01 — 2.4 GHz
+### 2.4 GHz — NRF24L01
 | Ferramenta | Descrição |
 |---|---|
 | **BT Jammer** | Portadora constante varrendo canais Bluetooth Classic |
@@ -157,10 +157,12 @@ O projeto foi migrado para o **PlatformIO**, o que automatiza a instalação de 
 2. O PlatformIO irá detectar o arquivo `platformio.ini` e baixar automaticamente todas as bibliotecas e ferramentas necessárias.
 
 ### Patch de Injeção de Pacotes (Obrigatório para ataques WiFi)
-O projeto utiliza um bypass dinâmico de pacotes, mas dependendo da versão do framework baixado, pode ser necessário rodar o script de patch na biblioteca nativa do ESP32 (`libnet80211.a`):
-1. Feche o VS Code para evitar conflitos de arquivos em uso.
-2. Execute `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS). O script tentará encontrar a pasta do framework do PlatformIO automaticamente.
+O projeto utiliza um bypass dinâmico de pacotes na biblioteca nativa do ESP32 (`libnet80211.a`). O patch **só precisa ser aplicado uma vez** e agora detecta automaticamente se você usa Arduino IDE ou PlatformIO:
+1. Feche o VS Code / Arduino IDE para evitar conflitos de arquivos em uso.
+2. Execute `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS).
 3. Aguarde a confirmação de sucesso.
+
+> **Nota:** Se você atualizar a framework do ESP32 (Arduino Core ou PlatformIO), rod o patch novamente.
 
 ### Upload do Sistema de Arquivos (SPIFFS)
 A página web do Captive Portal, credenciais salvas e a tela de boot (imagem BMP) precisam ser gravadas no sistema de arquivos do ESP32:
@@ -220,8 +222,8 @@ r4bb1t_fhc/
 3. Verifique a solda nos pinos SPI (SCK, MISO, MOSI, CSN, CE)
 4. Teste com outro módulo — NRF24L01+ defeituosos são comuns
 
-### Ataques WiFi não funcionam (Deauther/Beacon)
-Execute o patch `patch_libnet.bat` antes de compilar. Sem ele, o driver nativo do ESP32 bloqueia pacotes de gerenciamento.
+### Ataques WiFi não funcionam (Deauther/Beacon/NAV Jammer)
+Execute o patch `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS) antes de compilar. O script detecta automaticamente Arduino IDE e PlatformIO. Sem ele, o driver nativo do ESP32 bloqueia frames de gerenciamento e controle.
 
 ### Display não liga ou fica com cores erradas
 Verifique se `User_Setup.h` está configurado corretamente para o seu display (ST7735 vs ST7789, offset X/Y).

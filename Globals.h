@@ -88,7 +88,7 @@ extern int opcaoSubMenuAtaque;
 
 // Deauther
 extern bool deautherAtivo;
-extern unsigned long deauthCounter;
+extern volatile unsigned long deauthCounter;
 extern int deauthTipo;
 extern int clientScanBtnSel;  // declaração
 
@@ -106,18 +106,22 @@ extern uint8_t targetClientMac[6]; // MAC do cliente alvo para deauth unicast
 
 // CTS Jammer
 extern volatile bool ctsAtivo;
-extern unsigned long ctsCounter;
+extern volatile unsigned long ctsCounter;
 
 // Beacon Spam
 extern int beaconModo;
 extern String beaconCustomSSID;
 extern int beaconQuantidade;
 extern bool beaconAtivo;
-extern unsigned long beaconCounter;
+extern volatile unsigned long beaconCounter;
 
 // Estado do rádio
 extern volatile bool radioLocked;
 extern volatile uint8_t canalTravado;
+
+// RF — Frequência detectada automaticamente
+extern float rfDetectedMHz;     // frequência com maior RSSI (0 = não detectada)
+extern int   rfDetectedRSSI;    // RSSI da frequência detectada
 
 // Estado atual
 extern EstadoTela estadoAtual;

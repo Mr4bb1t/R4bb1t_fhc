@@ -41,7 +41,7 @@ static const int labelY[4] = {
   cells[2].y + 46, cells[3].y + 46,
 };
 
-static const char *labels[4] = {"WiFi", "NRF24", "RF 433", "Config"};
+static const char *labels[4] = {"WiFi", "2.4GHz", "Sub GHz", "Config"};
 
 // ── Timer de inatividade (screensaver) ─────────
 #define IDLE_TIMEOUT_MS 30000UL

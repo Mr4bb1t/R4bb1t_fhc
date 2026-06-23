@@ -12,26 +12,42 @@ echo.
 set ARDUINO15=%LOCALAPPDATA%\Arduino15
 if not exist "%ARDUINO15%" set ARDUINO15=%APPDATA%\Arduino15
 
-:: ── Localizar libnet80211.a em tools\esp32-libs ───────────────────────────────
-echo Procurando libnet80211.a em esp32-libs...
+:: ── Localizar libnet80211.a ──────────────────────────────────────────────────
+echo Procurando libnet80211.a...
 set LIBPATH=
+
+:: Busca 1: Arduino IDE — esp32-libs
 for /f "delims=" %%F in ('dir /s /b "%ARDUINO15%\packages\esp32\tools\esp32-libs\libnet80211.a" 2^>nul') do (
     set LIBPATH=%%F
     goto :found_lib
 )
 
-:: Fallback: busca em qualquer lugar
+:: Busca 2: Arduino IDE — fallback
 for /f "delims=" %%F in ('dir /s /b "%ARDUINO15%\packages\esp32\libnet80211.a" 2^>nul') do (
     set LIBPATH=%%F
     goto :found_lib
 )
 
+:: Busca 3: PlatformIO — framework-arduinoespressif32
+set PIO=%USERPROFILE%\.platformio\packages\framework-arduinoespressif32
+if exist "%PIO%\tools\sdk\esp32\lib\libnet80211.a" (
+    set LIBPATH=%PIO%\tools\sdk\esp32\lib\libnet80211.a
+    goto :found_lib
+)
+
+:: Busca 4: PlatformIO — caminho alternativo
+for /f "delims=" %%F in ('dir /s /b "%USERPROFILE%\.platformio\packages\*\tools\sdk\esp32\lib\libnet80211.a" 2^>nul') do (
+    set LIBPATH=%%F
+    goto :found_lib
+)
+
 echo [ERRO] libnet80211.a nao encontrada.
+echo Nao encontrei no Arduino IDE nem no PlatformIO.
 echo Abrindo Explorer para localizar manualmente...
-explorer "%ARDUINO15%\packages\esp32\tools"
+explorer "%USERPROFILE%\.platformio\packages"
 echo.
 echo Quando achar, execute:
-echo   patch_libnet_final.bat "C:\caminho\completo\libnet80211.a"
+echo   patch_libnet.bat "C:\caminho\completo\libnet80211.a"
 pause
 exit /b 1
 
@@ -53,28 +69,43 @@ if not exist "%BACKUP%" (
     echo Backup ja existe, pulando.
 )
 
-:: ── Localizar xtensa-esp-elf-objcopy (IDF 5.x usa esp-x32/xtensa-esp-elf) ────
+:: ── Localizar xtensa-esp-elf-objcopy ─────────────────────────────────────────
 echo.
 echo Procurando objcopy...
 set OBJCOPY=
 
-:: IDF 5.x / arduino-esp32 3.x: toolchain chama-se esp-x32, binario = xtensa-esp-elf-objcopy
+:: Busca 1: PlatformIO — toolchain-xtensa-esp32
+if exist "%USERPROFILE%\.platformio\packages\toolchain-xtensa-esp32\bin\xtensa-esp32-elf-objcopy.exe" (
+    set OBJCOPY=%USERPROFILE%\.platformio\packages\toolchain-xtensa-esp32\bin\xtensa-esp32-elf-objcopy.exe
+    goto :found_obj
+)
+
+:: Busca 2: Arduino IDE — IDF 5.x / arduino-esp32 3.x (esp-x32)
 for /f "delims=" %%F in ('dir /s /b "%ARDUINO15%\packages\esp32\tools\esp-x32\xtensa-esp-elf-objcopy.exe" 2^>nul') do (
     set OBJCOPY=%%F
     goto :found_obj
 )
-:: Nome alternativo sem prefixo esp
+
+:: Busca 3: Arduino IDE — nome alternativo
 for /f "delims=" %%F in ('dir /s /b "%ARDUINO15%\packages\esp32\tools\*\bin\xtensa-esp-elf-objcopy.exe" 2^>nul') do (
     set OBJCOPY=%%F
     goto :found_obj
 )
-:: Fallback antigo xtensa-esp32-elf
+
+:: Busca 4: Arduino IDE — fallback antigo xtensa-esp32-elf
 for /f "delims=" %%F in ('dir /s /b "%ARDUINO15%\packages\esp32\tools\xtensa-esp32-elf-gcc\xtensa-esp32-elf-objcopy.exe" 2^>nul') do (
     set OBJCOPY=%%F
     goto :found_obj
 )
-:: Busca geral por qualquer *objcopy dentro de tools
+
+:: Busca 5: Geral
 for /f "delims=" %%F in ('dir /s /b "%ARDUINO15%\packages\esp32\tools\*objcopy.exe" 2^>nul') do (
+    set OBJCOPY=%%F
+    goto :found_obj
+)
+
+:: Busca 6: PlatformIO — qualquer toolchain
+for /f "delims=" %%F in ('dir /s /b "%USERPROFILE%\.platformio\packages\toolchain-*\bin\xtensa-esp32-elf-objcopy.exe" 2^>nul') do (
     set OBJCOPY=%%F
     goto :found_obj
 )
@@ -124,7 +155,7 @@ echo  Símbolos enfraquecidos:
 echo    - ieee80211_raw_frame_sanity_check (management frames)
 echo    - ieee80211_is_tx_allowed (control frames / TX permission)
 echo.
-echo  Compile e grave normalmente no Arduino IDE.
+echo  Compile e grave normalmente (Arduino IDE ou PlatformIO).
 echo  Para reverter: copy "%BACKUP%" "%LIBPATH%"
 echo ============================================================
 pause

@@ -16,7 +16,6 @@
 #include <SPIFFS.h>
 
 // ── Objetos ──────────────────────────────────────
-static SPIClass spiCC(HSPI);
 static RCSwitch rcSwitch;
 static bool rfReady = false;
 
@@ -32,6 +31,7 @@ struct RFSignal {
   unsigned long value;
   int bits;
   int protocol;
+  float freq;
 };
 
 // ── Sub-menu RF ──────────────────────────────────
@@ -68,12 +68,15 @@ static void rfFooter(const char *hint = nullptr) {
   tft.print(">");
 }
 
+// Forward declaration — definida na seção do scanner
+static void drawDetectedFreq(int y);
+
 // ── SPIFFS: salvar sinal ─────────────────────────
-static bool saveRFSignal(unsigned long val, int bits, int proto) {
+static bool saveRFSignal(unsigned long val, int bits, int proto, float freq) {
   File f = SPIFFS.open(RF_SIGNALS_FILE, FILE_APPEND);
   if (!f)
     return false;
-  f.printf("%lu,%d,%d\n", val, bits, proto);
+  f.printf("%lu,%d,%d,%.2f\n", val, bits, proto, freq);
   f.close();
   return true;
 }
@@ -95,7 +98,15 @@ static int loadRFSignals(RFSignal *out, int maxCount) {
       continue;
     out[count].value = strtoul(line.substring(0, c1).c_str(), nullptr, 10);
     out[count].bits = line.substring(c1 + 1, c2).toInt();
-    out[count].protocol = line.substring(c2 + 1).toInt();
+
+    int c3 = line.indexOf(',', c2 + 1);
+    if (c3 > 0) {
+      out[count].protocol = line.substring(c2 + 1, c3).toInt();
+      out[count].freq = line.substring(c3 + 1).toFloat();
+    } else {
+      out[count].protocol = line.substring(c2 + 1).toInt();
+      out[count].freq = 433.92f;
+    }
     count++;
   }
   f.close();
@@ -116,7 +127,8 @@ static bool deleteRFSignal(int index) {
   for (int i = 0; i < count; i++) {
     if (i == index)
       continue;
-    f.printf("%lu,%d,%d\n", buf[i].value, buf[i].bits, buf[i].protocol);
+    f.printf("%lu,%d,%d,%.2f\n", buf[i].value, buf[i].bits, buf[i].protocol,
+             buf[i].freq);
   }
   f.close();
   return true;
@@ -149,9 +161,10 @@ bool rfInit() {
 
   // Lê RSSI inicial para confirmar comunicação SPI
   float rssiInit = ELECHOUSE_cc1101.getRssi();
-  float lqiInit  = ELECHOUSE_cc1101.getLqi();
+  float lqiInit = ELECHOUSE_cc1101.getLqi();
   Serial.println("[RF] CC1101 OK @ 433.92 MHz");
-  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit, lqiInit);
+  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit,
+                lqiInit);
   return true;
 }
 
@@ -173,12 +186,8 @@ void displayRF() {
 
   tft.fillScreen(C_BG);
   tft.setTextSize(1);
-  drawHeader("RF 433", true);
+  drawHeader("SUB GHZ", true);
 
-  // Status CC1101 logo abaixo do header
-  tft.setTextColor(rfReady ? C_GREEN : C_RED);
-  tft.setCursor(4, 17);
-  // tft.print(rfReady ? "CC1101 433.92MHz OK" : "CC1101: ERRO!");
   tft.drawFastHLine(0, 26, SCR_W, C_GREY);
 
   // Lista de itens com drawMenuItem
@@ -265,31 +274,34 @@ static bool replayHasSig = false;
 void displayRF_Replay() {
   rfHeader("REPLAY");
 
+  // Frequência detectada no topo
+  drawDetectedFreq(17);
+
   tft.setTextSize(1);
   if (!replayHasSig) {
     tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(4, 30);
+    tft.setCursor(4, 32);
     tft.print("Aguardando sinal...");
     tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(4, 46);
+    tft.setCursor(4, 48);
     tft.print("Aponte o controle e");
-    tft.setCursor(4, 58);
+    tft.setCursor(4, 60);
     tft.print("pressione o botao.");
   } else {
     tft.setTextColor(TFT_WHITE);
-    tft.setCursor(4, 30);
+    tft.setCursor(4, 32);
     tft.print("Capturado:");
     tft.setTextColor(TFT_GREEN);
     char buf[32];
-    snprintf(buf, sizeof(buf), "Val: %lu", replayVal);
-    tft.setCursor(4, 44);
+    snprintf(buf, sizeof(buf), "Val: %lX", replayVal);
+    tft.setCursor(4, 46);
     tft.print(buf);
     snprintf(buf, sizeof(buf), "Bits:%d  Proto:%d", replayBits, replayProtocol);
-    tft.setCursor(4, 56);
+    tft.setCursor(4, 58);
     tft.print(buf);
 
     tft.setTextColor(TFT_CYAN);
-    tft.setCursor(4, 74);
+    tft.setCursor(4, 76);
     tft.print("o=TX  v=Salvar  ^=Vol");
   }
 
@@ -300,23 +312,33 @@ void displayRF_Replay() {
   }
   rfFooter();
   batteryDraw();
+
+  // Sintoniza na frequência detectada
+  if (rfReady && rfDetectedMHz > 0) {
+    ELECHOUSE_cc1101.setMHZ(rfDetectedMHz);
+    ELECHOUSE_cc1101.SetRx();
+    rcSwitch.enableReceive(RF_GDO2);
+  }
 }
 
 void handleRF_Replay() {
   // Recepção contínua
   if (rfReady && rcSwitch.available()) {
-    replayVal      = rcSwitch.getReceivedValue();
-    replayBits     = rcSwitch.getReceivedBitlength();
+    replayVal = rcSwitch.getReceivedValue();
+    replayBits = rcSwitch.getReceivedBitlength();
     replayProtocol = rcSwitch.getReceivedProtocol();
     rcSwitch.resetAvailable();
     replayHasSig = true;
 
     float rssi = ELECHOUSE_cc1101.getRssi();
-    float lqi  = ELECHOUSE_cc1101.getLqi();
+    float lqi = ELECHOUSE_cc1101.getLqi();
     Serial.println("[RF][REPLAY] Sinal capturado!");
-    Serial.printf("[RF][REPLAY]   Valor   : %lu (0x%lX)\n", replayVal, replayVal);
-    Serial.printf("[RF][REPLAY]   Bits    : %d  |  Protocolo: %d\n", replayBits, replayProtocol);
-    Serial.printf("[RF][REPLAY]   RSSI    : %.1f dBm  |  LQI: %.0f\n", rssi, lqi);
+    Serial.printf("[RF][REPLAY]   Valor   : %lu (0x%lX)\n", replayVal,
+                  replayVal);
+    Serial.printf("[RF][REPLAY]   Bits    : %d  |  Protocolo: %d\n", replayBits,
+                  replayProtocol);
+    Serial.printf("[RF][REPLAY]   RSSI    : %.1f dBm  |  LQI: %.0f\n", rssi,
+                  lqi);
 
     displayRF_Replay();
   }
@@ -324,10 +346,13 @@ void handleRF_Replay() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
 
     // SELECT → retransmite
-    if (digitalRead(BUTTON_SELECT) == LOW && replayHasSig) {
+    if (digitalRead(BUTTON_SELECT) == LOW && replayHasSig && rfReady) {
       lastDebounceTime = millis();
-      Serial.printf("[RF][REPLAY] Retransmitindo -> Val:%lu Bits:%d Proto:%d\n",
-                    replayVal, replayBits, replayProtocol);
+      float txFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+      Serial.printf("[RF][REPLAY] Retransmitindo na %.2fMHz -> Val:%lu Bits:%d "
+                    "Proto:%d\n",
+                    txFreq, replayVal, replayBits, replayProtocol);
+      ELECHOUSE_cc1101.setMHZ(txFreq);
       ELECHOUSE_cc1101.SetTx();
       delay(5);
       rcSwitch.setProtocol(replayProtocol);
@@ -346,7 +371,8 @@ void handleRF_Replay() {
     // RIGHT → salva no SPIFFS
     if (digitalRead(BUTTON_RIGHT) == LOW && replayHasSig) {
       lastDebounceTime = millis();
-      bool ok = saveRFSignal(replayVal, replayBits, replayProtocol);
+      float saveFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+      bool ok = saveRFSignal(replayVal, replayBits, replayProtocol, saveFreq);
       Serial.printf("[RF][REPLAY] Salvar no SPIFFS: %s\n", ok ? "OK" : "ERRO");
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
@@ -373,9 +399,13 @@ static bool rawListening = true;
 
 void displayRF_Raw() {
   rfHeader("RAW  RX");
+
+  // Frequência detectada
+  drawDetectedFreq(17);
+
   tft.setTextColor(TFT_YELLOW);
   tft.setTextSize(1);
-  tft.setCursor(4, 26);
+  tft.setCursor(4, 30);
   tft.print("Escutando pulsos...");
   tft.setTextColor(TFT_DARKGREY);
   tft.setCursor(4, SCR_H - 28);
@@ -383,6 +413,13 @@ void displayRF_Raw() {
   rfFooter();
   rawListening = true;
   batteryDraw();
+
+  // Sintoniza na frequência detectada
+  if (rfReady && rfDetectedMHz > 0) {
+    ELECHOUSE_cc1101.setMHZ(rfDetectedMHz);
+    ELECHOUSE_cc1101.SetRx();
+    rcSwitch.enableReceive(RF_GDO2);
+  }
 }
 
 void handleRF_Raw() {
@@ -407,7 +444,8 @@ void handleRF_Raw() {
 
     // Pega o maior sinal detectado
     int dbm = peakRSSI;
-    if (dbm == -100) dbm = (int)ELECHOUSE_cc1101.getRssi(); // Fallback
+    if (dbm == -100)
+      dbm = (int)ELECHOUSE_cc1101.getRssi(); // Fallback
     float lqi = ELECHOUSE_cc1101.getLqi();
     peakRSSI = -100; // Reseta para a próxima captura
 
@@ -416,9 +454,11 @@ void handleRF_Raw() {
     Serial.printf("[RF][RAW]   Hex     : 0x%lX\n", val);
     Serial.printf("[RF][RAW]   Bits    : %d  |  Protocolo: %d\n", bits, proto);
     Serial.printf("[RF][RAW]   RSSI    : %d dBm  |  LQI: %.0f\n", dbm, lqi);
-    Serial.printf("[RF][RAW]   Barras  : %d/10\n", constrain(map(dbm, -45, -20, 1, 10), 1, 10));
+    Serial.printf("[RF][RAW]   Barras  : %d/10\n",
+                  constrain(map(dbm, -45, -20, 1, 10), 1, 10));
 
-    // Partial redraw: limpa as 3 linhas de texto (Y=40 até 74) e a linha do Sinal/Barras (Y=82 até 90)
+    // Partial redraw: limpa as 3 linhas de texto (Y=40 até 74) e a linha do
+    // Sinal/Barras (Y=82 até 90)
     tft.fillRect(0, 40, SCR_W, 34, TFT_BLACK);
     tft.fillRect(0, 82, SCR_W, 8, TFT_BLACK);
 
@@ -441,8 +481,9 @@ void handleRF_Raw() {
     char sbuf[16];
     snprintf(sbuf, sizeof(sbuf), "dBm:%d", dbm);
     tft.print(sbuf);
-    
-    // Mapeia o RSSI real para 1 a 10 barras usando a exata mesma métrica do Analyser (-45 a -20)
+
+    // Mapeia o RSSI real para 1 a 10 barras usando a exata mesma métrica do
+    // Analyser (-45 a -20)
     int bars = constrain(map(dbm, -45, -20, 1, 10), 1, 10);
     for (int b = 0; b < 10; b++) {
       if (b < bars) {
@@ -463,7 +504,96 @@ void handleRF_Raw() {
 }
 
 // ════════════════════════════════════════════════
-//  MODO: ANALISADOR — Waterfall Spectrum 433 MHz
+//  AUTO-DETECÇÃO DE FREQUÊNCIA
+//  Varre o espectro do CC1101 e encontra o pico
+// ════════════════════════════════════════════════
+
+// Frequências comuns a varrer (MHz) — faixas do CC1101
+static const float SCAN_FREQS[] = {
+    300.00, 303.87, 310.00, 315.00, 318.00, 330.00, 390.00, 418.00, 430.00, 
+    431.00, 432.00, 433.00, 433.42, 433.92, 434.42, 435.00, 436.00, 438.00, 
+    440.00, 450.00, 868.00, 868.35, 868.95, 869.50, 915.00, 916.00, 920.00, 
+    925.00};
+#define SCAN_FREQ_COUNT (sizeof(SCAN_FREQS) / sizeof(SCAN_FREQS[0]))
+
+static int scanIdx = 0;          // índice atual na varredura
+static bool scanRunning = false; // varredura ativa?
+static int scanBestRSSI = -120;  // melhor RSSI encontrado na varredura
+static float scanBestMHz = 0;    // frequência com melhor RSSI
+static unsigned long scanLastStep = 0;
+
+// Executa um passo da varredura (chamado no loop do Analyser)
+// Retorna true quando completou um ciclo completo
+static bool rfScanStep() {
+  if (!rfReady)
+    return false;
+
+  // Sintoniza na frequência atual
+  ELECHOUSE_cc1101.setMHZ(SCAN_FREQS[scanIdx]);
+  ELECHOUSE_cc1101.SetRx();
+  delayMicroseconds(800); // tempo de settling do PLL
+
+  // Lê RSSI (média de 3 leituras para estabilidade)
+  int rssiSum = 0;
+  for (int i = 0; i < 3; i++) {
+    rssiSum += ELECHOUSE_cc1101.getRssi();
+    delayMicroseconds(200);
+  }
+  int rssi = rssiSum / 3;
+
+  if (rssi > scanBestRSSI) {
+    scanBestRSSI = rssi;
+    scanBestMHz = SCAN_FREQS[scanIdx];
+  }
+
+  scanIdx++;
+  if (scanIdx >= (int)SCAN_FREQ_COUNT) {
+    scanIdx = 0;
+
+    // Atualiza frequência detectada se o pico é acima do ruído
+    if (scanBestRSSI > -75) {
+      rfDetectedMHz = scanBestMHz;
+      rfDetectedRSSI = scanBestRSSI;
+      Serial.printf("[RF][SCAN] Freq detectada: %.2f MHz  RSSI: %d dBm\n",
+                    rfDetectedMHz, rfDetectedRSSI);
+    }
+
+    // Reseta para próximo ciclo
+    scanBestRSSI = -120;
+    scanBestMHz = 0;
+
+    // Volta para a frequência detectada (ou 433.92 padrão) para o waterfall
+    float tuneFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+    ELECHOUSE_cc1101.setMHZ(tuneFreq);
+    ELECHOUSE_cc1101.SetRx();
+
+    return true; // ciclo completo
+  }
+  return false;
+}
+
+// Helper: desenha a frequência detectada em qualquer tela
+// y = posição Y para desenhar, clearW = largura para limpar
+static void drawDetectedFreq(int y) {
+  tft.fillRect(0, y, SCR_W, 10, TFT_BLACK);
+  tft.setTextSize(1);
+  if (rfDetectedMHz > 0) {
+    tft.setTextColor(TFT_CYAN);
+    tft.setCursor(2, y);
+    char buf[24];
+    snprintf(buf, sizeof(buf), "F:%.2fMHz %ddBm", rfDetectedMHz,
+             rfDetectedRSSI);
+    tft.print(buf);
+  } else {
+    tft.setTextColor(TFT_DARKGREY);
+    tft.setCursor(2, y);
+    tft.print("Freq: buscando...");
+  }
+}
+
+// ════════════════════════════════════════════════
+//  MODO: ANALISADOR — Waterfall Spectrum
+//  Com detecção automática de frequência
 //
 //  −45 dBm = azul fino central
 //  −20 dBm = vermelho largo quase toda a tela
@@ -477,7 +607,7 @@ void handleRF_Raw() {
 // ════════════════════════════════════════════════
 
 #define WF_Y 20
-#define WF_H 130
+#define WF_H 120
 #define WF_CX (SCR_W / 2)
 
 #define WF_DBM_MIN -45
@@ -566,21 +696,22 @@ void displayRF_Analyser() {
   tft.setTextColor(TFT_CYAN);
   tft.setCursor(2, 4);
   tft.print("ANALISADOR");
-  tft.setTextColor(TFT_DARKGREY);
+
+  // Mostra frequência no header (detectada ou padrão)
+  tft.setTextColor(rfDetectedMHz > 0 ? TFT_GREEN : TFT_DARKGREY);
   tft.setCursor(68, 4);
-  tft.print("433.92 MHz");
+  char hdrBuf[16];
+  if (rfDetectedMHz > 0)
+    snprintf(hdrBuf, sizeof(hdrBuf), "%.2f", rfDetectedMHz);
+  else
+    snprintf(hdrBuf, sizeof(hdrBuf), "scan...");
+  tft.print(hdrBuf);
   tft.drawFastHLine(0, 14, SCR_W, TFT_DARKGREY);
 
+  // Barra de frequência no rodapé — mostra frequência real detectada
   int axisY = WF_Y + WF_H + 1;
-  tft.setTextColor(0x528A);
-  tft.setCursor(0, axisY);
-  tft.print("431");
-  tft.setCursor(50, axisY);
-  tft.print("433.9");
-  tft.setCursor(104, axisY);
-  tft.print("436");
-  tft.drawFastHLine(0, axisY + 8, SCR_W, 0x2945);
-  tft.drawFastVLine(WF_CX, axisY + 2, 6, TFT_YELLOW);
+  drawDetectedFreq(axisY);
+  tft.drawFastHLine(0, axisY + 10, SCR_W, 0x2945);
 
   tft.drawFastHLine(0, SCR_H - 16, SCR_W, TFT_DARKGREY);
   tft.setTextColor(TFT_YELLOW);
@@ -596,12 +727,46 @@ void displayRF_Analyser() {
   wfEnvStep = 0;
   wfSigActive = false;
 
+  // Inicializa scanner
+  scanRunning = true;
+  scanIdx = 0;
+  scanBestRSSI = -120;
+  scanBestMHz = 0;
+  scanLastStep = 0;
+
   wfRedraw();
   batteryDraw();
 }
 
 // ── Loop principal ────────────────────────────────
 void handleRF_Analyser() {
+  // ── Varredura de frequência (intercalada com waterfall) ──
+  if (scanRunning && (millis() - scanLastStep > 15)) {
+    scanLastStep = millis();
+    bool cycleComplete = rfScanStep();
+
+    if (cycleComplete) {
+      // Atualiza o header com a frequência detectada
+      tft.fillRect(66, 2, 62, 12, TFT_BLACK);
+      tft.setTextSize(1);
+      tft.setTextColor(rfDetectedMHz > 0 ? TFT_GREEN : TFT_DARKGREY);
+      tft.setCursor(68, 4);
+      char hBuf[16];
+      if (rfDetectedMHz > 0)
+        snprintf(hBuf, sizeof(hBuf), "%.2f", rfDetectedMHz);
+      else
+        snprintf(hBuf, sizeof(hBuf), "scan...");
+      tft.print(hBuf);
+
+      // Atualiza barra de frequência no rodapé
+      int axisY = WF_Y + WF_H + 1;
+      drawDetectedFreq(axisY);
+
+      // Re-habilita o rcSwitch na frequência detectada
+      rcSwitch.enableReceive(RF_GDO2);
+    }
+  }
+
   // Detecta sinal novo do rcSwitch
   if (rfReady && rcSwitch.available()) {
     rcSwitch.resetAvailable();
@@ -609,7 +774,7 @@ void handleRF_Analyser() {
     wfSigActive = true;
 
     float rssi = ELECHOUSE_cc1101.getRssi();
-    float lqi  = ELECHOUSE_cc1101.getLqi();
+    float lqi = ELECHOUSE_cc1101.getLqi();
     Serial.printf("[RF][ANALYSER] Sinal #%lu  RSSI: %.1f dBm  LQI: %.0f\n",
                   wfSigCount, rssi, lqi);
 
@@ -639,8 +804,9 @@ void handleRF_Analyser() {
     static uint8_t _dbgTick = 0;
     if (++_dbgTick >= 33) {
       _dbgTick = 0;
-      Serial.printf("[RF][ANALYSER] RSSI: %d dBm  norm: %d  env: %d\n",
-                    dbm, rssiBase, wfEnvLevel);
+      Serial.printf(
+          "[RF][ANALYSER] RSSI: %d dBm  norm: %d  env: %d  freq: %.2f\n", dbm,
+          rssiBase, wfEnvLevel, rfDetectedMHz);
     }
 
     // ── Máquina de estados do envelope ───────────
@@ -705,6 +871,12 @@ void handleRF_Analyser() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (digitalRead(BUTTON_LEFT) == LOW) {
       lastDebounceTime = millis();
+      scanRunning = false;
+      // Restaura frequência para uso em outras telas
+      float tuneFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+      ELECHOUSE_cc1101.setMHZ(tuneFreq);
+      ELECHOUSE_cc1101.SetRx();
+      rcSwitch.enableReceive(RF_GDO2);
       estadoAtual = MENU_RF;
       displayRF();
     }
@@ -733,9 +905,15 @@ void displayRF_Random() {
   }
 
   if (!jammerAtivo) {
+    // Frequência detectada
+    drawDetectedFreq(17);
+
     tft.setTextColor(TFT_YELLOW);
-    tft.setCursor(4, 30);
-    tft.print("Canal: 433.92 MHz");
+    tft.setCursor(4, 32);
+    char freqBuf[28];
+    snprintf(freqBuf, sizeof(freqBuf), "Canal: %.2f MHz",
+             rfDetectedMHz > 0 ? rfDetectedMHz : 433.92f);
+    tft.print(freqBuf);
 
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, 48);
@@ -760,7 +938,10 @@ void displayRF_Random() {
 
     tft.setTextColor(TFT_YELLOW);
     tft.setCursor(4, 48);
-    tft.print("433.92 MHz bloqueado");
+    char jfBuf[24];
+    snprintf(jfBuf, sizeof(jfBuf), "%.2f MHz bloqueado",
+             rfDetectedMHz > 0 ? rfDetectedMHz : 433.92f);
+    tft.print(jfBuf);
 
     // Contador de pacotes
     tft.fillRect(4, 66, SCR_W - 8, 12, TFT_BLACK);
@@ -820,7 +1001,9 @@ void handleRF_Random() {
       lastDebounceTime = millis();
       jammerAtivo = false;
       ELECHOUSE_cc1101.SetRx();
-      Serial.printf("[RF][JAMMER] Jammer PARADO. Total de pacotes enviados: %lu\n", jammerPackets);
+      Serial.printf(
+          "[RF][JAMMER] Jammer PARADO. Total de pacotes enviados: %lu\n",
+          jammerPackets);
       jammerPackets = 0;
       displayRF_Random();
     }
@@ -832,11 +1015,14 @@ void handleRF_Random() {
       // SELECT → iniciar jammer
       if (digitalRead(BUTTON_SELECT) == LOW && rfReady) {
         lastDebounceTime = millis();
+        // Sintoniza na freq detectada antes de transmitir
+        float jamFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+        ELECHOUSE_cc1101.setMHZ(jamFreq);
         ELECHOUSE_cc1101.SetTx();
         jammerAtivo = true;
         jammerPackets = 0;
         jammerLastDraw = 0;
-        Serial.println("[RF][JAMMER] Jammer INICIADO em 433.92 MHz");
+        Serial.printf("[RF][JAMMER] Jammer INICIADO em %.2f MHz\n", jamFreq);
         displayRF_Random();
       }
 
@@ -864,26 +1050,42 @@ static int savedIndex = 0; // sinal selecionado atualmente
 static int savedScroll = 0; // primeiro índice visível
 
 static void drawSavedItem(int idx, bool sel) {
-  if (idx < savedScroll || idx >= savedScroll + SAVED_VISIBLE || idx >= savedCount) return;
+  if (idx < savedScroll || idx >= savedScroll + SAVED_VISIBLE ||
+      idx >= savedCount)
+    return;
 
   int i = idx - savedScroll;
-  int y = 22 + i * 16;
-  
-  tft.fillRect(0, y - 2, SCR_W - 12, 16, TFT_BLACK);
-  
+  int y = 30 + i * 16;
+
+  tft.fillRect(0, y - 2, SCR_W, 16, TFT_BLACK);
+
   tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
   tft.setCursor(4, y);
 
   char buf[28];
-  snprintf(buf, sizeof(buf), "#%02d %lu B:%d", idx + 1,
-           savedSignals[idx].value, savedSignals[idx].bits);
+  float f = (savedSignals[idx].freq > 0) ? savedSignals[idx].freq : 433.92f;
+  // Ex: "#01 14FD58 433.92"
+  snprintf(buf, sizeof(buf), "#%02d %lX %.2f", idx + 1,
+           savedSignals[idx].value, f);
   tft.print(sel ? ">" : " ");
   tft.print(buf);
+
+  // Redesenha os indicadores de scroll (pois o fillRect apagou a linha inteira)
+  if (i == 0 && savedScroll > 0) {
+    tft.setTextColor(TFT_DARKGREY);
+    tft.setCursor(SCR_W - 10, y);
+    tft.print("^");
+  }
+  if (i == SAVED_VISIBLE - 1 && savedScroll + SAVED_VISIBLE < savedCount) {
+    tft.setTextColor(TFT_DARKGREY);
+    tft.setCursor(SCR_W - 10, y);
+    tft.print("v");
+  }
 }
 
 static void drawSavedList() {
-  // Limpa área da lista
-  tft.fillRect(0, 20, SCR_W, SCR_H - 38, TFT_BLACK);
+  // Limpa área da lista (começa em y=28 pra não apagar a freq detectada)
+  tft.fillRect(0, 28, SCR_W, SCR_H - 46, TFT_BLACK);
   tft.setTextSize(1);
 
   if (savedCount == 0) {
@@ -901,42 +1103,29 @@ static void drawSavedList() {
     int idx = savedScroll + i;
     if (idx >= savedCount)
       break;
-    
+
     drawSavedItem(idx, idx == savedIndex);
   }
 
-  // Indicador de scroll (se há mais itens)
-  if (savedScroll > 0) {
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(SCR_W - 10, 22);
-    tft.print("^");
-  }
-  if (savedScroll + SAVED_VISIBLE < savedCount) {
-    tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(SCR_W - 10, 22 + (SAVED_VISIBLE - 1) * 16);
-    tft.print("v");
-  }
+  // (Os indicadores de scroll já são desenhados dentro do drawSavedItem)
 }
 
 void displayRF_Saved() {
   rfHeader("SAVED RF");
+
   savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
   savedIndex = 0;
   savedScroll = 0;
 
   drawSavedList();
-
-  // Dica de ação
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_DARKGREY);
-  tft.setCursor(4, SCR_H - 28);
-  if (savedCount > 0)
-    tft.print("^x2=Del   o=TX   v=Prox");
-  else
-    tft.print("^ = Voltar");
-
   rfFooter();
   batteryDraw();
+
+  // Sintoniza na frequência detectada para TX
+  if (rfReady && rfDetectedMHz > 0) {
+    ELECHOUSE_cc1101.setMHZ(rfDetectedMHz);
+    ELECHOUSE_cc1101.SetRx();
+  }
 }
 
 void handleRF_Saved() {
@@ -952,13 +1141,13 @@ void handleRF_Saved() {
         int oldIndex = savedIndex;
         int oldScroll = savedScroll;
         savedIndex = (savedIndex + 1) % savedCount;
-        
+
         // Ajusta scroll
         if (savedIndex < savedScroll)
           savedScroll = savedIndex;
         if (savedIndex >= savedScroll + SAVED_VISIBLE)
           savedScroll = savedIndex - SAVED_VISIBLE + 1;
-          
+
         if (savedScroll != oldScroll) {
           drawSavedList();
         } else {
@@ -969,14 +1158,18 @@ void handleRF_Saved() {
     }
 
     // SELECT → transmite sinal selecionado
-    if (digitalRead(BUTTON_SELECT) == LOW && savedCount > 0) {
+    if (digitalRead(BUTTON_SELECT) == LOW && savedCount > 0 && rfReady) {
       lastDebounceTime = millis();
 
-      Serial.printf("[RF][SAVED] Transmitindo sinal #%d -> Val:%lu Bits:%d Proto:%d\n",
-                    savedIndex + 1,
-                    savedSignals[savedIndex].value,
+      float txFreq = (savedSignals[savedIndex].freq > 0)
+                         ? savedSignals[savedIndex].freq
+                         : 433.92f;
+      Serial.printf("[RF][SAVED] Transmitindo sinal #%d na %.2fMHz -> Val:%lu "
+                    "Bits:%d Proto:%d\n",
+                    savedIndex + 1, txFreq, savedSignals[savedIndex].value,
                     savedSignals[savedIndex].bits,
                     savedSignals[savedIndex].protocol);
+      ELECHOUSE_cc1101.setMHZ(txFreq);
       ELECHOUSE_cc1101.SetTx();
       rcSwitch.send(savedSignals[savedIndex].value,
                     savedSignals[savedIndex].bits);

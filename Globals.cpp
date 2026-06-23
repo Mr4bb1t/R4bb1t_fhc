@@ -40,7 +40,7 @@ int opcaoSubMenuAtaque = 0;
 
 // Deauther
 bool deautherAtivo = false;
-unsigned long deauthCounter = 0;
+volatile unsigned long deauthCounter = 0;
 int deauthTipo = 0; // 0 = Broadcast, 1 = Targeted
 int clientScanBtnSel = 0;     // definição
 
@@ -53,18 +53,22 @@ uint8_t targetClientMac[6] = {0};
 
 // CTS Jammer
 volatile bool ctsAtivo = false;
-unsigned long ctsCounter = 0;
+volatile unsigned long ctsCounter = 0;
 
 // Beacon Spam
 int beaconModo = 0;
 String beaconCustomSSID = "";
 int beaconQuantidade = 50;
 bool beaconAtivo = false;
-unsigned long beaconCounter = 0;
+volatile unsigned long beaconCounter = 0;
 
 // Estado do rádio
 volatile bool radioLocked = false;
 volatile uint8_t canalTravado = 0;
+
+// RF — Frequência detectada automaticamente
+float rfDetectedMHz = 0;      // 0 = não detectada ainda
+int   rfDetectedRSSI = -100;  // RSSI da frequência detectada
 
 // Estado Atual
 EstadoTela estadoAtual = MENU_INICIAL;

@@ -1,10 +1,12 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# patch_libnet.sh — Aplica o weaken-symbol na libnet80211.a do arduino-esp32
+# patch_libnet.sh — Aplica o weaken-symbol na libnet80211.a do ESP32
 #
-# Este script DEVE ser executado UMA VEZ antes de compilar no Arduino IDE.
-# Ele torna o símbolo ieee80211_raw_frame_sanity_check "fraco" na libnet80211.a,
-# permitindo que a implementação do wsl_bypasser.c sobreponha o comportamento.
+# Este script DEVE ser executado UMA VEZ antes de compilar.
+# Detecta automaticamente Arduino IDE e PlatformIO.
+# Ele torna os símbolos ieee80211_raw_frame_sanity_check e
+# ieee80211_is_tx_allowed "fracos" na libnet80211.a, permitindo que
+# a implementação do wsl_bypasser.c sobreponha o comportamento.
 #
 # USO:
 #   chmod +x patch_libnet.sh
@@ -44,21 +46,23 @@ find_libnet() {
         search_dirs=(
             "$HOME/.arduino15/packages/esp32/tools/esp32-libs"
             "$HOME/snap/arduino/current/.arduino15/packages/esp32/tools/esp32-libs"
+            "$HOME/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/lib"
         )
     elif [ "$OS" = "macos" ]; then
         search_dirs=(
             "$HOME/Library/Arduino15/packages/esp32/tools/esp32-libs"
+            "$HOME/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/lib"
         )
     elif [ "$OS" = "windows" ]; then
         search_dirs=(
             "$LOCALAPPDATA/Arduino15/packages/esp32/tools/esp32-libs"
             "$HOME/AppData/Local/Arduino15/packages/esp32/tools/esp32-libs"
+            "$HOME/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/lib"
         )
     fi
 
     for dir in "${search_dirs[@]}"; do
         if [ -d "$dir" ]; then
-            # Procura em todos os subdiretórios por libnet80211.a
             local libpath=$(find "$dir" -name "libnet80211.a" 2>/dev/null | head -1)
             if [ -n "$libpath" ]; then
                 echo "$libpath"
@@ -67,22 +71,34 @@ find_libnet() {
         fi
     done
 
-    # Fallback genérico em packages/esp32
+    # Fallback genérico em packages/esp32 (Arduino) ou framework (PlatformIO)
+    local fallback_dirs=()
     if [ "$OS" = "linux" ]; then
-        local fallback_dir="$HOME/.arduino15/packages/esp32"
+        fallback_dirs=(
+            "$HOME/.arduino15/packages/esp32"
+            "$HOME/.platformio/packages/framework-arduinoespressif32"
+        )
     elif [ "$OS" = "macos" ]; then
-        local fallback_dir="$HOME/Library/Arduino15/packages/esp32"
+        fallback_dirs=(
+            "$HOME/Library/Arduino15/packages/esp32"
+            "$HOME/.platformio/packages/framework-arduinoespressif32"
+        )
     elif [ "$OS" = "windows" ]; then
-        local fallback_dir="$LOCALAPPDATA/Arduino15/packages/esp32"
+        fallback_dirs=(
+            "$LOCALAPPDATA/Arduino15/packages/esp32"
+            "$HOME/.platformio/packages/framework-arduinoespressif32"
+        )
     fi
-    
-    if [ -d "$fallback_dir" ]; then
-        local libpath=$(find "$fallback_dir" -name "libnet80211.a" 2>/dev/null | head -1)
-        if [ -n "$libpath" ]; then
-            echo "$libpath"
-            return 0
+
+    for fallback_dir in "${fallback_dirs[@]}"; do
+        if [ -d "$fallback_dir" ]; then
+            local libpath=$(find "$fallback_dir" -name "libnet80211.a" 2>/dev/null | head -1)
+            if [ -n "$libpath" ]; then
+                echo "$libpath"
+                return 0
+            fi
         fi
-    fi
+    done
 
     return 1
 }
@@ -95,26 +111,34 @@ find_objcopy() {
         search_dirs=(
             "$HOME/.arduino15/packages/esp32/tools"
             "$HOME/snap/arduino/current/.arduino15/packages/esp32/tools"
+            "$HOME/.platformio/packages/toolchain-xtensa-esp32/bin"
         )
     elif [ "$OS" = "macos" ]; then
         search_dirs=(
             "$HOME/Library/Arduino15/packages/esp32/tools"
+            "$HOME/.platformio/packages/toolchain-xtensa-esp32/bin"
         )
     elif [ "$OS" = "windows" ]; then
         search_dirs=(
             "$LOCALAPPDATA/Arduino15/packages/esp32/tools"
+            "$HOME/.platformio/packages/toolchain-xtensa-esp32/bin"
         )
     fi
 
     for dir in "${search_dirs[@]}"; do
         if [ -d "$dir" ]; then
-            # IDF 5.x / arduino-esp32 3.x: toolchain chama-se esp-x32, binario = xtensa-esp-elf-objcopy
+            # Busca direta no bin/ do toolchain PlatformIO
+            if [ -f "$dir/xtensa-esp32-elf-objcopy" ]; then
+                echo "$dir/xtensa-esp32-elf-objcopy"
+                return 0
+            fi
+            # IDF 5.x / arduino-esp32 3.x: toolchain chama-se esp-x32
             local objcopy_path=$(find "$dir/esp-x32" -name "xtensa-esp-elf-objcopy*" 2>/dev/null | head -1)
             if [ -n "$objcopy_path" ]; then
                 echo "$objcopy_path"
                 return 0
             fi
-            
+
             # Fallback geral
             local objcopy_path=$(find "$dir" -name "*objcopy" -o -name "*objcopy.exe" 2>/dev/null | grep -i "xtensa" | head -1)
             if [ -n "$objcopy_path" ]; then
@@ -162,8 +186,10 @@ if [ -z "$LIBPATH" ]; then
     echo "[ERRO] libnet80211.a não encontrada automaticamente."
     echo ""
     echo "Informe o caminho manualmente:"
-    echo "  No Linux/macOS: ~/.arduino15/packages/esp32/hardware/esp32/X.X.X/tools/sdk/esp32/lib/libnet80211.a"
-    echo "  No Windows: %LOCALAPPDATA%\\Arduino15\\packages\\esp32\\hardware\\esp32\\X.X.X\\tools\\sdk\\esp32\\lib\\libnet80211.a"
+    echo "  Arduino IDE:"
+    echo "    ~/.arduino15/packages/esp32/tools/esp32-libs/.../libnet80211.a"
+    echo "  PlatformIO:"
+    echo "    ~/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/lib/libnet80211.a"
     echo ""
     echo "Depois execute:"
     echo "  ./patch_libnet.sh /caminho/completo/para/libnet80211.a"
@@ -255,5 +281,5 @@ echo "Símbolos enfraquecidos:"
 echo "  - ieee80211_raw_frame_sanity_check (management frames)"
 echo "  - ieee80211_is_tx_allowed (control frames / TX permission)"
 echo ""
-echo "Agora compile e grave o r4bb1t_fhc no Arduino IDE."
+echo "Agora compile e grave o r4bb1t_fhc (Arduino IDE ou PlatformIO)."
 echo "Para reverter: ./patch_libnet.sh --restore"

