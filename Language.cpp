@@ -668,12 +668,12 @@ const LangPack langEN PROGMEM = {
     "Magenta Eye",
 };
 
-const LangPack* lang = &langPT;
+const LangPack *lang = &langPT;
 
 void setLanguage(int langId) {
-    if (langId == 1) {
-        lang = &langEN;
-    } else {
-        lang = &langPT;
-    }
+  if (langId == 1) {
+    lang = &langEN;
+  } else {
+    lang = &langPT;
+  }
 }
