@@ -138,11 +138,12 @@ static void drawR4BB1T_Logo(int screenW, int y) {
   }
 }
 
-void displaySplash(unsigned long delayMs) {
+void displaySplash(unsigned long delayMs, bool forceStatic) {
   tft.fillScreen(TFT_BLACK);
 
-  BootAnimPlayer player;
-  if (player.begin("/boot_anim.bin")) {
+  if (!forceStatic) {
+    BootAnimPlayer player;
+    if (player.begin("/boot_anim.bin")) {
     uint16_t *buf = (uint16_t *)malloc(128 * 160 * 2);
     if (buf) {
       uint32_t interval = player.getFrameIntervalMs();
@@ -182,6 +183,7 @@ void displaySplash(unsigned long delayMs) {
       return; // done with animation!
     }
     player.end();
+  }
   }
 
   File f = SPIFFS.open("/r4bb1t.bmp", "r");

@@ -1045,7 +1045,7 @@ void displayArmazenamento() {
   tft.setTextColor(C_GOLD_DIM);
   int ft_w = strlen(buf_ft) * 6;
   int ft_x = lx + (128 - lx - ft_w) / 2 - 5;
-  tft.setCursor(ft_x, 102);
+  tft.setCursor(ft_x, 110);
   tft.print(buf_ft);
 
   // ── Botões de ação ──
@@ -2058,8 +2058,8 @@ static void initCurrentAnim() {
       animSpr = nullptr;
     }
     tft.fillScreen(TFT_BLACK);
-    extern void displaySplash(unsigned long delayMs);
-    displaySplash(0);
+    extern void displaySplash(unsigned long delayMs, bool forceStatic);
+    displaySplash(0, true);
   } else {
     animInitLUT();
     if (!animSpr) {

@@ -3,6 +3,6 @@
 
 // Exibe /r4bb1t.bmp do SPIFFS como splash screen
 // e aguarda 'delayMs' milissegundos antes de retornar.
-void displaySplash(unsigned long delayMs = 2500);
+void displaySplash(unsigned long delayMs = 2500, bool forceStatic = false);
 
 #endif
