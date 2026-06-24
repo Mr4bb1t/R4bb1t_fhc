@@ -1170,17 +1170,17 @@ void displayRF_Saved() {
 }
 
 static void openSavedActionMenu(int signalIdx) {
-  // Modal de opções flutuante (desfoca/fundo escuro pseudo-modal)
-  int px = 14, py = 40, pw = 100, ph = 64;
-  tft.fillRect(px, py, pw, ph, 0x2104);   // Fundo escuro acinzentado
-  tft.drawRect(px, py, pw, ph, TFT_CYAN); // Borda
+  // Modal de opções flutuante
+  int px = 14, py = 35, pw = 100, ph = 78;
+  tft.fillRect(px, py, pw, ph, 0x2104);
+  tft.drawRect(px, py, pw, ph, TFT_CYAN);
   tft.setTextSize(1);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor(px + 4, py + 6);
   tft.print(lang->rf_svd_acoes);
 
-  const char *opts[] = {lang->rf_svd_transmitir, lang->rf_svd_excluir, lang->rf_svd_voltar};
-  int numOpts = 3;
+  const char *opts[] = {lang->rf_svd_transmitir, lang->rf_svd_excluir, lang->rf_svd_repetir, lang->rf_svd_voltar};
+  int numOpts = 4;
   int selOpt = 0;
 
   auto drawPopupOpts = [&]() {
@@ -1195,15 +1195,15 @@ static void openSavedActionMenu(int signalIdx) {
 
   drawPopupOpts();
 
-  // Espera soltar o botão da pressão longa, exibindo o popup imediatamente
+  // Espera soltar o botão da pressão longa
   while (digitalRead(BUTTON_SELECT) == LOW)
     vTaskDelay(10 / portTICK_PERIOD_MS);
 
   unsigned long modalDebounce = millis();
   while (true) {
-    vTaskDelay(10 / portTICK_PERIOD_MS); // watchdog feed
+    vTaskDelay(10 / portTICK_PERIOD_MS);
 
-    if (millis() - modalDebounce > 150) {
+    if (millis() - modalDebounce > debounceDelay) {
       if (digitalRead(BUTTON_LEFT) == LOW) {
         modalDebounce = millis();
         selOpt = (selOpt - 1 + numOpts) % numOpts;
@@ -1217,7 +1217,7 @@ static void openSavedActionMenu(int signalIdx) {
       if (digitalRead(BUTTON_SELECT) == LOW) {
         modalDebounce = millis();
         while (digitalRead(BUTTON_SELECT) == LOW)
-          vTaskDelay(10); // espera soltar
+          vTaskDelay(10);
 
         if (selOpt == 0) { // Transmitir
           float txFreq = (savedSignals[signalIdx].freq > 0)
@@ -1234,7 +1234,8 @@ static void openSavedActionMenu(int signalIdx) {
           tft.setCursor(px + 4, py + ph + 2);
           tft.print(lang->rf_svd_enviado);
           delay(600);
-          break;                  // sai do modal
+          break;
+
         } else if (selOpt == 1) { // Excluir
           deleteRFSignal(signalIdx);
 
@@ -1243,19 +1244,84 @@ static void openSavedActionMenu(int signalIdx) {
           tft.setCursor(px + 4, py + ph + 2);
           tft.print(lang->rf_svd_deletado);
           delay(600);
-          // Recarrega
           savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
           savedIndex = 0;
           savedScroll = 0;
-          break;                  // sai do modal
-        } else if (selOpt == 2) { // Cancelar/Voltar
-          break;                  // sai do modal
+          break;
+
+        } else if (selOpt == 2) { // Repetir
+          float txFreq = (savedSignals[signalIdx].freq > 0)
+                             ? savedSignals[signalIdx].freq
+                             : 433.92f;
+
+          // Sub-janela de repetição (sobreposição abaixo de "Repetir")
+          int sx = px + 7, sy = py + 18 + 2 * 14 + 7, sw = pw - 4, sh = 36;
+          tft.fillRect(sx, sy, sw, sh, 0x2104);
+          tft.drawRect(sx, sy, sw, sh, TFT_CYAN);
+          tft.setTextSize(1);
+
+          unsigned long pulseCount = 0;
+          bool repeatRunning = true;
+
+          while (repeatRunning) {
+            // Transmite
+            ELECHOUSE_cc1101.setMHZ(txFreq);
+            ELECHOUSE_cc1101.SetTx();
+            rcSwitch.send(savedSignals[signalIdx].value,
+                          savedSignals[signalIdx].bits);
+            ELECHOUSE_cc1101.SetRx();
+            pulseCount++;
+
+            // Atualiza contagem (só a região do número)
+            tft.fillRect(sx + 2, sy + 4, sw - 4, 12, 0x2104);
+            tft.setTextColor(TFT_YELLOW);
+            tft.setCursor(sx + 6, sy + 6);
+            tft.print(lang->rf_svd_pulsos);
+            tft.print(" ");
+            tft.print(pulseCount);
+
+            // Botão parar (estilo lista: verde selecionado)
+            tft.fillRect(sx + 2, sy + 20, sw - 4, 12, 0x2104);
+            tft.setTextColor(TFT_GREEN);
+            tft.setCursor(sx + 6, sy + 22);
+            tft.print("> ");
+            tft.print(lang->rf_svd_parar);
+
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+
+            // Verifica botão SELECT
+            if ((millis() - modalDebounce) > debounceDelay) {
+              if (digitalRead(BUTTON_SELECT) == LOW) {
+                modalDebounce = millis();
+                while (digitalRead(BUTTON_SELECT) == LOW)
+                  vTaskDelay(10);
+                repeatRunning = false;
+              }
+            }
+
+            vTaskDelay(50 / portTICK_PERIOD_MS);
+          }
+
+          // Fecha sub-janela
+          tft.fillRect(sx, sy, sw, sh, TFT_BLACK);
+
+          // Redesenha o que estava por trás (salva lista + modal)
+          drawSavedList();
+          tft.fillRect(px, py, pw, ph, 0x2104);
+          tft.drawRect(px, py, pw, ph, TFT_CYAN);
+          tft.setTextSize(1);
+          tft.setTextColor(TFT_WHITE);
+          tft.setCursor(px + 4, py + 6);
+          tft.print(lang->rf_svd_acoes);
+          drawPopupOpts();
+
+        } else if (selOpt == 3) { // Voltar
+          break;
         }
       }
     }
   }
 
-  // Restaura a tela ao fechar o pop-up
   drawSavedList();
 }
 

@@ -2,12 +2,14 @@
 //
 // Estética Cyber Edition:
 //  1. Exibe BMP centralizado (lógica original preservada)
-//  2. Após imagem: logo "R4BB1T" pixel art estilizado + barra de loading pixelada
+//  2. Após imagem: logo "R4BB1T" pixel art estilizado + barra de loading
+//  pixelada
 
 #include "Splash.h"
-#include "Globals.h"
 #include "Config.h"
+#include "Globals.h"
 #include "Language.h"
+#include "boot_anim_player.h"
 #include <SPIFFS.h>
 
 // ── Helpers para ler little-endian do SPIFFS ──────
@@ -45,78 +47,74 @@ static void drawLoadingBar(int progress, int total) {
 //  Pixéis 2×2 dourados com sombra de offset (+1,+1) em dourado escuro.
 //
 static const uint8_t PROGMEM glyph_R[7] = {
-  0b11110, // ████░
-  0b10001, // █░░░█
-  0b10001, // █░░░█
-  0b11110, // ████░
-  0b10100, // █░█░░
-  0b10010, // █░░█░
-  0b10001, // █░░░█
+    0b11110, // ████░
+    0b10001, // █░░░█
+    0b10001, // █░░░█
+    0b11110, // ████░
+    0b10100, // █░█░░
+    0b10010, // █░░█░
+    0b10001, // █░░░█
 };
 static const uint8_t PROGMEM glyph_4[7] = {
-  0b10001, // █░░░█
-  0b10001, // █░░░█
-  0b10001, // █░░░█
-  0b11111, // █████
-  0b00001, // ░░░░█
-  0b00001, // ░░░░█
-  0b00001, // ░░░░█
+    0b10001, // █░░░█
+    0b10001, // █░░░█
+    0b10001, // █░░░█
+    0b11111, // █████
+    0b00001, // ░░░░█
+    0b00001, // ░░░░█
+    0b00001, // ░░░░█
 };
 static const uint8_t PROGMEM glyph_B[7] = {
-  0b11110, // ████░
-  0b10001, // █░░░█
-  0b10001, // █░░░█
-  0b11110, // ████░
-  0b10001, // █░░░█
-  0b10001, // █░░░█
-  0b11110, // ████░
+    0b11110, // ████░
+    0b10001, // █░░░█
+    0b10001, // █░░░█
+    0b11110, // ████░
+    0b10001, // █░░░█
+    0b10001, // █░░░█
+    0b11110, // ████░
 };
 static const uint8_t PROGMEM glyph_1[7] = {
-  0b00100, // ░░█░░
-  0b01100, // ░██░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b01110, // ░███░
+    0b00100, // ░░█░░
+    0b01100, // ░██░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b01110, // ░███░
 };
 static const uint8_t PROGMEM glyph_T[7] = {
-  0b11111, // █████
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
-  0b00100, // ░░█░░
+    0b11111, // █████
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
+    0b00100, // ░░█░░
 };
 
 static const uint8_t PROGMEM glyph_space[7] = {
-  0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000
-};
-static const uint8_t PROGMEM glyph_F[7] = {
-  0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000
-};
-static const uint8_t PROGMEM glyph_H[7] = {
-  0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001
-};
-static const uint8_t PROGMEM glyph_C[7] = {
-  0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111
-};
+    0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000};
+static const uint8_t PROGMEM glyph_F[7] = {0b11111, 0b10000, 0b10000, 0b11110,
+                                           0b10000, 0b10000, 0b10000};
+static const uint8_t PROGMEM glyph_H[7] = {0b10001, 0b10001, 0b10001, 0b11111,
+                                           0b10001, 0b10001, 0b10001};
+static const uint8_t PROGMEM glyph_C[7] = {0b01111, 0b10000, 0b10000, 0b10000,
+                                           0b10000, 0b10000, 0b01111};
 
 // Ponteiros para os 10 glifos na ordem R-4-B-B-1-T-[espaço]-F-H-C
-static const uint8_t * const PROGMEM glyphs[10] = {
-  glyph_R, glyph_4, glyph_B, glyph_B, glyph_1, glyph_T, glyph_space, glyph_F, glyph_H, glyph_C
-};
+static const uint8_t *const PROGMEM glyphs[10] = {
+    glyph_R, glyph_4,     glyph_B, glyph_B, glyph_1,
+    glyph_T, glyph_space, glyph_F, glyph_H, glyph_C};
 
 // Espaçamento: 5 colunas × escala 2 = 10 px/letra + 2 px gap → passo 12 px
 // Total: 10×12 - 2 = 118 px → centrado em 128 px → x0 = (128-118)/2 = 5
 static void drawR4BB1T_Logo(int screenW, int y) {
-  const int SCALE   = 2;  // tamanho de cada pixel em tela
-  const int COLS    = 5;  // colunas do glifo
-  const int ROWS    = 7;  // linhas do glifo
-  const int GAP     = 2;  // espaço entre letras (px de tela)
+  const int SCALE = 2; // tamanho de cada pixel em tela
+  const int COLS = 5;  // colunas do glifo
+  const int ROWS = 7;  // linhas do glifo
+  const int GAP = 2;   // espaço entre letras (px de tela)
   const int letterW = COLS * SCALE;
-  const int totalW  = 10 * letterW + 9 * GAP;
+  const int totalW = 10 * letterW + 9 * GAP;
   const int SW = (screenW > 0) ? screenW : 128;
   int x0 = (SW - totalW) / 2;
 
@@ -127,9 +125,10 @@ static void drawR4BB1T_Logo(int screenW, int y) {
       uint8_t bits = pgm_read_byte(&g[row]);
       for (int col = 0; col < COLS; col++) {
         bool on = (bits >> (4 - col)) & 1;
-        if (!on) continue;
+        if (!on)
+          continue;
         int px = lx + col * SCALE;
-        int py = y  + row * SCALE;
+        int py = y + row * SCALE;
         // Sombra (offset +1,+1)
         tft.fillRect(px + 1, py + 1, SCALE, SCALE, C_GOLD_DIM);
         // Pixel principal
@@ -141,6 +140,49 @@ static void drawR4BB1T_Logo(int screenW, int y) {
 
 void displaySplash(unsigned long delayMs) {
   tft.fillScreen(TFT_BLACK);
+
+  BootAnimPlayer player;
+  if (player.begin("/boot_anim.bin")) {
+    uint16_t *buf = (uint16_t *)malloc(128 * 160 * 2);
+    if (buf) {
+      uint32_t interval = player.getFrameIntervalMs();
+      uint32_t lastFrame = millis();
+
+      // Executa a animação 2 vezes
+      for (int loop_count = 0; loop_count < 2; loop_count++) {
+        while (player.decodeNextFrame(buf)) {
+          while (millis() - lastFrame < interval) {
+            yield();
+          }
+          lastFrame = millis();
+
+          // Swap bytes for proper endianness to fix color interference
+          tft.setSwapBytes(true);
+
+          // Center the animation dynamically e desce um pouco (+4)
+          int anim_x = (tft.width() - player.getWidth()) / 2;
+          int anim_y = ((tft.height() - player.getHeight()) / 2) + 25;
+          if (anim_x < 0)
+            anim_x = 0;
+          if (anim_y < 0)
+            anim_y = 0;
+
+          tft.pushImage(anim_x, anim_y, player.getWidth(), player.getHeight(),
+                        buf);
+          tft.setSwapBytes(false); // Restore for future drawing
+        }
+
+        // Se for o primeiro loop, reseta para rodar a segunda vez
+        if (loop_count == 0) {
+          player.reset(buf);
+        }
+      }
+      free(buf);
+      player.end();
+      return; // done with animation!
+    }
+    player.end();
+  }
 
   File f = SPIFFS.open("/r4bb1t.bmp", "r");
   if (!f) {
@@ -159,7 +201,7 @@ void displaySplash(unsigned long delayMs) {
     f.close();
     delay(delayMs);
     return;
-  }                             // "BM"
+  } // "BM"
   r32(f);                       // filesize
   r32(f);                       // reservado
   uint32_t dataOffset = r32(f); // offset dos pixels
@@ -183,7 +225,8 @@ void displaySplash(unsigned long delayMs) {
   }
 
   bool flipY = (bmpH > 0);
-  if (bmpH < 0) bmpH = -bmpH;
+  if (bmpH < 0)
+    bmpH = -bmpH;
 
   // ── Escala proporcional — imagem ocupa y=0..139 (deixa rodapé para texto) ──
   const int16_t scrW = (int16_t)tft.width();
@@ -192,12 +235,15 @@ void displaySplash(unsigned long delayMs) {
   uint32_t sx = (uint32_t)scrW * 256 / (uint32_t)bmpW;
   uint32_t sy = (uint32_t)scrH * 256 / (uint32_t)bmpH;
   uint32_t sc = (sx < sy) ? sx : sy;
-  if (sc > 256) sc = 256;
+  if (sc > 256)
+    sc = 256;
 
   int16_t dW = (int16_t)((uint32_t)bmpW * sc / 256);
   int16_t dH = (int16_t)((uint32_t)bmpH * sc / 256);
-  if (dW < 1) dW = 1;
-  if (dH < 1) dH = 1;
+  if (dW < 1)
+    dW = 1;
+  if (dH < 1)
+    dH = 1;
 
   int16_t ox = (scrW - dW) / 2;
   int16_t oy = (scrH - dH) / 2;
@@ -207,11 +253,13 @@ void displaySplash(unsigned long delayMs) {
   uint16_t *fb = (uint16_t *)malloc(fbSize * sizeof(uint16_t));
 
   uint32_t rowBytes = ((uint32_t)(bmpW * 3 + 3) / 4) * 4;
-  uint8_t  *row = (uint8_t *)malloc(rowBytes);
+  uint8_t *row = (uint8_t *)malloc(rowBytes);
 
   if (!fb || !row) {
-    if (fb)  free(fb);
-    if (row) free(row);
+    if (fb)
+      free(fb);
+    if (row)
+      free(row);
     f.close();
     tft.setTextColor(C_RED);
     tft.setTextSize(1);
@@ -225,21 +273,22 @@ void displaySplash(unsigned long delayMs) {
   f.seek(dataOffset);
 
   for (int32_t fileRow = 0; fileRow < bmpH; fileRow++) {
-    if (f.read(row, rowBytes) != (int)rowBytes) break;
+    if (f.read(row, rowBytes) != (int)rowBytes)
+      break;
 
     int32_t imgY = flipY ? (bmpH - 1 - fileRow) : fileRow;
-    int16_t sY   = (int16_t)((int32_t)imgY * dH / bmpH);
-    if (sY < 0 || sY >= dH) continue;
+    int16_t sY = (int16_t)((int32_t)imgY * dH / bmpH);
+    if (sY < 0 || sY >= dH)
+      continue;
 
     uint16_t *fbRow = &fb[(size_t)sY * (size_t)dW];
     for (int16_t x = 0; x < dW; x++) {
       int32_t sX = (int32_t)x * bmpW / dW;
-      uint8_t b  = row[sX * 3 + 0];
-      uint8_t g  = row[sX * 3 + 1];
+      uint8_t b = row[sX * 3 + 0];
+      uint8_t g = row[sX * 3 + 1];
       uint8_t r2 = row[sX * 3 + 2];
-      fbRow[x] = ((uint16_t)(r2 & 0xF8) << 8) |
-                 ((uint16_t)(g  & 0xFC) << 3) |
-                 (b >> 3);
+      fbRow[x] =
+          ((uint16_t)(r2 & 0xF8) << 8) | ((uint16_t)(g & 0xFC) << 3) | (b >> 3);
     }
   }
 

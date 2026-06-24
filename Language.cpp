@@ -76,8 +76,8 @@ const LangPack langPT PROGMEM = {
     "  o    salva e volta",
 
     // ── Armazenamento ──
-    "STORAGE",
-    "used",
+    "ARMAZENAMENTO",
+    "USADO",
     "VOLTAR",
     "ARQUIVOS",
     "< >  sel    o  ok",
@@ -157,9 +157,12 @@ const LangPack langPT PROGMEM = {
     "Acoes:",
     "Transmitir",
     "Excluir",
+    "Repetir",
     "Voltar",
     ">> ENVIADO!",
     "Sinal Deletado",
+    "Parar",
+    "Pulsos:",
 
     // ── Menu Ataques ──
     "WIFI ATTACKS",
@@ -312,6 +315,12 @@ const LangPack langPT PROGMEM = {
     "Selecione o Idioma:",
     "BEM-VINDO AO R4BB1T",
 
+    // ── Storage labels ──
+    "FW",
+    "SPIFFS",
+    "LIVRE",
+    "total:",
+
     // ── Screensaver anim names ──
     "Logo R4BB1T",
     "Matrix Rain",
@@ -402,7 +411,7 @@ const LangPack langEN PROGMEM = {
 
     // ── Armazenamento ──
     "STORAGE",
-    "used",
+    "USED",
     "BACK",
     "FILES",
     "< >  sel    o  ok",
@@ -482,9 +491,12 @@ const LangPack langEN PROGMEM = {
     "Actions:",
     "Transmit",
     "Delete",
+    "Repeat",
     "Back",
     ">> SENT!",
     "Signal Deleted",
+    "Stop",
+    "Pulses:",
 
     // ── Menu Ataques ──
     "WIFI ATTACKS",
@@ -636,6 +648,12 @@ const LangPack langEN PROGMEM = {
     "Wiping system...",
     "Select Language:",
     "WELCOME TO R4BB1T",
+
+    // ── Storage labels ──
+    "FW",
+    "SPIFFS",
+    "FREE",
+    "total:",
 
     // ── Screensaver anim names ──
     "Logo R4BB1T",

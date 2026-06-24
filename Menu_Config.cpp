@@ -3,11 +3,12 @@
 #include "Config.h"
 #include "Globals.h"
 #include "HWProbe.h"
+#include "Language.h"
 #include "Menu_Main.h"
 #include "Menu_NRF24.h"
 #include "Menu_RF.h"
 #include "UI.h"
-#include "Language.h"
+#include "boot_anim_player.h"
 
 #include <SPI.h>
 #include <SPIFFS.h>
@@ -20,31 +21,42 @@
 #define SCR_W 128
 #define SCR_H 160
 
-static const char *configItems_raw[] = {"Voltar",      "Sobre",     "Mudar MAC",
-                                    "Brilho",      "Modo Menu", "Armazenamento",
-                                    "Descanso Tela", "Idioma", "Hard Reset", "Desligar"};
+static const char *configItems_raw[] = {
+    "Voltar",        "Sobre",         "Mudar MAC", "Brilho",     "Modo Menu",
+    "Armazenamento", "Descanso Tela", "Idioma",    "Hard Reset", "Desligar"};
 
-static const char* getConfigItem(int i) {
-    switch(i) {
-        case 0: return lang->cfg_itm_voltar;
-        case 1: return lang->cfg_itm_sobre;
-        case 2: return lang->cfg_itm_mac;
-        case 3: return lang->cfg_itm_brilho;
-        case 4: return lang->cfg_itm_modomenu;
-        case 5: return lang->cfg_itm_storage;
-        case 6: return lang->cfg_itm_saver;
-        case 7: return lang->cfg_itm_idioma;
-        case 8: return lang->cfg_itm_hardreset;
-        case 9: return lang->cfg_itm_desligar;
-        default: return configItems_raw[i];
-    }
+static const char *getConfigItem(int i) {
+  switch (i) {
+  case 0:
+    return lang->cfg_itm_voltar;
+  case 1:
+    return lang->cfg_itm_sobre;
+  case 2:
+    return lang->cfg_itm_mac;
+  case 3:
+    return lang->cfg_itm_brilho;
+  case 4:
+    return lang->cfg_itm_modomenu;
+  case 5:
+    return lang->cfg_itm_storage;
+  case 6:
+    return lang->cfg_itm_saver;
+  case 7:
+    return lang->cfg_itm_idioma;
+  case 8:
+    return lang->cfg_itm_hardreset;
+  case 9:
+    return lang->cfg_itm_desligar;
+  default:
+    return configItems_raw[i];
+  }
 }
 static const int NUM_CONFIG_ITEMS = 10;
 static int opcaoConfig = 0;
 
 // Forward declarations para hard reset (usadas em handleConfiguracoes)
 static int hrStep = 0;
-static int hrSel  = 0;
+static int hrSel = 0;
 
 static void initScreensaverMenu();
 
@@ -67,7 +79,8 @@ void displayConfiguracoes() {
     int idx = configScroll + i;
     if (idx >= NUM_CONFIG_ITEMS)
       break;
-    drawMenuItem(0, 16 + i * 20, 128, 19, getConfigItem(idx), idx == opcaoConfig);
+    drawMenuItem(0, 16 + i * 20, 128, 19, getConfigItem(idx),
+                 idx == opcaoConfig);
   }
 
   if (configScroll > 0) {
@@ -147,7 +160,7 @@ void handleConfiguracoes() {
         displayIdioma();
       } else if (opcaoConfig == 8) {
         hrStep = 0;
-        hrSel  = 0;
+        hrSel = 0;
         estadoAtual = TELA_HARDRESET;
         displayHardReset();
       } else if (opcaoConfig == 9) {
@@ -278,12 +291,6 @@ void displayIdioma() {
   drawMenuItem(0, 40, SCR_W, 19, lang->cfg_lang_pt, idiomaTemp == 0);
   drawMenuItem(0, 60, SCR_W, 19, lang->cfg_lang_en, idiomaTemp == 1);
 
-  drawSeparator(SCR_H - 24, C_GREY);
-  tft.setTextSize(1);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, SCR_H - 18);
-  tft.print(lang->cfg_lang_hint);
-
   batteryDraw();
 }
 
@@ -300,13 +307,24 @@ void handleIdioma() {
       // Salva e aplica a alteração
       setLanguage(idiomaTemp);
       prefs.putInt("idioma", idiomaTemp);
+
+      // Feedback rápido ornamentado
+      tft.setTextSize(1);
+      int tw = strlen(lang->cfg_lang_salvo) * 6;
+      int bw = tw + 24;
+      int bh = 24;
+      int bx = (SCR_W - bw) / 2;
+      int by = 85;
       
-      // Feedback rápido
-      tft.fillRect(0, 85, SCR_W, 12, C_BG);
+      tft.fillRoundRect(bx, by, bw, bh, 4, C_BG);
+      tft.drawRoundRect(bx, by, bw, bh, 4, C_GREEN);
+      tft.drawRoundRect(bx + 1, by + 1, bw - 2, bh - 2, 3, C_GREEN); // Borda dupla
+      
       tft.setTextColor(C_GREEN);
-      tft.setCursor(30, 85);
+      tft.setCursor(bx + 12, by + 8);
       tft.print(lang->cfg_lang_salvo);
-      delay(600);
+      
+      delay(800);
 
       estadoAtual = MENU_CONFIGURACOES;
       displayConfiguracoes();
@@ -468,7 +486,8 @@ static void displaySobre_p0() {
   row(lang->cfg_lbl_chip, model);
   row(lang->cfg_lbl_cores, String(chip.cores));
   row(lang->cfg_lbl_rev, String(chip.revision));
-  row(lang->cfg_lbl_flash, String(ESP.getFlashChipSize() / (1024 * 1024)) + " MB");
+  row(lang->cfg_lbl_flash,
+      String(ESP.getFlashChipSize() / (1024 * 1024)) + " MB");
   row(lang->cfg_lbl_heap, String(ESP.getFreeHeap() / 1024) + " KB", C_GREEN);
   row(lang->cfg_lbl_sdk, String(ESP.getSdkVersion()).substring(0, 10));
   row(lang->cfg_lbl_fw, "v1.0.0", C_GOLD);
@@ -531,7 +550,8 @@ static void displaySobre_p2() {
     y += LH;
   };
 
-  row("Status:", hwNRF24_2_ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect,
+  row("Status:",
+      hwNRF24_2_ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect,
       hwNRF24_2_ok ? C_GREEN : C_RED);
   row(lang->cfg_lbl_bus, lang->cfg_val_hspi, C_GOLD_DIM);
   row(lang->cfg_lbl_ce, "GPIO 12");
@@ -561,7 +581,8 @@ static void displaySobre_p3() {
     y += LH;
   };
 
-  row("Status:", ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect, ok ? C_GREEN : C_RED);
+  row("Status:", ok ? lang->cfg_st_conectado : lang->cfg_st_nao_detect,
+      ok ? C_GREEN : C_RED);
   row(lang->cfg_lbl_freq, "433.92 MHz", C_GOLD);
   row(lang->cfg_lbl_cs, "GPIO 25");
   row(lang->cfg_lbl_gdo0, "GPIO 2");
@@ -605,13 +626,23 @@ static void displaySobre_p4() {
   tft.setTextColor(TFT_BLACK);
   if (fill > 20) {
     int li = pct < 10 ? 0 : pct < 25 ? 1 : pct < 50 ? 2 : pct < 80 ? 3 : 4;
-    const char* lvlStr;
-    switch(li) {
-      case 0: lvlStr = lang->cfg_bat_critico; break;
-      case 1: lvlStr = lang->cfg_bat_baixo; break;
-      case 2: lvlStr = lang->cfg_bat_medio; break;
-      case 3: lvlStr = lang->cfg_bat_bom; break;
-      default: lvlStr = lang->cfg_bat_cheio; break;
+    const char *lvlStr;
+    switch (li) {
+    case 0:
+      lvlStr = lang->cfg_bat_critico;
+      break;
+    case 1:
+      lvlStr = lang->cfg_bat_baixo;
+      break;
+    case 2:
+      lvlStr = lang->cfg_bat_medio;
+      break;
+    case 3:
+      lvlStr = lang->cfg_bat_bom;
+      break;
+    default:
+      lvlStr = lang->cfg_bat_cheio;
+      break;
     }
     int lw = (int)strlen(lvlStr) * 6;
     tft.setCursor(BX + (fill - lw) / 2, BY + 7);
@@ -867,7 +898,7 @@ static int viewScroll = 0;
 
 // Constantes do donut
 #define DONUT_CX 36   // centro X (metade esquerda da tela)
-#define DONUT_CY 72   // centro Y
+#define DONUT_CY 64   // centro Y
 #define DONUT_ROUT 34 // raio externo
 #define DONUT_RIN 21  // raio interno
 
@@ -904,7 +935,7 @@ static void drawDonutCenter(int cx, int cy, int pct) {
   tft.setCursor(tx, cy - 4);
   tft.print(buf);
   tft.setTextColor(C_GOLD_DIM);
-  int ux = cx - 9;
+  int ux = cx - ((int)strlen(lang->cfg_st_used) * 6) / 2;
   tft.setCursor(ux, cy + 5);
   tft.print(lang->cfg_st_used);
 }
@@ -924,7 +955,7 @@ static void drawStorLegend(int x, int y, uint16_t color, const char *label,
 
 // ── Atualiza apenas os botões da tela de armazenamento ──
 static void updateArmazenamentoBotoes() {
-  const int BTN_Y = 119;
+  const int BTN_Y = 134;
   const int BTN_H = 16;
   const int BTN_W = 55;
 
@@ -934,7 +965,8 @@ static void updateArmazenamentoBotoes() {
   tft.drawRoundRect(3, BTN_Y, BTN_W, BTN_H, 3, selV ? C_GOLD : C_GREY);
   tft.setTextSize(1);
   tft.setTextColor(selV ? C_GOLD : C_WHITE);
-  tft.setCursor(15, BTN_Y + 5);
+  int vx = 3 + (BTN_W - (int)strlen(lang->cfg_st_voltar) * 6) / 2;
+  tft.setCursor(vx, BTN_Y + 5);
   tft.print(lang->cfg_st_voltar);
 
   // [ARQUIVOS]
@@ -942,7 +974,8 @@ static void updateArmazenamentoBotoes() {
   tft.fillRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD_SEL : C_BG);
   tft.drawRoundRect(70, BTN_Y, BTN_W, BTN_H, 3, selA ? C_GOLD : C_GREY);
   tft.setTextColor(selA ? C_GOLD : C_WHITE);
-  tft.setCursor(76, BTN_Y + 5);
+  int ax = 70 + (BTN_W - (int)strlen(lang->cfg_st_arquivos) * 6) / 2;
+  tft.setCursor(ax, BTN_Y + 5);
   tft.print(lang->cfg_st_arquivos);
 }
 
@@ -993,32 +1026,32 @@ void displayArmazenamento() {
   drawDonutCenter(DONUT_CX, DONUT_CY, used_pct);
 
   // ── Legenda (lado direito) ──
-  char buf_fw[10], buf_sp[10], buf_fr[10], buf_ft[12];
-  snprintf(buf_fw, sizeof(buf_fw), "%uKB", (unsigned)(fw_size / 1024));
-  snprintf(buf_sp, sizeof(buf_sp), "%uKB", (unsigned)(sp_used / 1024));
-  snprintf(buf_fr, sizeof(buf_fr), "%uKB", (unsigned)(flash_free / 1024));
-  snprintf(buf_ft, sizeof(buf_ft), "%uMB tot",
-           (unsigned)(flash_tot / (1024 * 1024)));
+  char buf_fw[16], buf_sp[16], buf_fr[16], buf_ft[16];
+  snprintf(buf_fw, sizeof(buf_fw), "%.2fMB",
+           (float)fw_size / (1024.0f * 1024.0f));
+  snprintf(buf_sp, sizeof(buf_sp), "%.2fMB",
+           (float)sp_used / (1024.0f * 1024.0f));
+  snprintf(buf_fr, sizeof(buf_fr), "%.2fMB",
+           (float)flash_free / (1024.0f * 1024.0f));
+  snprintf(buf_ft, sizeof(buf_ft), "%s %.0fMB", lang->st_total,
+           (float)flash_tot / (1024.0f * 1024.0f));
 
   int lx = DONUT_CX + DONUT_ROUT + 8;
-  drawStorLegend(lx, 22, C_ORANGE, "FW", buf_fw);
-  drawStorLegend(lx, 44, C_GOLD, "SPIF", buf_sp);
-  drawStorLegend(lx, 66, C_GREY, "FREE", buf_fr);
+  drawStorLegend(lx, 38, C_ORANGE, lang->st_fw, buf_fw);
+  drawStorLegend(lx, 62, C_GOLD, lang->st_spiffs, buf_sp);
+  drawStorLegend(lx, 86, C_GREY, lang->st_free, buf_fr);
 
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(lx, 88);
+  int ft_w = strlen(buf_ft) * 6;
+  int ft_x = lx + (128 - lx - ft_w) / 2 - 5;
+  tft.setCursor(ft_x, 102);
   tft.print(buf_ft);
 
   // ── Botões de ação ──
-  drawSeparator(114, C_GREY);
+  drawSeparator(SCR_H - 4, C_GREY);
 
   updateArmazenamentoBotoes();
-
-  // Dica de controles
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(14, 140);
-  tft.print(lang->cfg_st_hint);
 
   batteryDraw();
 }
@@ -1300,20 +1333,66 @@ static void displayFileViewerText() {
   batteryDraw();
 }
 
+static void playBinAnimation(const char* path) {
+  BootAnimPlayer player;
+  if (player.begin(path)) {
+    uint16_t *buf = (uint16_t *)malloc(128 * 160 * 2);
+    if (buf) {
+      uint32_t interval = player.getFrameIntervalMs();
+      uint32_t lastFrame = millis();
+
+      tft.fillScreen(TFT_BLACK);
+      
+      while (player.decodeNextFrame(buf)) {
+        while (millis() - lastFrame < interval) {
+          yield();
+        }
+        lastFrame = millis();
+
+        tft.setSwapBytes(true);
+
+        int anim_x = (tft.width() - player.getWidth()) / 2;
+        int anim_y = (tft.height() - player.getHeight()) / 2;
+        if (anim_x < 0) anim_x = 0;
+        if (anim_y < 0) anim_y = 0;
+
+        tft.pushImage(anim_x, anim_y, player.getWidth(), player.getHeight(), buf);
+        tft.setSwapBytes(false);
+        
+        // Sai se apertar algum botao
+        if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
+            lastDebounceTime = millis();
+            break;
+        }
+      }
+      free(buf);
+    }
+    player.end();
+  }
+}
+
 static void openFileForView(int fi) {
   const char *fname = fileNames[fi];
   int len = strlen(fname);
+
+  String path = fname;
+  if (!path.startsWith("/"))
+    path = "/" + path;
+
   if (len > 4 && strcasecmp(fname + len - 4, ".bmp") == 0) {
     storageState = 3;
     displayFileViewerBMP();
     return;
   }
 
+  if (len > 4 && strcasecmp(fname + len - 4, ".bin") == 0) {
+    playBinAnimation(path.c_str());
+    displayArquivosSPIFFS();
+    return;
+  }
+
   viewLen = 0;
   viewScroll = 0;
-  String path = fname;
-  if (!path.startsWith("/"))
-    path = "/" + path;
   File f = SPIFFS.open(path.c_str(), FILE_READ);
   if (!f)
     return;
@@ -1332,13 +1411,16 @@ static void openFileForView(int fi) {
 }
 
 static void switchViewerFile(int dir) {
-  if (fileCount <= 1) return;
-  
+  if (fileCount <= 1)
+    return;
+
   int current = fileCursor - 1;
   current += dir;
-  if (current < 0) current = fileCount - 1;
-  if (current >= fileCount) current = 0;
-  
+  if (current < 0)
+    current = fileCount - 1;
+  if (current >= fileCount)
+    current = 0;
+
   fileCursor = current + 1;
   openFileForView(current);
 }
@@ -1362,7 +1444,8 @@ void handleArmazenamento() {
           displayArquivosSPIFFS();
         } else { // 0 = VOLTAR
           storageState = 0;
-          storageOpcao = 1; // Reseta o estado para ARQUIVOS quando voltar a entrar
+          storageOpcao =
+              1; // Reseta o estado para ARQUIVOS quando voltar a entrar
           estadoAtual = MENU_CONFIGURACOES;
           displayConfiguracoes();
         }
@@ -1403,29 +1486,33 @@ void handleArmazenamento() {
     } else if (storageState == 2) {
       if (digitalRead(BUTTON_RIGHT) == LOW) {
         unsigned long start = millis();
-        while(digitalRead(BUTTON_RIGHT) == LOW) {
-           if(millis() - start > 400) break;
-           delay(10);
+        while (digitalRead(BUTTON_RIGHT) == LOW) {
+          if (millis() - start > 400)
+            break;
+          delay(10);
         }
         if (millis() - start > 400) {
-           switchViewerFile(1);
+          switchViewerFile(1);
         } else {
-           if (viewScroll < viewTotalLines - VIEWER_LINES) viewScroll++;
-           displayFileViewerText();
+          if (viewScroll < viewTotalLines - VIEWER_LINES)
+            viewScroll++;
+          displayFileViewerText();
         }
         lastDebounceTime = millis();
       }
       if (digitalRead(BUTTON_LEFT) == LOW) {
         unsigned long start = millis();
-        while(digitalRead(BUTTON_LEFT) == LOW) {
-           if(millis() - start > 400) break;
-           delay(10);
+        while (digitalRead(BUTTON_LEFT) == LOW) {
+          if (millis() - start > 400)
+            break;
+          delay(10);
         }
         if (millis() - start > 400) {
-           switchViewerFile(-1);
+          switchViewerFile(-1);
         } else {
-           if (viewScroll > 0) viewScroll--;
-           displayFileViewerText();
+          if (viewScroll > 0)
+            viewScroll--;
+          displayFileViewerText();
         }
         lastDebounceTime = millis();
       }
@@ -1478,7 +1565,7 @@ void displayDesligar() {
 
   tft.setTextSize(1);
   tft.setTextColor(C_WHITE);
-  const char* t = lang->cfg_dl_msg;
+  const char *t = lang->cfg_dl_msg;
   tft.setCursor((128 - strlen(t) * 6) / 2, 82);
   tft.print(t);
 
@@ -1524,7 +1611,7 @@ void handleDesligar() {
 
       tft.setTextSize(1);
       tft.setTextColor(TFT_RED);
-      const char* tMsg = lang->cfg_dl_sistema;
+      const char *tMsg = lang->cfg_dl_sistema;
       tft.setCursor((128 - strlen(tMsg) * 6) / 2, 95);
       tft.print(tMsg);
 
@@ -1584,32 +1671,46 @@ static uint16_t pCol(uint8_t speed, int offset) {
 #define ANIM_COUNT 11
 
 static int animIndex = 0;
-static const char *animNames[] = {
-    "<- VOLTAR", "Logo R4BB1T", "Matrix Rain", "Cubo 3D", "Plasma", "Tesseract 4D", "Corredor",
-    "Onda Grade",  "Aneis",   "Quadrados", "Olho Magenta"};
+static const char *animNames[] = {"<- VOLTAR", "Logo R4BB1T", "Matrix Rain",
+                                  "Cubo 3D",   "Plasma",      "Tesseract 4D",
+                                  "Corredor",  "Onda Grade",  "Aneis",
+                                  "Quadrados", "Olho Magenta"};
 
-static const char* getAnimName(int i) {
-    switch(i) {
-        case 0: return lang->cfg_sv_voltar;
-        case 1: return lang->sv_name_logo;
-        case 2: return lang->sv_name_matrix;
-        case 3: return lang->sv_name_cubo;
-        case 4: return lang->sv_name_plasma;
-        case 5: return lang->sv_name_tesseract;
-        case 6: return lang->sv_name_corredor;
-        case 7: return lang->sv_name_ondagrade;
-        case 8: return lang->sv_name_aneis;
-        case 9: return lang->sv_name_quadrados;
-        case 10: return lang->sv_name_olho;
-        default: return "";
-    }
+static const char *getAnimName(int i) {
+  switch (i) {
+  case 0:
+    return lang->cfg_sv_voltar;
+  case 1:
+    return lang->sv_name_logo;
+  case 2:
+    return lang->sv_name_matrix;
+  case 3:
+    return lang->sv_name_cubo;
+  case 4:
+    return lang->sv_name_plasma;
+  case 5:
+    return lang->sv_name_tesseract;
+  case 6:
+    return lang->sv_name_corredor;
+  case 7:
+    return lang->sv_name_ondagrade;
+  case 8:
+    return lang->sv_name_aneis;
+  case 9:
+    return lang->sv_name_quadrados;
+  case 10:
+    return lang->sv_name_olho;
+  default:
+    return "";
+  }
 }
 
 static TFT_eSprite *animSpr = nullptr;
 
 static void initScreensaverMenu() {
   animIndex = prefs.getInt("screensaver", 1);
-  if (animIndex == 0 || animIndex >= ANIM_COUNT) animIndex = 1;
+  if (animIndex == 0 || animIndex >= ANIM_COUNT)
+    animIndex = 1;
 }
 
 static int scrScroll = 0;
@@ -1627,17 +1728,19 @@ void displayScreensaverTest() {
 
   for (int i = 0; i < 6; i++) {
     int idx = scrScroll + i;
-    if (idx >= ANIM_COUNT) break;
+    if (idx >= ANIM_COUNT)
+      break;
 
     String label = String(getAnimName(idx));
-    if (idx == savedIdx && idx != 0) label += lang->cfg_sv_ativo;
+    if (idx == savedIdx && idx != 0)
+      label += lang->cfg_sv_ativo;
 
     drawMenuItem(0, 16 + i * 19, 125, 19, label.c_str(), idx == animIndex);
   }
 
   // Barra de rolagem
   if (ANIM_COUNT > 6) {
-    int barH = (6 * 114) / ANIM_COUNT; 
+    int barH = (6 * 114) / ANIM_COUNT;
     int barY = 16 + (scrScroll * 114) / ANIM_COUNT;
     tft.drawFastVLine(126, 16, 114, C_GREY);
     tft.drawFastVLine(127, 16, 114, C_GREY);
@@ -1652,7 +1755,7 @@ void displayScreensaverTest() {
   tft.print(lang->cfg_sv_hint1);
   tft.setCursor(70, 136);
   tft.print(lang->cfg_sv_hint2);
-  
+
   batteryDraw();
 }
 
@@ -1717,7 +1820,8 @@ static void animFrame(uint32_t now) {
   switch (animIndex) {
 
   // 1: LOGO R4BB1T (Splash) - Não é animado via sprite
-  case 1: break;
+  case 1:
+    break;
 
   // 2: MATRIX RAIN
   case 2: {
@@ -1956,7 +2060,8 @@ static void initCurrentAnim() {
       animSpr->createSprite(ANIM_W, ANIM_H);
     }
     if (animIndex == 2) {
-      for (int i = 0; i < 13; i++) matInitCol(i);
+      for (int i = 0; i < 13; i++)
+        matInitCol(i);
     }
     eyeX = ANIM_CX;
     eyeY = ANIM_CY;
@@ -1973,15 +2078,16 @@ static bool animStartedFromIdle = false;
 void startScreensaver(bool fromIdle) {
   animStartedFromIdle = fromIdle;
   estadoAtual = TELA_SCREENSAVER_TEST; // reaproveita o estado
-  
+
   if (fromIdle) {
     animIndex = prefs.getInt("screensaver", 1);
-    if (animIndex == 0 || animIndex >= ANIM_COUNT) animIndex = 1;
+    if (animIndex == 0 || animIndex >= ANIM_COUNT)
+      animIndex = 1;
   }
 
   animRunning = true;
   initCurrentAnim();
-  
+
   // Escurece a tela apenas se for a partir do repouso
   if (fromIdle) {
     blDim();
@@ -1997,15 +2103,20 @@ void handleScreensaverTest() {
         int old = animIndex;
         animIndex = (animIndex - 1 + ANIM_COUNT) % ANIM_COUNT;
         lastDebounceTime = millis();
-        if (animIndex >= scrScroll && animIndex < scrScroll + 6 && old >= scrScroll && old < scrScroll + 6) {
+        if (animIndex >= scrScroll && animIndex < scrScroll + 6 &&
+            old >= scrScroll && old < scrScroll + 6) {
           int savedIdx = prefs.getInt("screensaver", 1);
           String labelOld = String(getAnimName(old));
-          if (old == savedIdx && old != 0) labelOld += lang->cfg_sv_ativo;
-          drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19, labelOld.c_str(), false);
-          
+          if (old == savedIdx && old != 0)
+            labelOld += lang->cfg_sv_ativo;
+          drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19,
+                       labelOld.c_str(), false);
+
           String labelNew = String(getAnimName(animIndex));
-          if (animIndex == savedIdx && animIndex != 0) labelNew += lang->cfg_sv_ativo;
-          drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19, labelNew.c_str(), true);
+          if (animIndex == savedIdx && animIndex != 0)
+            labelNew += lang->cfg_sv_ativo;
+          drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19,
+                       labelNew.c_str(), true);
         } else {
           displayScreensaverTest();
         }
@@ -2014,15 +2125,20 @@ void handleScreensaverTest() {
         int old = animIndex;
         animIndex = (animIndex + 1) % ANIM_COUNT;
         lastDebounceTime = millis();
-        if (animIndex >= scrScroll && animIndex < scrScroll + 6 && old >= scrScroll && old < scrScroll + 6) {
+        if (animIndex >= scrScroll && animIndex < scrScroll + 6 &&
+            old >= scrScroll && old < scrScroll + 6) {
           int savedIdx = prefs.getInt("screensaver", 1);
           String labelOld = String(getAnimName(old));
-          if (old == savedIdx && old != 0) labelOld += lang->cfg_sv_ativo;
-          drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19, labelOld.c_str(), false);
-          
+          if (old == savedIdx && old != 0)
+            labelOld += lang->cfg_sv_ativo;
+          drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19,
+                       labelOld.c_str(), false);
+
           String labelNew = String(getAnimName(animIndex));
-          if (animIndex == savedIdx && animIndex != 0) labelNew += lang->cfg_sv_ativo;
-          drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19, labelNew.c_str(), true);
+          if (animIndex == savedIdx && animIndex != 0)
+            labelNew += lang->cfg_sv_ativo;
+          drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19,
+                       labelNew.c_str(), true);
         } else {
           displayScreensaverTest();
         }
@@ -2048,10 +2164,11 @@ void handleScreensaverTest() {
     animFrame(now);
 
     // Verifica botões para trocar/sair
-    if ((now - lastDebounceTime) > 150) {
-      if (digitalRead(BUTTON_SELECT) == LOW || 
-         (animStartedFromIdle && (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW))) {
-        
+    if ((now - lastDebounceTime) > debounceDelay) {
+      if (digitalRead(BUTTON_SELECT) == LOW ||
+          (animStartedFromIdle && (digitalRead(BUTTON_LEFT) == LOW ||
+                                   digitalRead(BUTTON_RIGHT) == LOW))) {
+
         lastDebounceTime = now;
         animRunning = false;
 
@@ -2078,16 +2195,18 @@ void handleScreensaverTest() {
           lastDebounceTime = now;
           // Pula a opção "VOLTAR" (index 0) durante a execução
           animIndex = animIndex - 1;
-          if (animIndex <= 0) animIndex = ANIM_COUNT - 1;
-          
+          if (animIndex <= 0)
+            animIndex = ANIM_COUNT - 1;
+
           initCurrentAnim();
         }
         if (digitalRead(BUTTON_RIGHT) == LOW) {
           lastDebounceTime = now;
           // Pula a opção "VOLTAR" (index 0) durante a execução
           animIndex = animIndex + 1;
-          if (animIndex >= ANIM_COUNT) animIndex = 1;
-          
+          if (animIndex >= ANIM_COUNT)
+            animIndex = 1;
+
           initCurrentAnim();
         }
       }
@@ -2100,10 +2219,11 @@ void handleScreensaverTest() {
 // ═══════════════════════════════════════════════
 // (hrStep e hrSel declarados no topo do arquivo)
 // ── Botão estilizado para hard reset ──
-static void drawHRButton(int x, int y, int w, int h, const char* lbl, bool danger, bool active) {
+static void drawHRButton(int x, int y, int w, int h, const char *lbl,
+                         bool danger, bool active) {
   uint16_t borderCol = active ? (danger ? C_RED : C_GOLD) : C_GREY;
-  uint16_t bgCol     = active ? (danger ? 0x2000 : C_GOLD_SEL) : C_BG;
-  uint16_t txtCol    = active ? (danger ? C_RED : C_GOLD) : C_GREY;
+  uint16_t bgCol = active ? (danger ? 0x2000 : C_GOLD_SEL) : C_BG;
+  uint16_t txtCol = active ? (danger ? C_RED : C_GOLD) : C_GREY;
   tft.fillRoundRect(x, y, w, h, 3, bgCol);
   tft.drawRoundRect(x, y, w, h, 3, borderCol);
   tft.setTextSize(1);
@@ -2122,8 +2242,10 @@ void displayHardReset() {
     // Ícone de aviso (triângulo com !) em vermelho
     const int cx = 64, ty = 26;
     int tri[3][2] = {{cx, ty}, {cx - 12, ty + 20}, {cx + 12, ty + 20}};
-    tft.fillTriangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0], tri[2][1], 0x2000);
-    tft.drawTriangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0], tri[2][1], C_RED);
+    tft.fillTriangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0],
+                     tri[2][1], 0x2000);
+    tft.drawTriangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0],
+                     tri[2][1], C_RED);
     tft.setTextColor(C_RED);
     tft.setTextSize(2);
     tft.setCursor(cx - 4, ty + 6);
@@ -2146,8 +2268,8 @@ void displayHardReset() {
     drawSeparator(102, C_GREY);
 
     // Botões — hrSel determina qual está ativo
-    drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
-    drawHRButton(66, 108, 58, 18, lang->hr_btn_proximo,  false, hrSel == 1);
+    drawHRButton(3, 108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+    drawHRButton(66, 108, 58, 18, lang->hr_btn_proximo, false, hrSel == 1);
 
     // Dica de navegação — extremidades da tela
     tft.setTextSize(1);
@@ -2168,7 +2290,8 @@ void displayHardReset() {
     int dlw = (int)strlen(lang->hr_conf2_msg1) * 6;
     tft.setCursor((128 - dlw) / 2, 28);
     tft.print(lang->hr_conf2_msg1);
-    // Linha 2 do banner: conf2_msg2 (ex: "Acao IRREVERSIVEL." / "NO going back.")
+    // Linha 2 do banner: conf2_msg2 (ex: "Acao IRREVERSIVEL." / "NO going
+    // back.")
     int dlw2 = (int)strlen(lang->hr_conf2_msg2) * 6;
     tft.setTextColor(C_GOLD_DIM);
     tft.setCursor((128 - dlw2) / 2, 38);
@@ -2191,8 +2314,8 @@ void displayHardReset() {
     drawSeparator(102, C_GREY);
 
     // Botões na mesma altura que o passo 1
-    drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
-    drawHRButton(66, 108, 58, 18, lang->hr_btn_confirmar, true,  hrSel == 1);
+    drawHRButton(3, 108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+    drawHRButton(66, 108, 58, 18, lang->hr_btn_confirmar, true, hrSel == 1);
 
     // Dica de navegação — extremidades da tela
     tft.setTextSize(1);
@@ -2224,7 +2347,8 @@ void displayHardReset() {
 }
 
 void handleHardReset() {
-  if (hrStep == 2) return;
+  if (hrStep == 2)
+    return;
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (hrStep == 0) {
@@ -2232,20 +2356,20 @@ void handleHardReset() {
       if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
         lastDebounceTime = millis();
         hrSel = (hrSel == 0) ? 1 : 0;
-        drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
-        drawHRButton(66, 108, 58, 18, lang->hr_btn_proximo,  false, hrSel == 1);
+        drawHRButton(3, 108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+        drawHRButton(66, 108, 58, 18, lang->hr_btn_proximo, false, hrSel == 1);
       }
       // ─ Confirmar seleção ─
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
         if (hrSel == 0) {
           hrStep = 0;
-          hrSel  = 0;
+          hrSel = 0;
           estadoAtual = MENU_CONFIGURACOES;
           displayConfiguracoes();
         } else {
           hrStep = 1;
-          hrSel  = 0; // volta ao cancelar na tela de confirmação
+          hrSel = 0; // volta ao cancelar na tela de confirmação
           displayHardReset();
         }
       }
@@ -2254,15 +2378,15 @@ void handleHardReset() {
       if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
         lastDebounceTime = millis();
         hrSel = (hrSel == 0) ? 1 : 0;
-        drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar,  false, hrSel == 0);
-        drawHRButton(66, 108, 58, 18, lang->hr_btn_confirmar, true,  hrSel == 1);
+        drawHRButton(3, 108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+        drawHRButton(66, 108, 58, 18, lang->hr_btn_confirmar, true, hrSel == 1);
       }
       // ─ Confirmar seleção ─
       if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
         if (hrSel == 0) {
           hrStep = 0;
-          hrSel  = 0;
+          hrSel = 0;
           displayHardReset();
         } else {
           hrStep = 2;
@@ -2270,9 +2394,11 @@ void handleHardReset() {
 
           // Limpa arquivos
           File f = SPIFFS.open("/rf_signals.txt", FILE_WRITE);
-          if (f) f.close();
+          if (f)
+            f.close();
           f = SPIFFS.open("/credenciais.txt", FILE_WRITE);
-          if (f) f.close();
+          if (f)
+            f.close();
 
           // Limpa EEPROM/NVRAM
           prefs.clear();
@@ -2318,7 +2444,7 @@ void handlePrimeiroBoot() {
       lastDebounceTime = millis();
       setLanguage(fbLangId);
       prefs.putInt("idioma", fbLangId);
-      
+
       estadoAtual = TELA_BEM_VINDO;
       displayBemVindo();
     }
@@ -2337,16 +2463,21 @@ static uint32_t wvLastUpdate = 0;
 // 2) Texto WELCOME piscando
 // 3) Aneis se expandindo (mesma técnica do screensaver)
 static void wvDrawFrame(uint32_t now) {
-  if (!wvSpr) return;
+  if (!wvSpr)
+    return;
   wvSpr->fillSprite(TFT_BLACK);
 
   // ── Aneis pulsantes de fundo ──
   for (int i = 0; i < 6; i++) {
-    int br = (int)((animSinLUT[((int)(now / 8.0f) + i * 42) & 0xFF] + 127)) * 25 / 255;
+    int br = (int)((animSinLUT[((int)(now / 8.0f) + i * 42) & 0xFF] + 127)) *
+             25 / 255;
     int radius = br + i * 12 + 4;
     // cor ciclante dourada
-    uint8_t rv = (uint8_t)((animSinLUT[((int)(now / 6) + i * 30) & 0xFF] + 127));
-    uint8_t gv = (uint8_t)((animSinLUT[((int)(now / 6) + i * 30 + 85) & 0xFF] + 127) / 4);
+    uint8_t rv =
+        (uint8_t)((animSinLUT[((int)(now / 6) + i * 30) & 0xFF] + 127));
+    uint8_t gv =
+        (uint8_t)((animSinLUT[((int)(now / 6) + i * 30 + 85) & 0xFF] + 127) /
+                  4);
     uint8_t bv = 0;
     uint16_t col = wvSpr->color565(rv, gv, bv);
     wvSpr->drawCircle(ANIM_CX, ANIM_CY, radius, col);
@@ -2355,7 +2486,7 @@ static void wvDrawFrame(uint32_t now) {
   // ── Logo R4BB1T pixelart central ──
   const int SCALE = 2, COLS = 5, ROWS = 7, GAP = 2;
   const int letterW = COLS * SCALE;
-  const int totalW  = 10 * letterW + 9 * GAP;
+  const int totalW = 10 * letterW + 9 * GAP;
   int x0 = (ANIM_W - totalW) / 2;
   int yLogo = ANIM_CY - ROWS * SCALE;
   // pulso de brilho
@@ -2364,16 +2495,16 @@ static void wvDrawFrame(uint32_t now) {
   uint16_t shadowCol = wvSpr->color565(pulse / 4, 0, 0);
 
   static const uint8_t PROGMEM wv_glyphs[10][7] = {
-    {0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001}, // R
-    {0b10001,0b10001,0b10001,0b11111,0b00001,0b00001,0b00001}, // 4
-    {0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110}, // B
-    {0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110}, // B
-    {0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110}, // 1
-    {0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100}, // T
-    {0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000}, // space
-    {0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000}, // F
-    {0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001}, // H
-    {0b01111,0b10000,0b10000,0b10000,0b10000,0b10000,0b01111}, // C
+      {0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001}, // R
+      {0b10001, 0b10001, 0b10001, 0b11111, 0b00001, 0b00001, 0b00001}, // 4
+      {0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110}, // B
+      {0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110}, // B
+      {0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110}, // 1
+      {0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100}, // T
+      {0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000}, // space
+      {0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000}, // F
+      {0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001}, // H
+      {0b01111, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b01111}, // C
   };
 
   for (int li = 0; li < 10; li++) {
@@ -2381,7 +2512,8 @@ static void wvDrawFrame(uint32_t now) {
     for (int row = 0; row < ROWS; row++) {
       uint8_t bits = wv_glyphs[li][row];
       for (int col = 0; col < COLS; col++) {
-        if (!((bits >> (4 - col)) & 1)) continue;
+        if (!((bits >> (4 - col)) & 1))
+          continue;
         int px = lx + col * SCALE;
         int py = yLogo + row * SCALE;
         wvSpr->fillRect(px + 1, py + 1, SCALE, SCALE, shadowCol);
@@ -2395,7 +2527,7 @@ static void wvDrawFrame(uint32_t now) {
   if (blink) {
     wvSpr->setTextSize(1);
     wvSpr->setTextColor(C_GREEN);
-    const char* txt = lang->fb_bemvindo;
+    const char *txt = lang->fb_bemvindo;
     int tw = (int)strlen(txt) * 6;
     wvSpr->setCursor((ANIM_W - tw) / 2, ANIM_CY + 18);
     wvSpr->print(txt);
@@ -2403,11 +2535,13 @@ static void wvDrawFrame(uint32_t now) {
 
   // ── Barra de progresso ──
   uint32_t elapsed = now - startWelcome;
-  if (elapsed > 3500) elapsed = 3500;
+  if (elapsed > 3500)
+    elapsed = 3500;
   const int BX = 14, BY = ANIM_CY + 36, BW = 100, BH = 4;
   wvSpr->fillRect(BX, BY, BW, BH, 0x18C3);
   int fill = (int)((long)BW * elapsed / 3500);
-  if (fill > 0) wvSpr->fillRect(BX, BY, fill, BH, C_GOLD);
+  if (fill > 0)
+    wvSpr->fillRect(BX, BY, fill, BH, C_GOLD);
   wvSpr->drawRect(BX - 1, BY - 1, BW + 2, BH + 2, C_GOLD_DIM);
 
   wvSpr->pushSprite(0, 0);

@@ -158,9 +158,12 @@ struct LangPack {
     const char* rf_svd_acoes;
     const char* rf_svd_transmitir;
     const char* rf_svd_excluir;
+    const char* rf_svd_repetir;
     const char* rf_svd_voltar;
     const char* rf_svd_enviado;
     const char* rf_svd_deletado;
+    const char* rf_svd_parar;
+    const char* rf_svd_pulsos;
 
     // ── Menu Ataques ──
     const char* atk_hdr_wifi;
@@ -312,6 +315,12 @@ struct LangPack {
     const char* hr_msg_apagando;
     const char* fb_sel_idioma;
     const char* fb_bemvindo;
+
+    // ── Storage labels ──
+    const char* st_fw;
+    const char* st_spiffs;
+    const char* st_free;
+    const char* st_total;
 
     // ── Screensaver anim names ──
     const char* sv_name_logo;
