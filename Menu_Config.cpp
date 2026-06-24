@@ -1343,26 +1343,33 @@ static void playBinAnimation(const char* path) {
 
       tft.fillScreen(TFT_BLACK);
       
-      while (player.decodeNextFrame(buf)) {
-        while (millis() - lastFrame < interval) {
-          yield();
+      bool exit_anim = false;
+      while (!exit_anim) {
+        while (player.decodeNextFrame(buf)) {
+          while (millis() - lastFrame < interval) {
+            yield();
+          }
+          lastFrame = millis();
+
+          tft.setSwapBytes(true);
+
+          int anim_x = (tft.width() - player.getWidth()) / 2;
+          int anim_y = (tft.height() - player.getHeight()) / 2;
+          if (anim_x < 0) anim_x = 0;
+          if (anim_y < 0) anim_y = 0;
+
+          tft.pushImage(anim_x, anim_y, player.getWidth(), player.getHeight(), buf);
+          tft.setSwapBytes(false);
+          
+          // Sai se apertar algum botao
+          if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
+              lastDebounceTime = millis();
+              exit_anim = true;
+              break;
+          }
         }
-        lastFrame = millis();
-
-        tft.setSwapBytes(true);
-
-        int anim_x = (tft.width() - player.getWidth()) / 2;
-        int anim_y = (tft.height() - player.getHeight()) / 2;
-        if (anim_x < 0) anim_x = 0;
-        if (anim_y < 0) anim_y = 0;
-
-        tft.pushImage(anim_x, anim_y, player.getWidth(), player.getHeight(), buf);
-        tft.setSwapBytes(false);
-        
-        // Sai se apertar algum botao
-        if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
-            lastDebounceTime = millis();
-            break;
+        if (!exit_anim) {
+          player.reset(buf);
         }
       }
       free(buf);
