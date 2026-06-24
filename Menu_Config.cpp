@@ -42,6 +42,10 @@ static const char* getConfigItem(int i) {
 static const int NUM_CONFIG_ITEMS = 10;
 static int opcaoConfig = 0;
 
+// Forward declarations para hard reset (usadas em handleConfiguracoes)
+static int hrStep = 0;
+static int hrSel  = 0;
+
 static void initScreensaverMenu();
 
 // ═══════════════════════════════════════════════
@@ -142,6 +146,8 @@ void handleConfiguracoes() {
         estadoAtual = TELA_IDIOMA;
         displayIdioma();
       } else if (opcaoConfig == 8) {
+        hrStep = 0;
+        hrSel  = 0;
         estadoAtual = TELA_HARDRESET;
         displayHardReset();
       } else if (opcaoConfig == 9) {
@@ -2090,76 +2096,190 @@ void handleScreensaverTest() {
 }
 
 // ═══════════════════════════════════════════════
-//  HARD RESET
+//  HARD RESET — redesign Cyber Edition
 // ═══════════════════════════════════════════════
-static int hrStep = 0;
+// (hrStep e hrSel declarados no topo do arquivo)
+// ── Botão estilizado para hard reset ──
+static void drawHRButton(int x, int y, int w, int h, const char* lbl, bool danger, bool active) {
+  uint16_t borderCol = active ? (danger ? C_RED : C_GOLD) : C_GREY;
+  uint16_t bgCol     = active ? (danger ? 0x2000 : C_GOLD_SEL) : C_BG;
+  uint16_t txtCol    = active ? (danger ? C_RED : C_GOLD) : C_GREY;
+  tft.fillRoundRect(x, y, w, h, 3, bgCol);
+  tft.drawRoundRect(x, y, w, h, 3, borderCol);
+  tft.setTextSize(1);
+  tft.setTextColor(txtCol);
+  int lw = (int)strlen(lbl) * 6;
+  tft.setCursor(x + (w - lw) / 2, y + (h - 8) / 2);
+  tft.print(lbl);
+}
 
 void displayHardReset() {
   tft.fillScreen(C_BG);
-  drawHeader(lang->hr_hdr_reset, false);
-  tft.setTextSize(1);
-  
+  drawHeader(lang->hr_hdr_reset, true);
+
   if (hrStep == 0) {
+    // ── Passo 1: Aviso inicial ──
+    // Ícone de aviso (triângulo com !) em vermelho
+    const int cx = 64, ty = 26;
+    int tri[3][2] = {{cx, ty}, {cx - 12, ty + 20}, {cx + 12, ty + 20}};
+    tft.fillTriangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0], tri[2][1], 0x2000);
+    tft.drawTriangle(tri[0][0], tri[0][1], tri[1][0], tri[1][1], tri[2][0], tri[2][1], C_RED);
     tft.setTextColor(C_RED);
-    tft.setCursor(5, 30); tft.print(lang->hr_conf1_msg1);
-    tft.setTextColor(TFT_WHITE);
-    tft.setCursor(5, 45); tft.print(lang->hr_conf1_msg2);
-    tft.setCursor(5, 60); tft.print(lang->hr_conf1_msg3);
-    
+    tft.setTextSize(2);
+    tft.setCursor(cx - 4, ty + 6);
+    tft.print("!");
+
+    // Linha separadora
+    drawSeparator(51, C_GREY);
+
+    // Textos das linhas (curtos para não quebrar)
+    tft.setTextSize(1);
+    tft.setTextColor(C_WHITE);
+    tft.setCursor(4, 56);
+    tft.print(lang->hr_conf1_msg1);
+    tft.setCursor(4, 70);
+    tft.print(lang->hr_conf1_msg2);
+    tft.setCursor(4, 82);
+    tft.print(lang->hr_conf1_msg3);
+
+    // Separador rodapé
+    drawSeparator(102, C_GREY);
+
+    // Botões — hrSel determina qual está ativo
+    drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+    drawHRButton(66, 108, 58, 18, lang->hr_btn_proximo,  false, hrSel == 1);
+
+    // Dica de navegação — extremidades da tela
+    tft.setTextSize(1);
     tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(5, 120); tft.print(lang->hr_btn_cancelar);
-    tft.setCursor(75, 120); tft.print(lang->hr_btn_proximo);
+    tft.setCursor(5, 140);
+    tft.print("<");
+    tft.setCursor(116, 140);
+    tft.print(">");
+
   } else if (hrStep == 1) {
+    // ── Passo 2: Confirmação final ──
+    // Ícone DANGER: banner vermelho com texto do idioma
+    tft.fillRoundRect(4, 22, 120, 28, 4, 0x2000);
+    tft.drawRoundRect(4, 22, 120, 28, 4, C_RED);
+    tft.setTextSize(1);
     tft.setTextColor(C_RED);
-    tft.setCursor(5, 40); tft.print(lang->hr_conf2_msg1);
-    tft.setCursor(5, 55); tft.print(lang->hr_conf2_msg2);
-    
+    // Linha 1 do banner: conf2_msg1 (ex: "Tem certeza?" / "Are you sure?")
+    int dlw = (int)strlen(lang->hr_conf2_msg1) * 6;
+    tft.setCursor((128 - dlw) / 2, 28);
+    tft.print(lang->hr_conf2_msg1);
+    // Linha 2 do banner: conf2_msg2 (ex: "Acao IRREVERSIVEL." / "NO going back.")
+    int dlw2 = (int)strlen(lang->hr_conf2_msg2) * 6;
     tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(5, 120); tft.print(lang->hr_btn_cancelar);
-    
-    tft.setTextColor(C_RED);
-    tft.setCursor(10, 140); tft.print(lang->hr_btn_confirmar);
+    tft.setCursor((128 - dlw2) / 2, 38);
+    tft.print(lang->hr_conf2_msg2);
+
+    // Linha separadora na mesma altura que o passo 1
+    drawSeparator(51, C_GREY);
+
+    // Textos das linhas idênticos ao passo 1
+    tft.setTextSize(1);
+    tft.setTextColor(C_WHITE);
+    tft.setCursor(4, 56);
+    tft.print(lang->hr_conf1_msg1);
+    tft.setCursor(4, 70);
+    tft.print(lang->hr_conf1_msg2);
+    tft.setCursor(4, 82);
+    tft.print(lang->hr_conf1_msg3);
+
+    // Separador rodapé na mesma altura que o passo 1
+    drawSeparator(102, C_GREY);
+
+    // Botões na mesma altura que o passo 1
+    drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+    drawHRButton(66, 108, 58, 18, lang->hr_btn_confirmar, true,  hrSel == 1);
+
+    // Dica de navegação — extremidades da tela
+    tft.setTextSize(1);
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(5, 140);
+    tft.print("<");
+    tft.setCursor(116, 140);
+    tft.print(">");
+
   } else if (hrStep == 2) {
+    // ── Passo 3: Executando ──
+    // Spinner / barra de progresso
+    const int BX = 14, BY = 80, BW = 100, BH = 8;
+    tft.drawRect(BX - 1, BY - 1, BW + 2, BH + 2, C_GOLD);
+    tft.fillRect(BX, BY, BW, BH, C_GREY_DARK);
+    // Animacao simples — barra cheia
+    tft.fillRect(BX, BY, BW, BH, C_RED);
+
+    tft.setTextSize(1);
     tft.setTextColor(C_RED);
-    tft.setCursor(10, 70); tft.print(lang->hr_msg_apagando);
+    int lw = (int)strlen(lang->hr_msg_apagando) * 6;
+    tft.setCursor((128 - lw) / 2, 60);
+    tft.print(lang->hr_msg_apagando);
+
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(24, 98);
+    tft.print("Aguarde...\0");
   }
 }
 
 void handleHardReset() {
   if (hrStep == 2) return;
-  
+
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (hrStep == 0) {
-      if (digitalRead(BUTTON_LEFT) == LOW) {
+      // ─ Navegar entre os botões ─
+      if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
         lastDebounceTime = millis();
-        estadoAtual = MENU_CONFIGURACOES;
-        displayConfiguracoes();
-      } else if (digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
+        hrSel = (hrSel == 0) ? 1 : 0;
+        drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar, false, hrSel == 0);
+        drawHRButton(66, 108, 58, 18, lang->hr_btn_proximo,  false, hrSel == 1);
+      }
+      // ─ Confirmar seleção ─
+      if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
-        hrStep = 1;
-        displayHardReset();
+        if (hrSel == 0) {
+          hrStep = 0;
+          hrSel  = 0;
+          estadoAtual = MENU_CONFIGURACOES;
+          displayConfiguracoes();
+        } else {
+          hrStep = 1;
+          hrSel  = 0; // volta ao cancelar na tela de confirmação
+          displayHardReset();
+        }
       }
     } else if (hrStep == 1) {
-      if (digitalRead(BUTTON_LEFT) == LOW) {
+      // ─ Navegar entre os botões ─
+      if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
         lastDebounceTime = millis();
-        hrStep = 0;
-        displayHardReset();
-      } else if (digitalRead(BUTTON_SELECT) == LOW) {
+        hrSel = (hrSel == 0) ? 1 : 0;
+        drawHRButton(3,  108, 55, 18, lang->hr_btn_cancelar,  false, hrSel == 0);
+        drawHRButton(66, 108, 58, 18, lang->hr_btn_confirmar, true,  hrSel == 1);
+      }
+      // ─ Confirmar seleção ─
+      if (digitalRead(BUTTON_SELECT) == LOW) {
         lastDebounceTime = millis();
-        hrStep = 2;
-        displayHardReset();
-        
-        // Limpa arquivos
-        File f = SPIFFS.open("/rf_signals.txt", FILE_WRITE);
-        if(f) f.close();
-        f = SPIFFS.open("/credenciais.txt", FILE_WRITE);
-        if(f) f.close();
-        
-        // Limpa EEPROM/NVRAM
-        prefs.clear();
-        
-        delay(1000);
-        ESP.restart();
+        if (hrSel == 0) {
+          hrStep = 0;
+          hrSel  = 0;
+          displayHardReset();
+        } else {
+          hrStep = 2;
+          displayHardReset();
+
+          // Limpa arquivos
+          File f = SPIFFS.open("/rf_signals.txt", FILE_WRITE);
+          if (f) f.close();
+          f = SPIFFS.open("/credenciais.txt", FILE_WRITE);
+          if (f) f.close();
+
+          // Limpa EEPROM/NVRAM
+          prefs.clear();
+
+          delay(1000);
+          ESP.restart();
+        }
       }
     }
   }
@@ -2175,7 +2295,7 @@ void displayPrimeiroBoot() {
   drawHeader("R4BB1T FHC", false);
 
   setLanguage(fbLangId);
-  
+
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(5, 25);
@@ -2184,9 +2304,7 @@ void displayPrimeiroBoot() {
   drawMenuItem(0, 50, SCR_W, 20, "Portugues (PT-BR)", fbLangId == 0);
   drawMenuItem(0, 75, SCR_W, 20, "English (EN)", fbLangId == 1);
 
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, SCR_H - 18);
-  tft.print("v/^=Nav  [O]=Sel");
+  drawFooter();
 }
 
 void handlePrimeiroBoot() {
@@ -2208,24 +2326,120 @@ void handlePrimeiroBoot() {
 }
 
 // ═══════════════════════════════════════════════
-//  TELA BEM VINDO
+//  TELA BEM VINDO — animação via screensaver
 // ═══════════════════════════════════════════════
 static uint32_t startWelcome = 0;
+static TFT_eSprite *wvSpr = nullptr; // sprite para a animacao
+static uint32_t wvLastUpdate = 0;
+
+// Splash screen do BEM VINDO:
+// 1) Logo R4BB1T pulsante no centro
+// 2) Texto WELCOME piscando
+// 3) Aneis se expandindo (mesma técnica do screensaver)
+static void wvDrawFrame(uint32_t now) {
+  if (!wvSpr) return;
+  wvSpr->fillSprite(TFT_BLACK);
+
+  // ── Aneis pulsantes de fundo ──
+  for (int i = 0; i < 6; i++) {
+    int br = (int)((animSinLUT[((int)(now / 8.0f) + i * 42) & 0xFF] + 127)) * 25 / 255;
+    int radius = br + i * 12 + 4;
+    // cor ciclante dourada
+    uint8_t rv = (uint8_t)((animSinLUT[((int)(now / 6) + i * 30) & 0xFF] + 127));
+    uint8_t gv = (uint8_t)((animSinLUT[((int)(now / 6) + i * 30 + 85) & 0xFF] + 127) / 4);
+    uint8_t bv = 0;
+    uint16_t col = wvSpr->color565(rv, gv, bv);
+    wvSpr->drawCircle(ANIM_CX, ANIM_CY, radius, col);
+  }
+
+  // ── Logo R4BB1T pixelart central ──
+  const int SCALE = 2, COLS = 5, ROWS = 7, GAP = 2;
+  const int letterW = COLS * SCALE;
+  const int totalW  = 10 * letterW + 9 * GAP;
+  int x0 = (ANIM_W - totalW) / 2;
+  int yLogo = ANIM_CY - ROWS * SCALE;
+  // pulso de brilho
+  uint8_t pulse = (uint8_t)((animSinLUT[((int)(now / 4)) & 0xFF] + 127));
+  uint16_t logoCol = wvSpr->color565(pulse, pulse / 4, 0);
+  uint16_t shadowCol = wvSpr->color565(pulse / 4, 0, 0);
+
+  static const uint8_t PROGMEM wv_glyphs[10][7] = {
+    {0b11110,0b10001,0b10001,0b11110,0b10100,0b10010,0b10001}, // R
+    {0b10001,0b10001,0b10001,0b11111,0b00001,0b00001,0b00001}, // 4
+    {0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110}, // B
+    {0b11110,0b10001,0b10001,0b11110,0b10001,0b10001,0b11110}, // B
+    {0b00100,0b01100,0b00100,0b00100,0b00100,0b00100,0b01110}, // 1
+    {0b11111,0b00100,0b00100,0b00100,0b00100,0b00100,0b00100}, // T
+    {0b00000,0b00000,0b00000,0b00000,0b00000,0b00000,0b00000}, // space
+    {0b11111,0b10000,0b10000,0b11110,0b10000,0b10000,0b10000}, // F
+    {0b10001,0b10001,0b10001,0b11111,0b10001,0b10001,0b10001}, // H
+    {0b01111,0b10000,0b10000,0b10000,0b10000,0b10000,0b01111}, // C
+  };
+
+  for (int li = 0; li < 10; li++) {
+    int lx = x0 + li * (letterW + GAP);
+    for (int row = 0; row < ROWS; row++) {
+      uint8_t bits = wv_glyphs[li][row];
+      for (int col = 0; col < COLS; col++) {
+        if (!((bits >> (4 - col)) & 1)) continue;
+        int px = lx + col * SCALE;
+        int py = yLogo + row * SCALE;
+        wvSpr->fillRect(px + 1, py + 1, SCALE, SCALE, shadowCol);
+        wvSpr->fillRect(px, py, SCALE, SCALE, logoCol);
+      }
+    }
+  }
+
+  // ── Texto BEM-VINDO piscante ──
+  bool blink = ((now / 500) % 2) == 0;
+  if (blink) {
+    wvSpr->setTextSize(1);
+    wvSpr->setTextColor(C_GREEN);
+    const char* txt = lang->fb_bemvindo;
+    int tw = (int)strlen(txt) * 6;
+    wvSpr->setCursor((ANIM_W - tw) / 2, ANIM_CY + 18);
+    wvSpr->print(txt);
+  }
+
+  // ── Barra de progresso ──
+  uint32_t elapsed = now - startWelcome;
+  if (elapsed > 3500) elapsed = 3500;
+  const int BX = 14, BY = ANIM_CY + 36, BW = 100, BH = 4;
+  wvSpr->fillRect(BX, BY, BW, BH, 0x18C3);
+  int fill = (int)((long)BW * elapsed / 3500);
+  if (fill > 0) wvSpr->fillRect(BX, BY, fill, BH, C_GOLD);
+  wvSpr->drawRect(BX - 1, BY - 1, BW + 2, BH + 2, C_GOLD_DIM);
+
+  wvSpr->pushSprite(0, 0);
+}
 
 void displayBemVindo() {
-  tft.fillScreen(C_BG);
-  tft.setTextColor(C_GREEN);
-  tft.setTextSize(1);
-  
-  int16_t w = tft.textWidth(lang->fb_bemvindo);
-  tft.setCursor((SCR_W - w) / 2, SCR_H / 2 - 10);
-  tft.print(lang->fb_bemvindo);
-  
+  animInitLUT(); // garante que a LUT está pronta
+
+  if (!wvSpr) {
+    wvSpr = new TFT_eSprite(&tft);
+    wvSpr->createSprite(ANIM_W, ANIM_H);
+  }
   startWelcome = millis();
+  wvLastUpdate = 0;
 }
 
 void handleBemVindo() {
-  if (millis() - startWelcome > 2000) {
+  uint32_t now = millis();
+
+  // Renderiza a cada ~33ms (30fps)
+  if (now - wvLastUpdate >= 33) {
+    wvLastUpdate = now;
+    wvDrawFrame(now);
+  }
+
+  // Dura 3.5 segundos
+  if (now - startWelcome > 3500) {
+    if (wvSpr) {
+      wvSpr->deleteSprite();
+      delete wvSpr;
+      wvSpr = nullptr;
+    }
     extern void displayMenuInicial();
     estadoAtual = MENU_INICIAL;
     displayMenuInicial();
