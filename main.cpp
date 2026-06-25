@@ -289,7 +289,7 @@ void loop() {
   if (isScreensaverAllowed(estadoAtual)) {
     // Screensaver por inatividade global
     if (millis() - lastActivityTime > 30000) {
-      if (prefs.getInt("screensaver", 2) != 1) { // 1 = Desativar
+      if (prefs.getBool("saver_active", true)) {
         estadoAnteriorScreensaver = estadoAtual;
         startScreensaver(true);
       } else {
