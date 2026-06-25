@@ -58,13 +58,7 @@ void wsl_bypasser_send_deauth_frame_unicast(const wifi_ap_record_t *ap_record,
  */
 void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record);
 
-/**
- * @brief Envia frame QoS Null Data com Duration máximo para NAV jamming
- * @param ap_bssid  BSSID do AP alvo (usado como SA e BSSID para que
- *                  clientes associados respeitem o NAV)
- * @return ESP_OK em sucesso, código de erro caso contrário
- */
-esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *ap_bssid);
+
 
 /**
  * @brief Verifica se o bypass está ativo e funcionando

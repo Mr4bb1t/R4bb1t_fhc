@@ -4,9 +4,9 @@
 #
 # Este script DEVE ser executado UMA VEZ antes de compilar.
 # Detecta automaticamente Arduino IDE e PlatformIO.
-# Ele torna os símbolos ieee80211_raw_frame_sanity_check e
-# ieee80211_is_tx_allowed "fracos" na libnet80211.a, permitindo que
-# a implementação do wsl_bypasser.c sobreponha o comportamento.
+# Ele torna o símbolo ieee80211_raw_frame_sanity_check "fraco"
+# na libnet80211.a, permitindo que a implementação do wsl_bypasser.c 
+# sobreponha o comportamento.
 #
 # USO:
 #   chmod +x patch_libnet.sh
@@ -23,7 +23,6 @@ BACKUP_SUFFIX=".orig_backup"
 
 SYMBOLS=(
     "ieee80211_raw_frame_sanity_check"
-    "ieee80211_is_tx_allowed"
 )
 
 # ── Detectar sistema operacional ──────────────────────────────────────────────
@@ -277,9 +276,8 @@ if [ -n "$nm_cmd" ]; then
 fi
 
 echo ""
-echo "Símbolos enfraquecidos:"
+echo "Símbolo enfraquecido:"
 echo "  - ieee80211_raw_frame_sanity_check (management frames)"
-echo "  - ieee80211_is_tx_allowed (control frames / TX permission)"
 echo ""
 echo "Agora compile e grave o r4bb1t_fhc (Arduino IDE ou PlatformIO)."
 echo "Para reverter: ./patch_libnet.sh --restore"

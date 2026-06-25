@@ -51,9 +51,12 @@ int clientSelected = 0;
 bool clientScanRunning = false;
 uint8_t targetClientMac[6] = {0};
 
-// CTS Jammer
-volatile bool ctsAtivo = false;
-volatile unsigned long ctsCounter = 0;
+// Packet Monitor
+volatile unsigned long pmTotalPackets = 0;
+volatile unsigned long pmPacketsPerSec = 0;
+volatile unsigned long pmUniqueClients = 0;
+unsigned long pmStartTime = 0;
+
 
 // Beacon Spam
 int beaconModo = 0;

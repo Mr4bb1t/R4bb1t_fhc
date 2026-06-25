@@ -22,7 +22,9 @@ enum EstadoTela {
   ATAQUE_CAPTIVE_PORTAL,
   ATAQUE_DEAUTHER,
   ATAQUE_DEAUTHER_SCAN,
-  ATAQUE_CTS_JAMMER,
+  MENU_WIFI_ANALYZER,
+  TELA_PACKET_MONITOR,
+  TELA_NETWORK_COMPARE,
   ATAQUE_BEACON_MODO,
   ATAQUE_BEACON_CUSTOM,
   ATAQUE_BEACON,
@@ -109,9 +111,12 @@ extern int clientSelected;
 extern bool clientScanRunning;
 extern uint8_t targetClientMac[6]; // MAC do cliente alvo para deauth unicast
 
-// CTS Jammer
-extern volatile bool ctsAtivo;
-extern volatile unsigned long ctsCounter;
+// Packet Monitor
+extern volatile unsigned long pmTotalPackets;
+extern volatile unsigned long pmPacketsPerSec;
+extern volatile unsigned long pmUniqueClients;
+extern unsigned long pmStartTime;
+
 
 // Beacon Spam
 extern int beaconModo;

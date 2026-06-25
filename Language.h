@@ -215,16 +215,14 @@ struct LangPack {
     const char* atk_ds_clientes_fmt;
     const char* atk_ds_hint;
 
-    // ── CTS Jammer ──
-    const char* atk_hdr_navjammer;
-    const char* atk_cts_desc1;
-    const char* atk_cts_desc2;
-    const char* atk_cts_desc3;
-    const char* atk_cts_desc4;
-    const char* atk_cts_iniciar;
-    const char* atk_cts_canal;
-    const char* atk_cts_navflood;
-    const char* atk_cts_parar;
+    // ── WiFi Analyzer ──
+    const char* atk_hdr_analyzer;
+    const char* atk_anl_packets_sec;
+    const char* atk_anl_total_packets;
+    const char* atk_anl_clients;
+    const char* atk_anl_compare_vs;
+    const char* atk_anl_channel;
+    const char* atk_anl_auth;
 
     // ── Beacon Modo ──
     const char* atk_hdr_beaconmodo;

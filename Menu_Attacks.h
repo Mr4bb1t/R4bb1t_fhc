@@ -18,8 +18,14 @@ void handleAtaqueDeauther();
 void displayAtaqueDeautherScan(bool init = false);
 void handleAtaqueDeautherScan();
 
-void displayAtaqueCtsJammer();
-void handleAtaqueCtsJammer();
+void displayWiFiAnalyzer();
+void handleWiFiAnalyzer();
+
+void displayPacketMonitor(int ch);
+void handlePacketMonitor();
+
+void displayNetworkCompare(int compareIdx);
+void handleNetworkCompare();
 
 void displayAtaqueBeaconModo();
 void handleAtaqueBeaconModo();

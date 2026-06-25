@@ -169,7 +169,7 @@ const LangPack langPT PROGMEM = {
     "< VOLTAR",
     "Captive Portal",
     "Deauther",
-    "NAV Jammer",
+    "CTS Jammer",
     "Beacon Spam",
 
     // ── Captive Portal ──
@@ -214,16 +214,14 @@ const LangPack langPT PROGMEM = {
     "%d cliente(s)",
     "",
 
-    // ── CTS Jammer ──
-    "NAV JAMMER",
-    "Mantem conexao ativa",
-    "Congela canal (NAV)",
-    "Mata velocidade/ping",
-    "BSSID forjado do AP",
-    "Iniciar Ataque",
-    "Canal travado:",
-    "NAV Flood:",
-    "[  PARAR  ]",
+    // ── WiFi Analyzer ──
+    "WIFI ANALYZER",
+    "Pacotes/s:",
+    "Total Pkts:",
+    "Clientes Unicos:",
+    "Comparar com Alvo",
+    "Canal:",
+    "Seguranca:",
 
     // ── Beacon Modo ──
     "BEACON MODO",
@@ -504,7 +502,7 @@ const LangPack langEN PROGMEM = {
     "< BACK",
     "Captive Portal",
     "Deauther",
-    "NAV Jammer",
+    "CTS Jammer",
     "Beacon Spam",
 
     // ── Captive Portal ──
@@ -512,16 +510,16 @@ const LangPack langEN PROGMEM = {
     "[ ACTIVE ]",
     "Portal: 192.168.4.1",
     "+ Deauther Active",
-    "Clear data",
+    "Erase data",
     "Credentials",
 
     // ── Apagar Dados ──
-    "CLEAR DATA",
-    "Delete all data?",
+    "ERASE DATA",
+    "Are you sure?",
     "This is irreversible.",
     "< CANCEL",
-    "[ DELETE ]",
-    "Data cleared!",
+    "[ ERASE ]",
+    "Data erased!",
 
     // ── Deauther ──
     "DEAUTHER",
@@ -531,11 +529,11 @@ const LangPack langEN PROGMEM = {
     "[  START  ]",
     "",
     "BCAST",
-    "TARG",
+    "TRGD",
     "[  STOP  ]",
     "ATTACK STOPPED",
     "Sent: %lu",
-    "ERROR: Radio!",
+    "ERR: Radio!",
 
     // ── Deauther Scan ──
     "CLIENTS",
@@ -549,16 +547,14 @@ const LangPack langEN PROGMEM = {
     "%d client(s)",
     "",
 
-    // ── CTS Jammer ──
-    "NAV JAMMER",
-    "Maintains active conn",
-    "Freezes channel (NAV)",
-    "Kills speed/ping",
-    "Forged AP BSSID",
-    "Start Attack",
-    "Locked channel:",
-    "NAV Flood:",
-    "[  STOP  ]",
+    // ── WiFi Analyzer ──
+    "WIFI ANALYZER",
+    "Packets/s:",
+    "Total Pkts:",
+    "Unique Clients:",
+    "Compare to Target",
+    "Channel:",
+    "Security:",
 
     // ── Beacon Modo ──
     "BEACON MODE",

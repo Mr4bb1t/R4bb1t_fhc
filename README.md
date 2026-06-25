@@ -23,7 +23,7 @@
 |---|---|
 | **Scanner de Redes** | Escaneamento de APs com RSSI, BSSID e canal |
 | **Deauther** | Desautenticação Broadcast e Targeted (com scanner de clientes em modo promíscuo) |
-| **CTS Jammer** | NAV Jamming na camada MAC — bloqueia o espectro do canal (efetivo contra WPA3) |
+| **WiFi Analyzer** | Análise em tempo real de pacotes (Packet Monitor) e comparação entre redes |
 | **Beacon Spam** | Múltiplos SSIDs falsos simultâneos (zero-width chars para clonagem invisível) |
 | **Captive Portal** | Hotspot com página de phishing para extração de credenciais |
 | **MAC Changer** | Alteração dinâmica do endereço MAC (via menu de Configurações) |
@@ -224,7 +224,7 @@ r4bb1t_fhc/
 3. Verifique a solda nos pinos SPI (SCK, MISO, MOSI, CSN, CE)
 4. Teste com outro módulo — NRF24L01+ defeituosos são comuns
 
-### Ataques WiFi não funcionam (Deauther/Beacon/NAV Jammer)
+### Ataques WiFi não funcionam (Deauther/Beacon/CTS Jammer)
 Execute o patch `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS) antes de compilar. O script detecta automaticamente Arduino IDE e PlatformIO. Sem ele, o driver nativo do ESP32 bloqueia frames de gerenciamento e controle.
 
 ### Display não liga ou fica com cores erradas

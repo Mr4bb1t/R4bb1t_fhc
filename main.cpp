@@ -58,7 +58,6 @@ void cleanup() {
 
   deautherAtivo = false;
   beaconAtivo = false;
-  ctsAtivo = false;
 
   Serial.println("Limpeza concluída");
 }
@@ -328,8 +327,16 @@ void loop() {
     handleAtaqueDeautherScan();
     break;
 
-  case ATAQUE_CTS_JAMMER:
-    handleAtaqueCtsJammer();
+  case MENU_WIFI_ANALYZER:
+    handleWiFiAnalyzer();
+    break;
+
+  case TELA_PACKET_MONITOR:
+    handlePacketMonitor();
+    break;
+
+  case TELA_NETWORK_COMPARE:
+    handleNetworkCompare();
     break;
 
   case ATAQUE_BEACON_MODO:

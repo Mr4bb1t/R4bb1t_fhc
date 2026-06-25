@@ -91,8 +91,8 @@ void handleMenuAtaques() {
         displayAtaqueDeauther();
         break;
       case 4:
-        estadoAtual = ATAQUE_CTS_JAMMER;
-        displayAtaqueCtsJammer();
+        estadoAtual = MENU_WIFI_ANALYZER;
+        displayWiFiAnalyzer();
         break;
       case 5:
         estadoAtual = ATAQUE_BEACON_MODO;
@@ -884,162 +884,501 @@ void handleAtaqueDeautherScan() {
 }
 
 // ═══════════════════════════════════════════════
-//  CTS JAMMER
+//  WIFI ANALYZER / PACKET MONITOR / COMPARE
 // ═══════════════════════════════════════════════
-static int ctsMenuSel = 1;
+static int    analyzerMenuSel    = 1;
+static int    analyzerViewScroll = 0;  // scroll na lista de APs
+static int    analyzerApCount    = 0;  // APs detectados
+static bool   analyzerScanDone   = false;
 
-void displayAtaqueCtsJammer() {
-  tft.fillScreen(C_BG);
-  drawHeader(lang->atk_hdr_navjammer, true);
+// Cores auxiliares para o Analyzer
+#define C_CYAN_DIM   0x0493   // Ciano apagado
+#define C_SEC_OPEN   0xF800   // Vermelho = rede aberta (risco)
+#define C_SEC_WEP    0xFD00   // Laranja = WEP (fraco)
+#define C_SEC_WPA    0xFFE0   // Amarelo = WPA
+#define C_SEC_WPA2   0x07E0   // Verde = WPA2
+#define C_SEC_WPA3   0x051F   // Azul = WPA3
 
+struct AnalyzerApEntry {
+  char ssid[24];
+  uint8_t ch;
+  int8_t  rssi;
+  wifi_auth_mode_t auth;
+  String bssid_str; // For comparison
+};
+static AnalyzerApEntry analyzerAps[16];
+
+// Cor por tipo de segurança
+static uint16_t secColor(wifi_auth_mode_t a) {
+  if (a == WIFI_AUTH_OPEN)           return C_SEC_OPEN;
+  if (a == WIFI_AUTH_WEP)            return C_SEC_WEP;
+  if (a == WIFI_AUTH_WPA_PSK)        return C_SEC_WPA;
+  if (a == WIFI_AUTH_WPA2_PSK ||
+      a == WIFI_AUTH_WPA_WPA2_PSK)   return C_SEC_WPA2;
+  if (a == WIFI_AUTH_WPA3_PSK ||
+      a == WIFI_AUTH_WPA2_WPA3_PSK)  return C_SEC_WPA3;
+  return C_GREY;
+}
+
+static const char* secStr(wifi_auth_mode_t a) {
+  if (a == WIFI_AUTH_OPEN)           return "OPEN";
+  if (a == WIFI_AUTH_WEP)            return "WEP";
+  if (a == WIFI_AUTH_WPA_PSK)        return "WPA";
+  if (a == WIFI_AUTH_WPA2_PSK ||
+      a == WIFI_AUTH_WPA_WPA2_PSK)   return "WPA2";
+  if (a == WIFI_AUTH_WPA3_PSK ||
+      a == WIFI_AUTH_WPA2_WPA3_PSK)  return "WPA3";
+  return "?";
+}
+
+// Barra de sinal miniatura (4 barras em 16px de largura)
+static void drawMiniSignal(int x, int y, int rssi, uint16_t col) {
+  int bars = (rssi >= -50) ? 4 : (rssi >= -65) ? 3 : (rssi >= -75) ? 2 : (rssi >= -85) ? 1 : 0;
+  for (int i = 0; i < 4; i++) {
+    int bh = 2 + i * 2;
+    int bx = x + i * 4;
+    tft.fillRect(bx, y + (6 - bh), 3, bh, i < bars ? col : C_GREY);
+  }
+}
+
+// Desenha uma linha de AP na lista (y é o topo da linha, h=16)
+static void drawAnalyzerApRow(int idx, int y, bool selected) {
+  AnalyzerApEntry& ap = analyzerAps[idx];
+  uint16_t bg = selected ? C_GOLD_SEL : C_BG;
+  tft.fillRect(0, y, 128, 16, bg);
+
+  if (selected) {
+    tft.drawFastHLine(0, y,     128, C_GOLD_DIM);
+    tft.drawFastHLine(0, y + 15, 128, C_GOLD_DIM);
+  }
+
+  uint16_t sc = secColor(ap.auth);
+  tft.fillRect(2, y + 5, 4, 6, sc);
+
+  char buf[18];
+  strncpy(buf, ap.ssid, 17);
+  buf[17] = '\0';
+  if (strlen(ap.ssid) > 17) buf[16] = '.';
+  tft.setTextSize(1);
+  tft.setTextColor(selected ? C_WHITE : C_GOLD_DIM);
+  tft.setCursor(8, y + 4);
+  tft.print(buf);
+
+  tft.setTextColor(C_CYAN);
+  char chbuf[5];
+  snprintf(chbuf, sizeof(chbuf), "C%d", ap.ch);
+  tft.setCursor(94, y + 4);
+  tft.print(chbuf);
+
+  drawMiniSignal(110, y + 5, ap.rssi, sc);
+}
+
+static void drawAnalyzerHeader() {
+  drawHeader(lang->atk_hdr_analyzer, true);
   tft.setTextSize(1);
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 17);
-  tft.print(truncSSID(ssidSelecionado, 21));
-  drawSeparator(27, C_GREY);
+  char sub[24];
+  snprintf(sub, sizeof(sub), "%.16s  CH%d", ssidSelecionado.c_str(), apRecordSelecionado.primary);
+  tft.print(sub);
+  tft.drawFastHLine(0, 26, 128, C_GREY);
+}
 
-  if (!ctsAtivo) {
-    tft.setTextColor(C_WHITE);
-    tft.setCursor(4, 35);
-    tft.print(lang->atk_cts_desc1);
-
+static void refreshAnalyzerList() {
+  if (!analyzerScanDone) {
+    tft.fillRect(0, 27, 128, 101, C_BG);
     tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(4, 50);
-    tft.print(lang->atk_cts_desc2);
-    tft.setCursor(4, 62);
-    tft.print(lang->atk_cts_desc3);
-    tft.setCursor(4, 74);
-    tft.print(lang->atk_cts_desc4);
-
-    drawSeparator(95, C_GREY);
-    
-    const char *items[] = {lang->atk_da_back, lang->atk_cts_iniciar};
-    for (int i = 0; i < 2; i++) {
-      drawMenuItem(0, 102 + i * 20, 128, 19, items[i], ctsMenuSel == i);
-    }
-  } else {
-    tft.setTextColor(C_RED);
-    tft.setCursor(38, 40);
-    tft.print(lang->atk_cp_ativo);
-
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(4, 60);
-    tft.print(lang->atk_cts_canal);
-    tft.setTextColor(C_WHITE);
-    tft.setCursor(90, 60);
-    tft.print(apRecordSelecionado.primary);
-
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(4, 75);
-    tft.print(lang->atk_cts_navflood);
-    tft.setTextColor(C_WHITE);
-    tft.setCursor(68, 75);
-    tft.printf("%lu", ctsCounter);
-
-    drawSeparator(116, C_GREY);
-    tft.fillRect(14, 120, 100, 20, C_GOLD_SEL);
-    tft.drawRect(14, 120, 100, 20, C_RED);
-    tft.setTextColor(C_RED);
-    tft.setCursor(34, 127);
-    tft.print(lang->atk_da_parar);
+    tft.setCursor(22, 65);
+    tft.print("Scanning...");
+    tft.drawFastHLine(14, 75, 100, C_GOLD_DIM);
+    return;
   }
 
+  if (analyzerApCount == 0) {
+    tft.fillRect(0, 27, 128, 101, C_BG);
+    
+    // Draw the "VOLTAR" row as the only option
+    tft.fillRect(0, 27, 128, 16, analyzerMenuSel == 0 ? C_GOLD_SEL : C_BG);
+    if (analyzerMenuSel == 0) {
+      tft.drawFastHLine(0, 27, 128, C_GOLD_DIM);
+      tft.drawFastHLine(0, 42, 128, C_GOLD_DIM);
+    }
+    tft.setTextSize(1);
+    tft.setTextColor(analyzerMenuSel == 0 ? C_WHITE : C_GOLD_DIM);
+    tft.setCursor(8, 31);
+    tft.print("< VOLTAR");
+    
+    tft.setTextColor(C_GREY);
+    tft.setCursor(18, 65);
+    tft.print("No APs found.");
+    return;
+  }
+
+  // We have items: VOLTAR (index 0) + APs (index 1 to analyzerApCount)
+  int totalItems = analyzerApCount + 1;
+  int visible = min(totalItems, 6);
+  int startIdx = analyzerViewScroll;
+  if (startIdx > totalItems - visible) startIdx = totalItems - visible;
+
+  for (int i = 0; i < visible; i++) {
+    int itemIdx = startIdx + i;
+    int y = 27 + i * 16;
+    bool selected = (itemIdx == analyzerMenuSel);
+    
+    if (itemIdx == 0) {
+      // Draw VOLTAR
+      tft.fillRect(0, y, 128, 16, selected ? C_GOLD_SEL : C_BG);
+      if (selected) {
+        tft.drawFastHLine(0, y, 128, C_GOLD_DIM);
+        tft.drawFastHLine(0, y + 15, 128, C_GOLD_DIM);
+      }
+      tft.setTextSize(1);
+      tft.setTextColor(selected ? C_WHITE : C_GOLD_DIM);
+      tft.setCursor(8, y + 4);
+      tft.print("< VOLTAR");
+    } else {
+      // Draw AP row
+      drawAnalyzerApRow(itemIdx - 1, y, selected);
+    }
+  }
+
+  // Clear remaining space at bottom if fewer than 6 items
+  if (visible < 6) {
+    tft.fillRect(0, 27 + visible * 16, 128, 101 - (visible * 16), C_BG);
+  }
+
+  if (totalItems > 6) {
+    int barH = max(1, (int)(96 * 6 / totalItems));
+    int barY = 27 + (int)(96 * startIdx / totalItems);
+    tft.drawFastVLine(127, 27, 96, C_GOLD_DIM);
+    // Clear old bar track space
+    tft.fillRect(126, 27, 2, 96, C_BG);
+    tft.fillRect(126, barY, 2, barH, C_GOLD);
+  }
+}
+
+// Handled above
+
+void displayWiFiAnalyzer() {
+  tft.fillScreen(C_BG);
+  drawAnalyzerHeader();
+  refreshAnalyzerList();
   batteryDraw();
 }
 
-void handleAtaqueCtsJammer() {
-  static bool holdingSelect = false;
+void handleWiFiAnalyzer() {
+  static bool holdingSelect    = false;
+  static int  scanState        = 0;
+  static unsigned long lastScan = 0;
+
   bool selectPressed = (digitalRead(BUTTON_SELECT) == LOW);
 
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (!ctsAtivo) {
-      if (digitalRead(BUTTON_LEFT) == LOW) {
-        int old = ctsMenuSel;
-        ctsMenuSel = (ctsMenuSel > 0) ? ctsMenuSel - 1 : 1;
-        lastDebounceTime = millis();
-        const char *items[] = {lang->atk_da_back, lang->atk_cts_iniciar};
-        drawMenuItem(0, 102 + old * 20, 128, 19, items[old], false);
-        drawMenuItem(0, 102 + ctsMenuSel * 20, 128, 19, items[ctsMenuSel], true);
-        return;
+  if (scanState == 1) {
+    int16_t res = WiFi.scanComplete();
+    if (res >= 0) {
+      analyzerApCount = 0;
+      for (int i = 0; i < res && analyzerApCount < 16; i++) {
+        analyzerAps[analyzerApCount].ch   = WiFi.channel(i);
+        analyzerAps[analyzerApCount].rssi = (int8_t)WiFi.RSSI(i);
+        analyzerAps[analyzerApCount].auth = (wifi_auth_mode_t)WiFi.encryptionType(i);
+        strncpy(analyzerAps[analyzerApCount].ssid, WiFi.SSID(i).c_str(), 23);
+        analyzerAps[analyzerApCount].ssid[23] = '\0';
+        analyzerAps[analyzerApCount].bssid_str = WiFi.BSSIDstr(i);
+        analyzerApCount++;
       }
-      if (digitalRead(BUTTON_RIGHT) == LOW) {
-        int old = ctsMenuSel;
-        ctsMenuSel = (ctsMenuSel < 1) ? ctsMenuSel + 1 : 0;
-        lastDebounceTime = millis();
-        const char *items[] = {lang->atk_da_back, lang->atk_cts_iniciar};
-        drawMenuItem(0, 102 + old * 20, 128, 19, items[old], false);
-        drawMenuItem(0, 102 + ctsMenuSel * 20, 128, 19, items[ctsMenuSel], true);
-        return;
-      }
-
-      if (selectPressed && !holdingSelect) {
-        holdingSelect = true;
-      }
-      if (!selectPressed && holdingSelect) {
-        holdingSelect = false;
-        lastDebounceTime = millis();
-        
-        if (ctsMenuSel == 0) {
-          estadoAtual = MENU_ATAQUES;
-          displayMenuAtaques();
-        } else {
-          uint8_t canal = (apRecordSelecionado.primary >= 1) ? apRecordSelecionado.primary : 1;
-          if (initRadioForAttack(canal)) {
-            ctsAtivo = true;
-            ctsCounter = 0;
-            if (attackTaskHandle == NULL) {
-              attackTaskRunning = true;
-              xTaskCreatePinnedToCore(attackTask, "AttackTask", 4096, NULL, 1,
-                                      &attackTaskHandle, 1);
-            }
-            displayAtaqueCtsJammer();
-          } else {
-            tft.fillScreen(C_BG);
-            drawHeader(lang->atk_hdr_navjammer, true);
-            tft.setTextColor(C_RED);
-            tft.setCursor(20, 80);
-            tft.println(lang->atk_da_erro_radio);
-            delay(1500);
-            displayAtaqueCtsJammer();
-          }
-        }
-      }
-    } else {
-      if (selectPressed && !holdingSelect) {
-        holdingSelect = true;
-      }
-      if (!selectPressed && holdingSelect) {
-        holdingSelect = false;
-        lastDebounceTime = millis();
-        
-        ctsAtivo = false;
-        deinitRadio();
-        if (attackTaskHandle != NULL) {
-          attackTaskRunning = false;
-          vTaskDelay(pdMS_TO_TICKS(300));
-          attackTaskHandle = NULL;
-        }
-        tft.fillScreen(C_BG);
-        drawHeader(lang->atk_hdr_navjammer, true);
-        tft.setTextColor(C_GOLD);
-        tft.setCursor(28, 80);
-        tft.println("ATAQUE PARADO");
-        delay(1500);
-        displayAtaqueCtsJammer();
-      }
+      WiFi.scanDelete();
+      analyzerScanDone = true;
+      scanState   = 0;
+      if (analyzerApCount > 0 && analyzerMenuSel < 0) analyzerMenuSel = 0;
+      if (analyzerMenuSel > analyzerApCount) analyzerMenuSel = analyzerApCount;
+      refreshAnalyzerList();
     }
   }
 
-  if (ctsAtivo) {
-    static unsigned long lastUpdate = 0;
-    if (millis() - lastUpdate > 200) {
-      lastUpdate = millis();
-      tft.setTextSize(1);
-      tft.fillRect(68, 75, 58, 8, C_BG);
-      tft.setTextColor(C_WHITE);
-      tft.setCursor(68, 75);
-      tft.printf("%lu", ctsCounter);
-      batteryDraw();
+  if (scanState == 0 && (millis() - lastScan > 2500)) {
+    lastScan  = millis();
+    WiFi.scanNetworks(true, false, false, 100);
+    scanState = 1;
+  }
+
+  if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW) {
+      lastDebounceTime = millis();
+      if (analyzerMenuSel > 0) {
+        analyzerMenuSel--;
+        if (analyzerMenuSel < analyzerViewScroll) analyzerViewScroll = analyzerMenuSel;
+        refreshAnalyzerList();
+      }
+      return;
+    }
+    if (digitalRead(BUTTON_RIGHT) == LOW) {
+      lastDebounceTime = millis();
+      if (analyzerMenuSel < analyzerApCount) {
+        analyzerMenuSel++;
+        if (analyzerMenuSel >= analyzerViewScroll + 6) analyzerViewScroll = analyzerMenuSel - 5;
+        refreshAnalyzerList();
+      }
+      return;
+    }
+    if (selectPressed && !holdingSelect) { holdingSelect = true; }
+    if (!selectPressed && holdingSelect) {
+      holdingSelect = false;
+      lastDebounceTime = millis();
+      
+      // Se selecionou VOLTAR (0)
+      if (analyzerMenuSel == 0) {
+        estadoAtual = MENU_ATAQUES;
+        displayMenuAtaques();
+        return;
+      }
+      
+      // Retorna se apertar SELECT e não houver redes (ou estar carregando)
+      if (!analyzerScanDone || analyzerApCount == 0) {
+        return;
+      }
+      
+      int idx = analyzerMenuSel - 1;
+      if (analyzerAps[idx].bssid_str == macSelecionado || String(analyzerAps[idx].ssid) == ssidSelecionado) {
+        estadoAtual = TELA_PACKET_MONITOR;
+        displayPacketMonitor(analyzerAps[idx].ch); // Pass the fresh channel!
+      } else {
+        estadoAtual = TELA_NETWORK_COMPARE;
+        displayNetworkCompare(idx);
+      }
+    }
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Packet Monitor
+// ────────────────────────────────────────────────────────────
+struct PmActiveClient {
+  uint8_t mac[6];
+  unsigned long lastSeen;
+};
+static PmActiveClient pmActiveClients[64];
+static int pmActiveClientsCount = 0;
+static volatile unsigned long pmDeauthPackets = 0;
+static unsigned long pmDeauthPerSec = 0;
+static int pmMonitorChannel = 1;
+
+static void IRAM_ATTR packetMonitorCb(void *buf, wifi_promiscuous_pkt_type_t type) {
+  if (type != WIFI_PKT_DATA && type != WIFI_PKT_MGMT) return;
+  pmTotalPackets++;
+  pmPacketsPerSec++;
+  
+  wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
+  const uint8_t *payload = pkt->payload;
+  if (payload == NULL) return;
+  
+  // Detecção de Deauth (Management Frame, Subtype 12)
+  if (type == WIFI_PKT_MGMT && payload[0] == 0xC0) {
+    pmDeauthPackets++;
+  }
+  
+  // Extrair o MAC Source Address (geralmente nos bytes 10-15)
+  const uint8_t *sa = &payload[10];
+  
+  // Ignora Broadcast/Multicast
+  if (sa[0] & 0x01) return;
+  
+  // Checar se já temos este MAC ativo
+  bool found = false;
+  for (int i = 0; i < pmActiveClientsCount; i++) {
+    if (memcmp(pmActiveClients[i].mac, sa, 6) == 0) {
+      pmActiveClients[i].lastSeen = millis();
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found && pmActiveClientsCount < 64) {
+    memcpy(pmActiveClients[pmActiveClientsCount].mac, sa, 6);
+    pmActiveClients[pmActiveClientsCount].lastSeen = millis();
+    pmActiveClientsCount++;
+  }
+}
+
+void displayPacketMonitor(int ch) {
+  pmMonitorChannel = ch;
+  tft.fillScreen(C_BG);
+  drawHeader(lang->atk_hdr_analyzer, true);
+  
+  tft.fillRect(4, 29, 120, 12, C_GOLD_SEL);
+  tft.drawRect(4, 29, 120, 12, C_GOLD);
+  tft.setTextColor(C_GOLD);
+  tft.setCursor(22, 32);
+  tft.print("PACKET MONITOR");
+  
+  tft.drawFastHLine(0, 44, 128, C_GOLD_DIM);
+  
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 52);
+  tft.print(lang->atk_anl_packets_sec);
+  
+  tft.setCursor(4, 76);
+  tft.print(lang->atk_anl_total_packets);
+  
+  tft.setCursor(4, 100);
+  tft.print("Active Devices:");
+  
+  tft.setCursor(4, 122);
+  tft.print("Deauth/s");
+
+  pmTotalPackets = 0;
+  pmPacketsPerSec = 0;
+  pmUniqueClients = 0;
+  pmActiveClientsCount = 0;
+  pmDeauthPackets = 0;
+  pmDeauthPerSec = 0;
+  pmStartTime = millis();
+  
+  WiFi.mode(WIFI_MODE_NULL);
+  delay(10);
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  esp_wifi_init(&cfg);
+  esp_wifi_set_mode(WIFI_MODE_STA);
+  esp_wifi_start();
+  esp_wifi_set_channel(pmMonitorChannel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_promiscuous_rx_cb(packetMonitorCb);
+}
+
+void handlePacketMonitor() {
+  static unsigned long lastUpdate = 0;
+  
+  if (millis() - lastUpdate >= 1000) {
+    lastUpdate = millis();
+    
+    // Calcula Deauth/s e reseta o contador
+    pmDeauthPerSec = pmDeauthPackets;
+    pmDeauthPackets = 0;
+    
+    tft.fillRect(94, 52, 30, 16, C_BG);
+    tft.setTextColor(C_CYAN);
+    tft.setCursor(94, 52);
+    tft.printf("%lu", pmPacketsPerSec);
+    pmPacketsPerSec = 0;
+    
+    tft.fillRect(94, 76, 30, 16, C_BG);
+    tft.setTextColor(C_WHITE);
+    tft.setCursor(94, 76);
+    // Para caber grandes números
+    tft.print(pmTotalPackets > 99999 ? ">99k" : String(pmTotalPackets).c_str());
+    
+    // Remove clientes ociosos a mais de 3 segundos
+    unsigned long now = millis();
+    for (int i = 0; i < pmActiveClientsCount; ) {
+      if (now - pmActiveClients[i].lastSeen > 3000) {
+        pmActiveClientsCount--;
+        if (i < pmActiveClientsCount) {
+          pmActiveClients[i] = pmActiveClients[pmActiveClientsCount];
+        }
+      } else {
+        i++;
+      }
+    }
+    
+    tft.fillRect(94, 100, 30, 16, C_BG);
+    tft.setTextColor(C_GREEN);
+    tft.setCursor(94, 100);
+    tft.printf("%d", pmActiveClientsCount);
+    
+    // Deauth Meter Bar
+    int barW = min((int)pmDeauthPerSec * 2, 72); // Max 72px width
+    tft.fillRect(52, 122, 72, 8, C_GOLD_SEL);
+    if (barW > 0) {
+      uint16_t barColor = (barW > 50) ? C_RED : ((barW > 25) ? C_YELLOW : C_GREEN);
+      tft.fillRect(52, 122, barW, 8, barColor);
+    }
+    tft.drawRect(52, 122, 72, 8, C_GOLD_DIM);
+    
+    batteryDraw();
+  }
+
+
+
+  if (digitalRead(BUTTON_SELECT) == LOW || digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
+    if (millis() - lastDebounceTime > debounceDelay) {
+      lastDebounceTime = millis();
+      esp_wifi_set_promiscuous(false);
+      esp_wifi_set_promiscuous_rx_cb(nullptr);
+      WiFi.mode(WIFI_STA);
+      WiFi.disconnect();
+      
+      estadoAtual = MENU_WIFI_ANALYZER;
+      displayWiFiAnalyzer();
+    }
+  }
+}
+
+// ────────────────────────────────────────────────────────────
+// Network Compare
+// ────────────────────────────────────────────────────────────
+static int compareIndex = 0;
+
+void displayNetworkCompare(int idx) {
+  compareIndex = idx;
+  tft.fillScreen(C_BG);
+  drawHeader(lang->atk_anl_compare_vs, true);
+  
+  tft.setTextSize(1);
+  
+  // Left side: Target
+  tft.drawFastVLine(64, 25, 103, C_GREY);
+  
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(4, 28);
+  tft.print("Target");
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(4, 40);
+  tft.print(truncSSID(ssidSelecionado, 9));
+  
+  tft.setTextColor(C_CYAN);
+  tft.setCursor(4, 60);
+  tft.print(lang->atk_anl_channel);
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(4, 72);
+  tft.printf("%d", apRecordSelecionado.primary);
+  
+  tft.setTextColor(C_CYAN);
+  tft.setCursor(4, 92);
+  tft.print("RSSI:");
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(4, 104);
+  tft.printf("%d", apRecordSelecionado.rssi);
+
+  // Right side: Compared
+  tft.setTextColor(C_GOLD_DIM);
+  tft.setCursor(68, 28);
+  tft.print("Compare");
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(68, 40);
+  tft.print(truncSSID(analyzerAps[idx].ssid, 9));
+  
+  tft.setTextColor(C_CYAN);
+  tft.setCursor(68, 60);
+  tft.print(lang->atk_anl_channel);
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(68, 72);
+  tft.printf("%d", analyzerAps[idx].ch);
+  
+  tft.setTextColor(C_CYAN);
+  tft.setCursor(68, 92);
+  tft.print("RSSI:");
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(68, 104);
+  tft.printf("%d", analyzerAps[idx].rssi);
+  
+  batteryDraw();
+}
+
+void handleNetworkCompare() {
+  if (digitalRead(BUTTON_SELECT) == LOW || digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
+    if (millis() - lastDebounceTime > debounceDelay) {
+      lastDebounceTime = millis();
+      estadoAtual = MENU_WIFI_ANALYZER;
+      displayWiFiAnalyzer();
     }
   }
 }

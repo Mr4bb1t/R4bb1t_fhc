@@ -134,26 +134,15 @@ if %errorlevel% neq 0 (
 )
 echo       OK
 
-:: 2) ieee80211_is_tx_allowed — bypass de verificacao de permissao TX (control frames)
-echo [2/2] Weakening: ieee80211_is_tx_allowed
-"%OBJCOPY%" --weaken-symbol=ieee80211_is_tx_allowed "%LIBPATH%" "%LIBPATH%"
-if %errorlevel% neq 0 (
-    echo.
-    echo [ERRO] Falha ao enfraquecer ieee80211_is_tx_allowed!
-    pause
-    exit /b 1
-)
 echo       OK
 
-echo.
 echo ============================================================
-echo  SUCESSO! Ambos os patches aplicados.
+echo  SUCESSO! Patch aplicado.
 echo  Lib : %LIBPATH%
 echo  Bkp : %BACKUP%
 echo.
 echo  Símbolos enfraquecidos:
 echo    - ieee80211_raw_frame_sanity_check (management frames)
-echo    - ieee80211_is_tx_allowed (control frames / TX permission)
 echo.
 echo  Compile e grave normalmente (Arduino IDE ou PlatformIO).
 echo  Para reverter: copy "%BACKUP%" "%LIBPATH%"
