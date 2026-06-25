@@ -266,6 +266,10 @@ void loop() {
     handleMenuAtaques();
     break;
 
+  case ATAQUE_INFO_REDE:
+    handleInfoRede();
+    break;
+
   case ATAQUE_CAPTIVE_PORTAL:
     handleAtaqueCaptivePortal();
     break;

@@ -315,15 +315,16 @@ void handleIdioma() {
       int bh = 24;
       int bx = (SCR_W - bw) / 2;
       int by = 85;
-      
+
       tft.fillRoundRect(bx, by, bw, bh, 4, C_BG);
       tft.drawRoundRect(bx, by, bw, bh, 4, C_GREEN);
-      tft.drawRoundRect(bx + 1, by + 1, bw - 2, bh - 2, 3, C_GREEN); // Borda dupla
-      
+      tft.drawRoundRect(bx + 1, by + 1, bw - 2, bh - 2, 3,
+                        C_GREEN); // Borda dupla
+
       tft.setTextColor(C_GREEN);
       tft.setCursor(bx + 12, by + 8);
       tft.print(lang->cfg_lang_salvo);
-      
+
       delay(800);
 
       estadoAtual = MENU_CONFIGURACOES;
@@ -336,6 +337,8 @@ void handleIdioma() {
 //  MUDAR MAC
 // ═══════════════════════════════════════════════
 
+static int macSel = 0; // 0 = Ação, 1 = Voltar
+
 void displayMudarMAC() {
   tft.fillScreen(C_BG);
   drawHeader(lang->cfg_hdr_mac, true);
@@ -344,71 +347,92 @@ void displayMudarMAC() {
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, 18);
   tft.print(lang->cfg_mac_atual);
-  tft.setTextColor(C_WHITE);
-  tft.setCursor(4, 28);
-  tft.print(WiFi.macAddress());
-  drawSeparator(38, C_GREY);
 
-  if (macState == 0) {
-    tft.setTextColor(C_GOLD);
-    tft.setCursor(8, 60);
-    tft.print(lang->cfg_mac_gerar);
+  tft.drawRoundRect(4, 28, 120, 18, 2, C_GREY);
+  tft.setTextColor(C_WHITE);
+  tft.setCursor(12, 33);
+  tft.print(WiFi.macAddress());
+
+  if (macState >= 1) {
     tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(32, 76);
-    tft.print(lang->cfg_mac_sel_gerar);
-  } else if (macState == 1) {
+    tft.setCursor(4, 52);
+    tft.print(lang->cfg_mac_novo);
+
+    tft.drawRoundRect(4, 62, 120, 18, 2, macState == 2 ? C_GREEN : C_GOLD);
+    tft.setTextColor(macState == 2 ? C_GREEN : C_GOLD);
+    tft.setCursor(12, 67);
     char buf[18];
     snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0],
              macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(4, 48);
-    tft.print(lang->cfg_mac_novo);
-    tft.setTextColor(C_GOLD);
-    tft.setCursor(4, 60);
     tft.print(buf);
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(28, 80);
-    tft.print(lang->cfg_mac_sel_aplicar);
-  } else if (macState == 2) {
-    char buf[18];
-    snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X", macBuf[0],
-             macBuf[1], macBuf[2], macBuf[3], macBuf[4], macBuf[5]);
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(4, 48);
-    tft.print(lang->cfg_mac_novo);
-    tft.setTextColor(C_GREEN);
-    tft.setCursor(4, 60);
-    tft.print(buf);
-    tft.setCursor(20, 76);
-    tft.print(lang->cfg_mac_aplicado);
-    tft.setTextColor(C_GOLD_DIM);
-    tft.setCursor(32, 96);
-    tft.print(lang->cfg_mac_sel_voltar);
   }
+
+  if (macState == 2) {
+    tft.setTextColor(C_GREEN);
+    String msg = String(lang->cfg_mac_aplicado);
+    int mw = msg.length() * 6;
+    tft.setCursor((SCR_W - mw) / 2, 85);
+    tft.print(msg);
+  }
+
+  bool isPT = (String(lang->cfg_itm_voltar) == "Voltar");
+
+  // Botões
+  if (macState < 2) {
+    tft.fillRect(14, 98, 100, 20, macSel == 0 ? C_GOLD_SEL : C_BG);
+    tft.drawRect(14, 98, 100, 20, macSel == 0 ? C_GOLD : C_GREY);
+    tft.setTextColor(macSel == 0 ? C_GOLD : C_GREY);
+    String actionTxt = isPT ? "GERAR MAC" : "GENERATE MAC";
+    if (macState == 1)
+      actionTxt = isPT ? "APLICAR MAC" : "APPLY MAC";
+    int tw = actionTxt.length() * 6;
+    tft.setCursor(14 + (100 - tw) / 2, 104);
+    tft.print(actionTxt);
+  }
+
+  tft.fillRect(14, 122, 100, 20, macSel == 1 ? C_GOLD_SEL : C_BG);
+  tft.drawRect(14, 122, 100, 20, macSel == 1 ? C_GOLD : C_GREY);
+  tft.setTextColor(macSel == 1 ? C_GOLD : C_GREY);
+  String backTxt = String(lang->cfg_itm_voltar);
+  int tw2 = backTxt.length() * 6;
+  tft.setCursor(14 + (100 - tw2) / 2, 128);
+  tft.print(backTxt);
 
   batteryDraw();
 }
 
 void handleMudarMAC() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
+    if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW) {
+      if (macState < 2) {
+        macSel = (macSel == 0) ? 1 : 0;
+        lastDebounceTime = millis();
+        displayMudarMAC();
+      }
+    }
     if (digitalRead(BUTTON_SELECT) == LOW) {
       lastDebounceTime = millis();
-      if (macState == 0) {
-        for (int i = 0; i < 6; i++)
-          macBuf[i] = (uint8_t)(esp_random() & 0xFF);
-        macBuf[0] = (macBuf[0] & 0xFE) | 0x02;
-        macState = 1;
-        displayMudarMAC();
-      } else if (macState == 1) {
-        WiFi.mode(WIFI_STA);
-        esp_wifi_set_mac(WIFI_IF_STA, macBuf);
-        prefs.putBytes("mac", macBuf, 6); // SALVA NA MEMÓRIA FIXA
-        macState = 2;
-        displayMudarMAC();
-      } else if (macState == 2) {
+      if (macSel == 1 || macState == 2) {
         macState = 0;
+        macSel = 0;
         estadoAtual = MENU_CONFIGURACOES;
         displayConfiguracoes();
+      } else {
+        if (macState == 0) {
+          for (int i = 0; i < 6; i++)
+            macBuf[i] = (uint8_t)(esp_random() & 0xFF);
+          macBuf[0] = (macBuf[0] & 0xFE) | 0x02;
+          macState = 1;
+          macSel = 0;
+          displayMudarMAC();
+        } else if (macState == 1) {
+          WiFi.mode(WIFI_STA);
+          esp_wifi_set_mac(WIFI_IF_STA, macBuf);
+          prefs.putBytes("mac", macBuf, 6);
+          macState = 2;
+          macSel = 1;
+          displayMudarMAC();
+        }
       }
     }
   }
@@ -606,50 +630,33 @@ static void displaySobre_p4() {
   snprintf(buf, sizeof(buf), "%d%%", pct);
   int bx = (SCR_W - (int)strlen(buf) * 24) / 2;
   tft.setTextColor(col);
-  tft.setCursor(bx < 2 ? 2 : bx, 18);
+  tft.setCursor(bx < 2 ? 2 : bx, 26);
   tft.print(buf);
 
   // Barra de carga
-  const int BW = 114;
-  const int BH = 20;
-  const int BX = (SCR_W - BW) / 2;
-  const int BY = 72;
-  tft.drawRect(BX - 1, BY - 1, BW + 2, BH + 2, C_GOLD);
-  tft.fillRect(BX, BY, BW, BH, C_GREY_DARK);
-  int fill = (int)((long)BW * pct / 100);
-  if (fill > 0)
-    tft.fillRect(BX, BY, fill, BH, col);
-  tft.fillRect(BX + BW + 1, BY + 6, 4, BH - 12, col);
+  const int BW = 90;
+  const int BH = 32;
+  const int BX = (SCR_W - BW) / 2; // centered: (128-90)/2 = 19
+  const int BY = 62;
 
-  // Label dentro da barra
-  tft.setTextSize(1);
-  tft.setTextColor(TFT_BLACK);
-  if (fill > 20) {
-    int li = pct < 10 ? 0 : pct < 25 ? 1 : pct < 50 ? 2 : pct < 80 ? 3 : 4;
-    const char *lvlStr;
-    switch (li) {
-    case 0:
-      lvlStr = lang->cfg_bat_critico;
-      break;
-    case 1:
-      lvlStr = lang->cfg_bat_baixo;
-      break;
-    case 2:
-      lvlStr = lang->cfg_bat_medio;
-      break;
-    case 3:
-      lvlStr = lang->cfg_bat_bom;
-      break;
-    default:
-      lvlStr = lang->cfg_bat_cheio;
-      break;
-    }
-    int lw = (int)strlen(lvlStr) * 6;
-    tft.setCursor(BX + (fill - lw) / 2, BY + 7);
-    tft.print(lvlStr);
-  }
+  // Borda dupla estilizada
+  tft.drawRoundRect(BX, BY, BW, BH, 3, C_GOLD);
+  tft.drawRoundRect(BX - 1, BY - 1, BW + 2, BH + 2, 4, C_GOLD);
+  // Terminal positivo
+  tft.fillRoundRect(BX + BW + 2, BY + 8, 4, 16, 2, C_GOLD);
+
+  // Interior
+  int innerW = BW - 6;
+  int innerX = BX + 3;
+  int innerY = BY + 3;
+  int innerH = BH - 6;
+  tft.fillRect(innerX, innerY, innerW, innerH, C_GREY_DARK);
+  int fill = (innerW * pct) / 100;
+  if (fill > 0)
+    tft.fillRect(innerX, innerY, fill, innerH, col);
 
   // Detalhes
+  tft.setTextSize(1);
   int y = 102;
   const int LH = 13;
   tft.setTextColor(C_GOLD_DIM);
@@ -783,19 +790,19 @@ static void drawBrilhoSlider() {
   if (pct > 100)
     pct = 100;
 
-  tft.fillRect(0, 40, SCR_W, 24, C_BG);
+  tft.fillRect(0, 50, SCR_W, 24, C_BG);
 
   tft.setTextSize(3);
   char pctBuf[6];
   snprintf(pctBuf, sizeof(pctBuf), "%d%%", pct);
   int pctX = (SCR_W - (int)strlen(pctBuf) * 18) / 2;
   tft.setTextColor(C_GOLD);
-  tft.setCursor(pctX, 40);
+  tft.setCursor(pctX, 50);
   tft.print(pctBuf);
 
   const int slX0 = 10;
   const int slX1 = SCR_W - 10;
-  const int slY = 88;
+  const int slY = 95;
   const int slW = slX1 - slX0;
 
   tft.fillRect(slX0 - 6, slY - 6, slW + 12, 12, C_BG);
@@ -818,20 +825,13 @@ void displayBrilho() {
 
   const int slX0 = 10;
   const int slX1 = SCR_W - 10;
-  const int slY = 88;
+  const int slY = 95;
   tft.setTextSize(1);
   tft.setTextColor(C_GREY);
   tft.setCursor(slX0, slY + 10);
   tft.print(lang->cfg_bl_min);
   tft.setCursor(slX1 - 12, slY + 10);
   tft.print(lang->cfg_bl_max);
-
-  drawSeparator(110, C_GREY);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(10, 116);
-  tft.print(lang->cfg_bl_hint1);
-  tft.setCursor(10, 128);
-  tft.print(lang->cfg_bl_hint2);
 
   drawFooter();
   batteryDraw();
@@ -1050,7 +1050,6 @@ void displayArmazenamento() {
 
   // ── Botões de ação ──
   drawSeparator(SCR_H - 4, C_GREY);
-
   updateArmazenamentoBotoes();
 
   batteryDraw();
@@ -1142,11 +1141,7 @@ static void displayArquivosSPIFFS() {
     tft.print("v");
   }
 
-  drawSeparator(SCR_H - 14, C_GREY);
-  tft.setTextSize(1);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, SCR_H - 10);
-  tft.print(lang->cfg_st_hint2);
+  drawFooter();
   batteryDraw();
 }
 
@@ -1328,12 +1323,10 @@ static void displayFileViewerText() {
   snprintf(pg, sizeof(pg), "L%d/%d", viewScroll + 1, viewTotalLines);
   tft.setCursor(4, SCR_H - 10);
   tft.print(pg);
-  tft.setCursor(55, SCR_H - 10);
-  tft.print(lang->cfg_st_hint3);
   batteryDraw();
 }
 
-static void playBinAnimation(const char* path) {
+static void playBinAnimation(const char *path) {
   BootAnimPlayer player;
   if (player.begin(path)) {
     uint16_t *buf = (uint16_t *)malloc(128 * 160 * 2);
@@ -1342,7 +1335,7 @@ static void playBinAnimation(const char* path) {
       uint32_t lastFrame = millis();
 
       tft.fillScreen(TFT_BLACK);
-      
+
       bool exit_anim = false;
       while (!exit_anim) {
         while (player.decodeNextFrame(buf)) {
@@ -1355,17 +1348,22 @@ static void playBinAnimation(const char* path) {
 
           int anim_x = (tft.width() - player.getWidth()) / 2;
           int anim_y = (tft.height() - player.getHeight()) / 2;
-          if (anim_x < 0) anim_x = 0;
-          if (anim_y < 0) anim_y = 0;
+          if (anim_x < 0)
+            anim_x = 0;
+          if (anim_y < 0)
+            anim_y = 0;
 
-          tft.pushImage(anim_x, anim_y, player.getWidth(), player.getHeight(), buf);
+          tft.pushImage(anim_x, anim_y, player.getWidth(), player.getHeight(),
+                        buf);
           tft.setSwapBytes(false);
-          
+
           // Sai se apertar algum botao
-          if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
-              lastDebounceTime = millis();
-              exit_anim = true;
-              break;
+          if (digitalRead(BUTTON_LEFT) == LOW ||
+              digitalRead(BUTTON_RIGHT) == LOW ||
+              digitalRead(BUTTON_SELECT) == LOW) {
+            lastDebounceTime = millis();
+            exit_anim = true;
+            break;
           }
         }
         if (!exit_anim) {
@@ -1728,41 +1726,40 @@ void displayScreensaverTest() {
 
   if (animIndex < scrScroll)
     scrScroll = animIndex;
-  if (animIndex >= scrScroll + 6)
-    scrScroll = animIndex - 6 + 1;
+  if (animIndex >= scrScroll + 7)
+    scrScroll = animIndex - 7 + 1;
 
   int savedIdx = prefs.getInt("screensaver", 1);
 
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < 7; i++) {
     int idx = scrScroll + i;
     if (idx >= ANIM_COUNT)
       break;
 
     String label = String(getAnimName(idx));
-    if (idx == savedIdx && idx != 0)
-      label += lang->cfg_sv_ativo;
 
     drawMenuItem(0, 16 + i * 19, 125, 19, label.c_str(), idx == animIndex);
+
+    if (idx == savedIdx && idx != 0) {
+      int cy = 16 + i * 19 + 9;
+      tft.drawLine(108, cy, 112, cy + 4, C_GREEN);
+      tft.drawLine(112, cy + 4, 118, cy - 4, C_GREEN);
+      tft.drawLine(108, cy + 1, 112, cy + 5, C_GREEN);
+      tft.drawLine(112, cy + 5, 118, cy - 3, C_GREEN);
+    }
   }
 
   // Barra de rolagem
-  if (ANIM_COUNT > 6) {
-    int barH = (6 * 114) / ANIM_COUNT;
-    int barY = 16 + (scrScroll * 114) / ANIM_COUNT;
-    tft.drawFastVLine(126, 16, 114, C_GREY);
-    tft.drawFastVLine(127, 16, 114, C_GREY);
+  if (ANIM_COUNT > 7) {
+    int barH = (7 * 133) / ANIM_COUNT;
+    int barY = 16 + (scrScroll * 133) / ANIM_COUNT;
+    tft.drawFastVLine(126, 16, 133, C_GREY);
+    tft.drawFastVLine(127, 16, 133, C_GREY);
     tft.drawFastVLine(126, barY, barH, C_GOLD);
     tft.drawFastVLine(127, barY, barH, C_GOLD);
   }
 
-  drawSeparator(132, C_GREY);
-  tft.setTextSize(1);
-  tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(4, 136);
-  tft.print(lang->cfg_sv_hint1);
-  tft.setCursor(70, 136);
-  tft.print(lang->cfg_sv_hint2);
-
+  drawFooter();
   batteryDraw();
 }
 
@@ -2110,20 +2107,30 @@ void handleScreensaverTest() {
         int old = animIndex;
         animIndex = (animIndex - 1 + ANIM_COUNT) % ANIM_COUNT;
         lastDebounceTime = millis();
-        if (animIndex >= scrScroll && animIndex < scrScroll + 6 &&
-            old >= scrScroll && old < scrScroll + 6) {
+        if (animIndex >= scrScroll && animIndex < scrScroll + 7 &&
+            old >= scrScroll && old < scrScroll + 7) {
           int savedIdx = prefs.getInt("screensaver", 1);
           String labelOld = String(getAnimName(old));
-          if (old == savedIdx && old != 0)
-            labelOld += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19,
                        labelOld.c_str(), false);
+          if (old == savedIdx && old != 0) {
+            int cy = 16 + (old - scrScroll) * 19 + 9;
+            tft.drawLine(108, cy, 112, cy + 4, C_GREEN);
+            tft.drawLine(112, cy + 4, 118, cy - 4, C_GREEN);
+            tft.drawLine(108, cy + 1, 112, cy + 5, C_GREEN);
+            tft.drawLine(112, cy + 5, 118, cy - 3, C_GREEN);
+          }
 
           String labelNew = String(getAnimName(animIndex));
-          if (animIndex == savedIdx && animIndex != 0)
-            labelNew += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19,
                        labelNew.c_str(), true);
+          if (animIndex == savedIdx && animIndex != 0) {
+            int cy = 16 + (animIndex - scrScroll) * 19 + 9;
+            tft.drawLine(108, cy, 112, cy + 4, C_GREEN);
+            tft.drawLine(112, cy + 4, 118, cy - 4, C_GREEN);
+            tft.drawLine(108, cy + 1, 112, cy + 5, C_GREEN);
+            tft.drawLine(112, cy + 5, 118, cy - 3, C_GREEN);
+          }
         } else {
           displayScreensaverTest();
         }
@@ -2132,20 +2139,30 @@ void handleScreensaverTest() {
         int old = animIndex;
         animIndex = (animIndex + 1) % ANIM_COUNT;
         lastDebounceTime = millis();
-        if (animIndex >= scrScroll && animIndex < scrScroll + 6 &&
-            old >= scrScroll && old < scrScroll + 6) {
+        if (animIndex >= scrScroll && animIndex < scrScroll + 7 &&
+            old >= scrScroll && old < scrScroll + 7) {
           int savedIdx = prefs.getInt("screensaver", 1);
           String labelOld = String(getAnimName(old));
-          if (old == savedIdx && old != 0)
-            labelOld += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (old - scrScroll) * 19, 125, 19,
                        labelOld.c_str(), false);
+          if (old == savedIdx && old != 0) {
+            int cy = 16 + (old - scrScroll) * 19 + 9;
+            tft.drawLine(108, cy, 112, cy + 4, C_GREEN);
+            tft.drawLine(112, cy + 4, 118, cy - 4, C_GREEN);
+            tft.drawLine(108, cy + 1, 112, cy + 5, C_GREEN);
+            tft.drawLine(112, cy + 5, 118, cy - 3, C_GREEN);
+          }
 
           String labelNew = String(getAnimName(animIndex));
-          if (animIndex == savedIdx && animIndex != 0)
-            labelNew += lang->cfg_sv_ativo;
           drawMenuItem(0, 16 + (animIndex - scrScroll) * 19, 125, 19,
                        labelNew.c_str(), true);
+          if (animIndex == savedIdx && animIndex != 0) {
+            int cy = 16 + (animIndex - scrScroll) * 19 + 9;
+            tft.drawLine(108, cy, 112, cy + 4, C_GREEN);
+            tft.drawLine(112, cy + 4, 118, cy - 4, C_GREEN);
+            tft.drawLine(108, cy + 1, 112, cy + 5, C_GREEN);
+            tft.drawLine(112, cy + 5, 118, cy - 3, C_GREEN);
+          }
         } else {
           displayScreensaverTest();
         }

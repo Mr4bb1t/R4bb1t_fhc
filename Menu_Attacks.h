@@ -6,6 +6,9 @@
 void displayMenuAtaques();
 void handleMenuAtaques();
 
+void displayInfoRede();
+void handleInfoRede();
+
 void displayAtaqueCaptivePortal();
 void handleAtaqueCaptivePortal();
 

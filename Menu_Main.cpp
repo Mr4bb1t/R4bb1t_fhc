@@ -76,7 +76,7 @@ static void drawMenuInicialItem(int i, bool sel) {
     }
 
     if (i == 0)      drawWiFiIconSmall(4, y, iconColor);
-    else if (i == 1) drawNRF24IconSmall(4, y, iconColor);
+    else if (i == 1) drawNRF24IconSmall(1, y, iconColor);
     else if (i == 2) drawRFIconSmall(4, y, iconColor);
     else             drawSettingsIconSmall(4, y, iconColor, sel ? C_GOLD_SEL : C_BG);
 
