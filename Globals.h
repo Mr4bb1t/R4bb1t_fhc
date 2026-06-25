@@ -130,5 +130,7 @@ extern int   rfDetectedRSSI;    // RSSI da frequência detectada
 
 // Estado atual
 extern EstadoTela estadoAtual;
+extern unsigned long lastActivityTime;
+extern EstadoTela estadoAnteriorScreensaver;
 
 #endif

@@ -209,14 +209,16 @@ void drawSeparator(int y, uint16_t color) {
 void drawMenuItem(int x, int y, int w, int h,
                   const char *label,
                   bool selected,
-                  bool hasArrow) {
+                  bool hasArrow,
+                  bool disabled,
+                  bool isSaved) {
   if (selected) {
     // Fundo escuro da seleção
     tft.fillRect(x, y, w, h, C_GOLD_SEL);
     // Borda lateral esquerda dourada (3px)
     tft.fillRect(x, y, 3, h, C_GOLD);
-    // Texto dourado
-    tft.setTextColor(C_GOLD);
+    // Texto dourado (ou verde se salvo)
+    tft.setTextColor(isSaved ? C_GREEN : C_GOLD);
     tft.setCursor(x + 7, y + (h - 8) / 2 + 1);
     tft.print(label);
     // Seta à direita
@@ -229,8 +231,12 @@ void drawMenuItem(int x, int y, int w, int h,
     tft.fillRect(x, y, w, h, C_BG);
     // Borda lateral esquerda discreta
     tft.fillRect(x, y, 1, h, C_GREY);
-    // Texto branco
-    tft.setTextColor(C_WHITE);
+    // Texto branco ou cinza se desativado (ou verde se salvo)
+    if (disabled) {
+      tft.setTextColor(C_GREY);
+    } else {
+      tft.setTextColor(isSaved ? C_GREEN : C_WHITE);
+    }
     tft.setCursor(x + 7, y + (h - 8) / 2 + 1);
     tft.print(label);
     if (hasArrow) {

@@ -36,7 +36,9 @@ void drawSeparator(int y, uint16_t color = C_GREY);
 void drawMenuItem(int x, int y, int w, int h,
                   const char *label,
                   bool selected,
-                  bool hasArrow = true);
+                  bool hasArrow = true,
+                  bool disabled = false,
+                  bool isSaved = false);
 
 // Rodapé com ícones de botão (< o >)
 void drawFooter();

@@ -332,6 +332,7 @@ const LangPack langPT PROGMEM = {
     "Aneis",
     "Quadrados",
     "Olho Magenta",
+    "Desativar",
 };
 
 const LangPack langEN PROGMEM = {
@@ -666,6 +667,7 @@ const LangPack langEN PROGMEM = {
     "Rings",
     "Squares",
     "Magenta Eye",
+    "Disable",
 };
 
 const LangPack *lang = &langPT;

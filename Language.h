@@ -333,6 +333,7 @@ struct LangPack {
     const char* sv_name_aneis;
     const char* sv_name_quadrados;
     const char* sv_name_olho;
+    const char* sv_name_desativar;
 };
 
 extern const LangPack* lang;

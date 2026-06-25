@@ -242,7 +242,34 @@ void setup() {
     displayMenuInicial();
   }
   
+  lastActivityTime = millis();
   Serial.println("=== SISTEMA PRONTO ===\n");
+}
+
+static bool isScreensaverAllowed(EstadoTela estado) {
+  switch (estado) {
+    case MENU_INICIAL:
+    case SELECAO_REDES:
+    case MENU_ATAQUES:
+    case VISUALIZAR_CREDENCIAIS:
+    case MENU_CONFIGURACOES:
+    case TELA_ARMAZENAMENTO:
+    case TELA_SOBRE:
+    case TELA_MAC_CHANGER:
+    case TELA_BRILHO:
+    case TELA_MODO_MENU:
+    case MENU_RF:
+    case TELA_RF_SAVED:
+    case CONFIRMA_APAGAR_CREDENCIAIS:
+    case MENU_NRF24:
+    case TELA_IDIOMA:
+    case TELA_HARDRESET:
+    case ATAQUE_BEACON_MODO:
+    case ATAQUE_BEACON_CUSTOM:
+      return true;
+    default:
+      return false;
+  }
 }
 
 // ==================== LOOP ====================
@@ -251,6 +278,25 @@ void loop() {
   if (!systemInitialized) {
     delay(100);
     return;
+  }
+
+  // Atualiza o timer de atividade se qualquer botão for pressionado
+  if (digitalRead(BUTTON_LEFT) == LOW || digitalRead(BUTTON_RIGHT) == LOW || digitalRead(BUTTON_SELECT) == LOW) {
+    lastActivityTime = millis();
+  }
+
+  // Verifica timeout de inatividade (30 segundos)
+  if (isScreensaverAllowed(estadoAtual)) {
+    // Screensaver por inatividade global
+    if (millis() - lastActivityTime > 30000) {
+      if (prefs.getInt("screensaver", 2) != 1) { // 1 = Desativar
+        estadoAnteriorScreensaver = estadoAtual;
+        startScreensaver(true);
+      } else {
+        lastActivityTime = millis(); // Reseta para não travar num loop contínuo
+      }
+      return;
+    }
   }
 
   switch (estadoAtual) {

@@ -55,8 +55,6 @@ static const char* getMainMenuLabel(int i) {
 }
 
 // ── Timer de inatividade (screensaver) ─────────
-#define IDLE_TIMEOUT_MS 30000UL
-static unsigned long lastActivityTime = 0;
 
 // ──────────────────────────────────────────────
 static void drawMenuInicialItem(int i, bool sel) {
@@ -139,11 +137,7 @@ void displayMenuInicial() {
 
 // ──────────────────────────────────────────────
 void handleMenuInicial() {
-  if ((millis() - lastActivityTime) >= IDLE_TIMEOUT_MS) {
-    lastActivityTime = millis();
-    startScreensaver(true);
-    return;
-  }
+
 
   if ((millis() - lastDebounceTime) > debounceDelay) {
 

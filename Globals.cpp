@@ -72,3 +72,5 @@ int   rfDetectedRSSI = -100;  // RSSI da frequência detectada
 
 // Estado Atual
 EstadoTela estadoAtual = MENU_INICIAL;
+unsigned long lastActivityTime = 0;
+EstadoTela estadoAnteriorScreensaver = MENU_INICIAL;
