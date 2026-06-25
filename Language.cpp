@@ -169,7 +169,7 @@ const LangPack langPT PROGMEM = {
     "< VOLTAR",
     "Captive Portal",
     "Deauther",
-    "CTS Jammer",
+    "WiFi Analyzer",
     "Beacon Spam",
 
     // ── Captive Portal ──
@@ -502,7 +502,7 @@ const LangPack langEN PROGMEM = {
     "< BACK",
     "Captive Portal",
     "Deauther",
-    "CTS Jammer",
+    "WiFi Analyzer",
     "Beacon Spam",
 
     // ── Captive Portal ──

@@ -39,7 +39,7 @@ void displayMenuAtaques() {
 
   bool isPT = (String(lang->cfg_itm_voltar) == "Voltar");
   String infoLbl = isPT ? "Informacoes" : "Net Info";
-  const char *items[] = {lang->atk_itm_back, infoLbl.c_str(), lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_navjammer,
+  const char *items[] = {lang->atk_itm_back, infoLbl.c_str(), lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_analyzer,
                          lang->atk_itm_beaconspam};
   for (int i = 0; i < 6; i++) {
     drawMenuItem(0, 27 + i * 20, 128, 19, items[i],
@@ -57,7 +57,7 @@ void handleMenuAtaques() {
       lastDebounceTime = millis();
       bool isPT = (String(lang->cfg_itm_voltar) == "Voltar");
       String infoLbl = isPT ? "Informacoes" : "Net Info";
-      const char *items[] = {lang->atk_itm_back, infoLbl.c_str(), lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_navjammer, lang->atk_itm_beaconspam};
+      const char *items[] = {lang->atk_itm_back, infoLbl.c_str(), lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_analyzer, lang->atk_itm_beaconspam};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
@@ -67,7 +67,7 @@ void handleMenuAtaques() {
       lastDebounceTime = millis();
       bool isPT = (String(lang->cfg_itm_voltar) == "Voltar");
       String infoLbl = isPT ? "Informacoes" : "Net Info";
-      const char *items[] = {lang->atk_itm_back, infoLbl.c_str(), lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_navjammer, lang->atk_itm_beaconspam};
+      const char *items[] = {lang->atk_itm_back, infoLbl.c_str(), lang->atk_itm_captive, lang->atk_itm_deauther, lang->atk_itm_analyzer, lang->atk_itm_beaconspam};
       drawMenuItem(0, 27 + old * 20, 128, 19, items[old], false);
       drawMenuItem(0, 27 + opcaoAtaqueSelecionada * 20, 128, 19, items[opcaoAtaqueSelecionada], true);
     }
@@ -1266,10 +1266,10 @@ void handlePacketMonitor() {
     // Para caber grandes números
     tft.print(pmTotalPackets > 99999 ? ">99k" : String(pmTotalPackets).c_str());
     
-    // Remove clientes ociosos a mais de 3 segundos
+    // Remove clientes ociosos a mais de 15 segundos
     unsigned long now = millis();
     for (int i = 0; i < pmActiveClientsCount; ) {
-      if (now - pmActiveClients[i].lastSeen > 3000) {
+      if (now - pmActiveClients[i].lastSeen > 15000) {
         pmActiveClientsCount--;
         if (i < pmActiveClientsCount) {
           pmActiveClients[i] = pmActiveClients[pmActiveClientsCount];

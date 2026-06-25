@@ -164,7 +164,7 @@ O projeto utiliza um bypass dinâmico de pacotes na biblioteca nativa do ESP32 (
 2. Execute `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS).
 3. Aguarde a confirmação de sucesso.
 
-> **Nota:** Se você atualizar a framework do ESP32 (Arduino Core ou PlatformIO), rod o patch novamente.
+> **Nota:** Se você atualizar a framework do ESP32 (Arduino Core ou PlatformIO), rode o patch novamente.
 
 ### Upload do Sistema de Arquivos (SPIFFS)
 A página web do Captive Portal, credenciais salvas e a tela de boot (imagem BMP) precisam ser gravadas no sistema de arquivos do ESP32:
@@ -187,7 +187,7 @@ r4bb1t_fhc/
 ├── platformio.ini        # Configuração do PlatformIO e dependências
 ├── Config.h              # Pinos e constantes
 ├── Globals.h/.cpp        # Variáveis globais
-├── Attacks.h/.cpp        # Ataques WiFi (deauth, beacon, CTS)
+├── Attacks.h/.cpp        # Ataques WiFi (deauth, beacon, analyzer)
 ├── wsl_bypasser.h/.c     # Bypass de filtro 802.11 (injeção de pacotes)
 ├── Scanner.h/.cpp        # Scanner de redes
 ├── Radio.h/.cpp          # Interface CC1101
@@ -224,7 +224,7 @@ r4bb1t_fhc/
 3. Verifique a solda nos pinos SPI (SCK, MISO, MOSI, CSN, CE)
 4. Teste com outro módulo — NRF24L01+ defeituosos são comuns
 
-### Ataques WiFi não funcionam (Deauther/Beacon/CTS Jammer)
+### Ataques WiFi não funcionam (Deauther/Beacon)
 Execute o patch `patch_libnet.bat` (Windows) ou `patch_libnet.sh` (Linux/macOS) antes de compilar. O script detecta automaticamente Arduino IDE e PlatformIO. Sem ele, o driver nativo do ESP32 bloqueia frames de gerenciamento e controle.
 
 ### Display não liga ou fica com cores erradas

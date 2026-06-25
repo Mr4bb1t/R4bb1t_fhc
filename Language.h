@@ -170,7 +170,7 @@ struct LangPack {
     const char* atk_itm_back;
     const char* atk_itm_captive;
     const char* atk_itm_deauther;
-    const char* atk_itm_navjammer;
+    const char* atk_itm_analyzer;
     const char* atk_itm_beaconspam;
 
     // ── Captive Portal ──
