@@ -249,6 +249,19 @@ struct LangPack {
     const char* atk_hdr_credenciais;
     const char* atk_cr_nenhuma;
 
+    // ── Monitor de Pacotes ──
+    const char* pm_hdr_monitor;
+    const char* pm_lbl_sair;
+    const char* pm_lbl_grafico;
+    const char* pm_lbl_pkts_s;
+    const char* pm_lbl_total;
+    const char* pm_lbl_devices;
+    const char* pm_lbl_deauth_s;
+    const char* pm_lbl_rx;
+    const char* pm_lbl_tx;
+    const char* pm_lbl_max;
+    const char* pm_lbl_avg;
+
     // ── Menu NRF24 ──
     const char* nrf_itm_back;
     const char* nrf_itm_btjammer;

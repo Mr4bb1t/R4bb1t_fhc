@@ -248,6 +248,19 @@ const LangPack langPT PROGMEM = {
     "CREDENCIAIS",
     "Nenhuma credencial",
 
+    // ── Monitor de Pacotes ──
+    "MONITOR PACOTES",
+    "< Sair",
+    "Grafico >",
+    "Pkts/s",
+    "Total",
+    "Devices",
+    "Deauth/s",
+    "IN",
+    "OUT",
+    "Max:",
+    "Avg:",
+
     // ── Menu NRF24 ──
     "< Voltar",
     "BT Jammer",
@@ -580,6 +593,19 @@ const LangPack langEN PROGMEM = {
     // ── Credenciais ──
     "CREDENTIALS",
     "No credentials",
+
+    // ── Monitor de Pacotes ──
+    "PACKET MONITOR",
+    "< Back",
+    "Graph >",
+    "Pkts/s",
+    "Total",
+    "Devices",
+    "Deauth/s",
+    "IN",
+    "OUT",
+    "Max:",
+    "Avg:",
 
     // ── Menu NRF24 ──
     "< Back",

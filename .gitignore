@@ -12,6 +12,8 @@ build/
 .piolibdeps/
 sdkconfig
 sdkconfig.old
+compile_commands.json
+.cache/
 
 
 # OS generated

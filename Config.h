@@ -34,5 +34,7 @@
 #define C_GREEN      0x07E0   // Verde — status OK / conectado
 #define C_YELLOW     0xFFE0   // Amarelo — avisos
 #define C_CYAN       0x07FF   // Ciano — info
+#define C_BLACK      0x0000   // Preto — textos
+#define C_BLUE       0x001F   // Azul — graficos
 
 #endif
