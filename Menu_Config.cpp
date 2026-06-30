@@ -4,14 +4,15 @@
 #include "Globals.h"
 #include "HWProbe.h"
 #include "Language.h"
+#include "Menu_Attacks.h"
 #include "Menu_Main.h"
 #include "Menu_NRF24.h"
-#include "Menu_RF.h"
-#include "Menu_Attacks.h"
 #include "Menu_Networks.h"
+#include "Menu_RF.h"
 #include "UI.h"
 #include "boot_anim_player.h"
 #include "toggle_32_32_28f.h"
+
 
 #include <SPI.h>
 #include <SPIFFS.h>
@@ -671,6 +672,21 @@ static void displaySobre_p4() {
   tft.setCursor(54, y);
   tft.print(vbuf);
   tft.print(" V");
+
+  // Temperatura
+  float tempC = batteryTemperature();
+  if (tempC > -100.0f) { // Se a leitura for válida
+    int tx = 95;
+    tft.setCursor(tx, y);
+    if (tempC >= 45.0f) {
+      tft.setTextColor(C_RED); // Fica vermelho se muito quente
+    } else {
+      tft.setTextColor(C_GREEN); // Verde
+    }
+    tft.print((int)tempC);
+    tft.print("°C");
+  }
+
   y += LH;
   tft.setTextColor(C_GOLD_DIM);
   tft.setCursor(4, y);
@@ -1693,18 +1709,18 @@ static uint16_t pCol(uint8_t speed, int offset) {
 // 1 = <- VOLTAR
 // 2..11 = Animações
 const char *animNames[] = {
-    "N/A",           // 0: Toggle
-    "<- VOLTAR",     // 1
-    "Logo R4BB1T",   // 2
-    "Matrix Rain",   // 3
-    "Cubo 3D",       // 4
-    "Plasma",        // 5
-    "Tesseract 4D",  // 6
-    "Corredor",      // 7
-    "Onda Grade",    // 8
-    "Aneis",         // 9
-    "Quadrados",     // 10
-    "Olho Magenta"   // 11
+    "N/A",          // 0: Toggle
+    "<- VOLTAR",    // 1
+    "Logo R4BB1T",  // 2
+    "Matrix Rain",  // 3
+    "Cubo 3D",      // 4
+    "Plasma",       // 5
+    "Tesseract 4D", // 6
+    "Corredor",     // 7
+    "Onda Grade",   // 8
+    "Aneis",        // 9
+    "Quadrados",    // 10
+    "Olho Magenta"  // 11
 };
 
 #define ANIM_COUNT 12
@@ -1719,28 +1735,30 @@ static int animIndex = 0;
 
 static TFT_eSprite *animSpr = nullptr;
 
-static void initScreensaverMenu() {
-  animIndex = 1;
-}
+static void initScreensaverMenu() { animIndex = 1; }
 
 static int scrScroll = 0;
 
-static void drawScreensaverItem(int idx, bool isActive, int savedIdx, bool isSelected) {
+static void drawScreensaverItem(int idx, bool isActive, int savedIdx,
+                                bool isSelected) {
   if (idx == 0) {
     tft.fillRect(0, 16, 128, 28, isSelected ? C_GOLD_SEL : C_BG);
-    if (isSelected) tft.fillRect(0, 16, 3, 28, C_GOLD);
+    if (isSelected)
+      tft.fillRect(0, 16, 3, 28, C_GOLD);
     tft.setTextColor(isSelected ? C_GOLD : C_WHITE);
     tft.setCursor(8, 16 + 10);
     tft.print(isActive ? "Ativado" : "Desativado");
     int staticFrame = isActive ? 0 : 13;
-    tft.drawBitmap(128 - 40, 16, toggle_32_32_28f_frames[staticFrame] + 12, 32, 28, C_GOLD, isSelected ? C_GOLD_SEL : C_BG);
+    tft.drawBitmap(128 - 40, 16, toggle_32_32_28f_frames[staticFrame] + 12, 32,
+                   28, C_GOLD, isSelected ? C_GOLD_SEL : C_BG);
   } else {
     if (idx >= scrScroll && idx < scrScroll + 5) {
       int y = 45 + (idx - scrScroll) * 19;
       String label = String(getAnimName(idx));
       bool disabled = (!isActive && idx >= 2);
       bool isSaved = (idx == savedIdx && isActive && idx >= 2);
-      drawMenuItem(0, y, 125, 19, label.c_str(), isSelected, false, disabled, isSaved);
+      drawMenuItem(0, y, 125, 19, label.c_str(), isSelected, false, disabled,
+                   isSaved);
     }
   }
 }
@@ -1757,16 +1775,20 @@ void displayScreensaverTest() {
 
   // SCROLLABLE LIST (Indices 1..11)
   if (animIndex >= 1) {
-    if (animIndex < scrScroll) scrScroll = animIndex;
-    if (animIndex >= scrScroll + 5) scrScroll = animIndex - 5 + 1;
+    if (animIndex < scrScroll)
+      scrScroll = animIndex;
+    if (animIndex >= scrScroll + 5)
+      scrScroll = animIndex - 5 + 1;
   }
-  if (scrScroll < 1) scrScroll = 1;
+  if (scrScroll < 1)
+    scrScroll = 1;
 
   drawScreensaverItem(0, isActive, savedIdx, animIndex == 0);
 
   for (int i = 0; i < 5; i++) {
     int idx = scrScroll + i;
-    if (idx >= ANIM_COUNT) break;
+    if (idx >= ANIM_COUNT)
+      break;
     drawScreensaverItem(idx, isActive, savedIdx, idx == animIndex);
   }
 
@@ -1845,7 +1867,8 @@ static void animFrame(uint32_t now) {
   switch (animIndex) {
 
   // 1: VOLTAR
-  case 1: break;
+  case 1:
+    break;
 
   // 2: LOGO R4BB1T (Splash) - Não é animado via sprite
   case 2:
@@ -2124,26 +2147,66 @@ void startScreensaver(bool fromIdle) {
 
 static void restoreScreenState(EstadoTela estado) {
   switch (estado) {
-    case MENU_INICIAL:                displayMenuInicial(); break;
-    case SELECAO_REDES:               displayNetworks(); break;
-    case MENU_ATAQUES:                displayMenuAtaques(); break;
-    case ATAQUE_INFO_REDE:            displayInfoRede(); break;
-    case VISUALIZAR_CREDENCIAIS:      displayCredenciais(); break;
-    case MENU_CONFIGURACOES:          displayConfiguracoes(); break;
-    case TELA_ARMAZENAMENTO:          displayArmazenamento(); break;
-    case TELA_SOBRE:                  displaySobre(); break;
-    case TELA_MAC_CHANGER:            displayMudarMAC(); break;
-    case TELA_BRILHO:                 displayBrilho(); break;
-    case TELA_MODO_MENU:              displayModoMenu(); break;
-    case MENU_RF:                     displayRF(); break;
-    case TELA_RF_SAVED:               displayRF_Saved(); break;
-    case CONFIRMA_APAGAR_CREDENCIAIS: displayConfirmaApagar(); break;
-    case MENU_NRF24:                  displayModoNRF24(); break;
-    case TELA_IDIOMA:                 displayIdioma(); break;
-    case TELA_HARDRESET:              displayHardReset(); break;
-    case ATAQUE_BEACON_MODO:          displayAtaqueBeaconModo(); break;
-    case ATAQUE_BEACON_CUSTOM:        displayAtaqueBeaconCustom(); break;
-    default:                          displayMenuInicial(); break;
+  case MENU_INICIAL:
+    displayMenuInicial();
+    break;
+  case SELECAO_REDES:
+    displayNetworks();
+    break;
+  case MENU_ATAQUES:
+    displayMenuAtaques();
+    break;
+  case ATAQUE_INFO_REDE:
+    displayInfoRede();
+    break;
+  case VISUALIZAR_CREDENCIAIS:
+    displayCredenciais();
+    break;
+  case MENU_CONFIGURACOES:
+    displayConfiguracoes();
+    break;
+  case TELA_ARMAZENAMENTO:
+    displayArmazenamento();
+    break;
+  case TELA_SOBRE:
+    displaySobre();
+    break;
+  case TELA_MAC_CHANGER:
+    displayMudarMAC();
+    break;
+  case TELA_BRILHO:
+    displayBrilho();
+    break;
+  case TELA_MODO_MENU:
+    displayModoMenu();
+    break;
+  case MENU_RF:
+    displayRF();
+    break;
+  case TELA_RF_SAVED:
+    displayRF_Saved();
+    break;
+  case CONFIRMA_APAGAR_CREDENCIAIS:
+    displayConfirmaApagar();
+    break;
+  case MENU_NRF24:
+    displayModoNRF24();
+    break;
+  case TELA_IDIOMA:
+    displayIdioma();
+    break;
+  case TELA_HARDRESET:
+    displayHardReset();
+    break;
+  case ATAQUE_BEACON_MODO:
+    displayAtaqueBeaconModo();
+    break;
+  case ATAQUE_BEACON_CUSTOM:
+    displayAtaqueBeaconCustom();
+    break;
+  default:
+    displayMenuInicial();
+    break;
   }
 }
 
@@ -2160,13 +2223,14 @@ void handleScreensaverTest() {
           animIndex = animIndex - 1;
         }
         lastDebounceTime = millis();
-        
+
         if (animIndex != old) {
           bool needsScroll = false;
-          if (animIndex >= 1 && (animIndex < scrScroll || animIndex >= scrScroll + 5)) {
+          if (animIndex >= 1 &&
+              (animIndex < scrScroll || animIndex >= scrScroll + 5)) {
             needsScroll = true;
           }
-          
+
           if (needsScroll) {
             displayScreensaverTest();
           } else {
@@ -2184,13 +2248,14 @@ void handleScreensaverTest() {
           animIndex = animIndex + 1;
         }
         lastDebounceTime = millis();
-        
+
         if (animIndex != old) {
           bool needsScroll = false;
-          if (animIndex >= 1 && (animIndex < scrScroll || animIndex >= scrScroll + 5)) {
+          if (animIndex >= 1 &&
+              (animIndex < scrScroll || animIndex >= scrScroll + 5)) {
             needsScroll = true;
           }
-          
+
           if (needsScroll) {
             displayScreensaverTest();
           } else {
@@ -2207,23 +2272,25 @@ void handleScreensaverTest() {
         if (animIndex == 0) {
           bool isActive = prefs.getBool("saver_active", true);
           bool turningOn = !isActive;
-          
+
           // Inverted: turning ON = 14 to 27, turning OFF = 0 to 13
           int startFrame = turningOn ? 14 : 0;
           int endFrame = turningOn ? 27 : 13;
-          
+
           for (int f = startFrame; f <= endFrame; f++) {
-            tft.drawBitmap(128 - 40, 16, toggle_32_32_28f_frames[f] + 12, 32, 28, C_GOLD, C_GOLD_SEL);
+            tft.drawBitmap(128 - 40, 16, toggle_32_32_28f_frames[f] + 12, 32,
+                           28, C_GOLD, C_GOLD_SEL);
             delay(15);
           }
-          
+
           prefs.putBool("saver_active", turningOn);
-          
+
           int savedIdx = prefs.getInt("screensaver", 2);
           drawScreensaverItem(0, turningOn, savedIdx, animIndex == 0);
           for (int i = 0; i < 5; i++) {
             int idx = scrScroll + i;
-            if (idx >= ANIM_COUNT) break;
+            if (idx >= ANIM_COUNT)
+              break;
             drawScreensaverItem(idx, turningOn, savedIdx, idx == animIndex);
           }
           return;

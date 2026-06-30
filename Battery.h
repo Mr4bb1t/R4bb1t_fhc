@@ -11,6 +11,8 @@
 //  ADC_11db: range 0–3600 mV (o mais estável para leituras < 2V)
 // ─────────────────────────────────────────────────────────────
 #define BAT_ADC_PIN      36
+#define BAT_TEMP_PIN     34
+
 
 // Tensões no pino ADC (em mV) — ajuste se necessário
 #define BAT_MV_FULL      1000   // mV quando bateria = 100%  (4.2V)
@@ -34,5 +36,6 @@ void batteryInit();
 void batteryUpdate();
 void batteryDraw();
 int  batteryPercent();
+float batteryTemperature();
 
 #endif // BATTERY_H

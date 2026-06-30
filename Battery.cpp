@@ -76,6 +76,7 @@ static void drawBatteryIcon(int pct) {
 void batteryInit() {
   // ADC_11db: range 0-3600 mV, funciona bem para leituras < 2V
   analogSetPinAttenuation(BAT_ADC_PIN, ADC_11db);
+  analogSetPinAttenuation(BAT_TEMP_PIN, ADC_11db);
 
   // Primeira leitura com analogReadMilliVolts (calibração interna)
   int mv  = analogReadMilliVolts(BAT_ADC_PIN);
@@ -119,4 +120,32 @@ void batteryDraw() {
 
 int batteryPercent() {
   return (s_lastDisplayedPct < 0) ? 0 : s_lastDisplayedPct;
+}
+
+float batteryTemperature() {
+  int mv = analogReadMilliVolts(BAT_TEMP_PIN);
+  
+  // Se assumirmos um resistor pull-up para 3.3V (ex: 10k), se o fio amarelo não estiver conectado,
+  // a tensão lida será bem alta, próxima a 3300mV.
+  // Se nada estiver conectado (nem resistor nem fio), o pino flutua e pode ler valores baixos (ex: 200mV = ~101°C).
+  // Se a tensão for menor que 400mV (equivalente a >70°C num NTC de 10k) ignoramos a leitura.
+  if (mv > 3100 || mv < 400) return -999.0f;
+
+  float vcc = 3300.0f;
+  float r_pullup = 10000.0f;
+  
+  // Vout = Vcc * R_ntc / (R_pullup + R_ntc)
+  // R_ntc = R_pullup * Vout / (Vcc - Vout)
+  float r_ntc = r_pullup * mv / (vcc - (float)mv);
+  if (r_ntc <= 0) return -999.0f;
+
+  // Parâmetros típicos NTC 10K
+  float b = 3950.0f;
+  float t0 = 298.15f; // 25°C
+  float r0 = 10000.0f;
+
+  float temp = 1.0f / (1.0f / t0 + (1.0f / b) * log(r_ntc / r0));
+  temp -= 273.15f; // Converte Kelvin para Celsius
+  
+  return temp;
 }

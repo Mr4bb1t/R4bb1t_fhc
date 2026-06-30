@@ -80,6 +80,7 @@
 | Capacitor cerâmico | 2 | 100nF (104) — um para cada módulo NRF24L01 entre VCC e GND |
 | Capacitor eletrolítico | 2 | 10µF — um para cada módulo NRF24L01 entre VCC e GND |
 | Resistor divisor de tensão | 2 | 3.2kΩ + 1kΩ — leitura de bateria no ADC |
+| Resistor pull-up (Opcional) | 1 | 10kΩ — leitura de temperatura da bateria (fio amarelo) |
 
 > **⚠️ IMPORTANTE sobre os capacitores NRF24L01:**
 > Os módulos NRF24L01+ são muito sensíveis a ruído na alimentação. Sem o capacitor de desacoplamento, o módulo pode:
@@ -143,6 +144,14 @@
 | GPIO 12 | CE |
 
 > **Nota:** O módulo 2 compartilha o barramento HSPI com o módulo 1 e o CC1101. O TFT usa VSPI (barramento separado). Não há conflito SPI entre os módulos.
+
+### Bateria
+| Pino ESP32 | Função |
+|---|---|
+| GPIO 36 | Leitura de tensão |
+| GPIO 34 | Fio amarelo do sensor de temperatura (opcional)* |
+
+> ***Opcional:** Conecte o fio amarelo ao pino GPIO 34. É necessário um resistor de pull-up (geralmente 10kΩ) ligado ao 3.3V. Se não estiver conectado, a temperatura não será exibida na interface.*
 
 ---
 
