@@ -156,28 +156,35 @@ bool rfInit() {
   ELECHOUSE_cc1101.setSpiPin(RF_SCK, RF_MISO, RF_MOSI, RF_CS);
   ELECHOUSE_cc1101.setGDO(RF_GDO0, RF_GDO2);
 
+  // Init() DEVE vir antes de getCC1101():
+  // Init() inicializa o spiCC(HSPI) via spiCC.end()+spiCC.begin().
+  // Sem isso, spiCC nao esta "begun" e getCC1101() le 0xFF (SPI inativo).
+  ELECHOUSE_cc1101.Init();
+
+  // Agora o spiCC esta pronto — verifica se o chip responde com VERSION valido
   if (!ELECHOUSE_cc1101.getCC1101()) {
     Serial.println("[RF] ERRO: CC1101 nao encontrado! Verifique a fiacao SPI.");
     rfReady = false;
     return false;
   }
 
-  ELECHOUSE_cc1101.Init();
   ELECHOUSE_cc1101.setMHZ(433.92);
   ELECHOUSE_cc1101.SetRx();
 
-  rcSwitch.enableReceive(RF_GDO2);
-  rcSwitch.enableTransmit(RF_GDO0);
+  // GDO0 e o pino de DADOS do CC1101. Em RX, o CC1101 pilota GDO0 (e OUTPUT
+  // do CC1101). O ESP32 deve estar em INPUT para nao conflitar.
+  // setGDO() define GDO0 como OUTPUT (padrao da lib para TX). Corrigimos aqui.
+  pinMode(RF_GDO0, INPUT);
+  rcSwitch.enableReceive(RF_GDO0);
   rcSwitch.setRepeatTransmit(10);
 
   rfReady = true;
 
-  // Lê RSSI inicial para confirmar comunicação SPI
+  // Le RSSI inicial para confirmar comunicacao SPI
   float rssiInit = ELECHOUSE_cc1101.getRssi();
-  float lqiInit = ELECHOUSE_cc1101.getLqi();
+  float lqiInit  = ELECHOUSE_cc1101.getLqi();
   Serial.println("[RF] CC1101 OK @ 433.92 MHz");
-  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit,
-                lqiInit);
+  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit, lqiInit);
   return true;
 }
 
@@ -309,18 +316,18 @@ void displayRF_Replay() {
     tft.setCursor(4, 46);
     tft.print(buf);
     snprintf(buf, sizeof(buf), "Hex: 0x%lX", replayVal);
-    tft.setCursor(70, 46);
+    tft.setCursor(4, 56);
     tft.print(buf);
     snprintf(buf, sizeof(buf), "Bits:%d  Proto:%d", replayBits, replayProtocol);
-    tft.setCursor(4, 58);
+    tft.setCursor(4, 66);
     tft.print(buf);
     float txFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
     snprintf(buf, sizeof(buf), "Freq: %.2f", txFreq);
-    tft.setCursor(4, 70);
+    tft.setCursor(4, 76);
     tft.print(buf);
 
     tft.setTextColor(TFT_CYAN);
-    tft.setCursor(4, 76);
+    tft.setCursor(4, 86);
     tft.print(lang->rf_rpl_hint_tx);
   }
 
@@ -332,11 +339,16 @@ void displayRF_Replay() {
   rfFooter();
   batteryDraw();
 
-  // Sintoniza na frequência detectada
-  if (rfReady && rfDetectedMHz > 0) {
-    ELECHOUSE_cc1101.setMHZ(rfDetectedMHz);
+  // Sempre re-habilita RX ao entrar no modo Replay.
+  // Se ja foi feito scan, sintoniza na freq detectada; senao usa 433.92 MHz.
+  if (rfReady) {
+    float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+    ELECHOUSE_cc1101.setMHZ(rxFreq);
     ELECHOUSE_cc1101.SetRx();
-    rcSwitch.enableReceive(RF_GDO2);
+    pinMode(RF_GDO0, INPUT);        // CC1101 pilota GDO0 em RX
+    rcSwitch.enableReceive(RF_GDO0);
+    Serial.printf("[RF][REPLAY] Escutando em %.2f MHz | GDO0=GPIO%d INPUT+INT\n",
+                  rxFreq, RF_GDO0);
   }
 }
 
@@ -374,8 +386,13 @@ void handleRF_Replay() {
       ELECHOUSE_cc1101.setMHZ(txFreq);
       ELECHOUSE_cc1101.SetTx();
       delay(5);
+      rcSwitch.disableReceive();
+      rcSwitch.enableTransmit(RF_GDO0);
       rcSwitch.setProtocol(replayProtocol);
       rcSwitch.send(replayVal, replayBits);
+      rcSwitch.disableTransmit();
+      pinMode(RF_GDO0, INPUT);
+      rcSwitch.enableReceive(RF_GDO0);
       delay(5);
       ELECHOUSE_cc1101.SetRx();
       Serial.println("[RF][REPLAY] TX concluido, voltando para RX.");
@@ -430,11 +447,16 @@ void displayRF_Raw() {
   rawListening = true;
   batteryDraw();
 
-  // Sintoniza na frequência detectada
-  if (rfReady && rfDetectedMHz > 0) {
-    ELECHOUSE_cc1101.setMHZ(rfDetectedMHz);
+  // Sempre re-habilita RX ao entrar no modo Raw.
+  // Se ja foi feito scan, sintoniza na freq detectada; senao usa 433.92 MHz.
+  if (rfReady) {
+    float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+    ELECHOUSE_cc1101.setMHZ(rxFreq);
     ELECHOUSE_cc1101.SetRx();
-    rcSwitch.enableReceive(RF_GDO2);
+    pinMode(RF_GDO0, INPUT);
+    rcSwitch.enableReceive(RF_GDO0);
+    Serial.printf("[RF][RAW] Escutando em %.2f MHz | GDO0=GPIO%d INPUT+INT\n",
+                  rxFreq, RF_GDO0);
   }
 }
 
@@ -471,12 +493,12 @@ void handleRF_Raw() {
     Serial.printf("[RF][RAW]   Bits    : %d  |  Protocolo: %d\n", bits, proto);
     Serial.printf("[RF][RAW]   RSSI    : %d dBm  |  LQI: %.0f\n", dbm, lqi);
     Serial.printf("[RF][RAW]   Barras  : %d/10\n",
-                  constrain(map(dbm, -45, -20, 1, 10), 1, 10));
+                  constrain(map(dbm, -85, -18, 1, 10), 1, 10));
 
-    // Partial redraw: limpa as 3 linhas de texto (Y=40 até 82) e a linha do
-    // Sinal/Barras (Y=82 até 90)
-    tft.fillRect(0, 40, SCR_W, 42, TFT_BLACK);
-    tft.fillRect(0, 82, SCR_W, 8, TFT_BLACK);
+    // Partial redraw: limpa as 3 linhas de texto (Y=40 ate 82) e a linha do
+    // Sinal/Barras (Y=87 ate 95)
+    tft.fillRect(0, 40, SCR_W, 44, TFT_BLACK); // 40 a 84
+    tft.fillRect(0, 87, SCR_W, 8, TFT_BLACK);
 
     tft.setTextSize(1);
     tft.setTextColor(TFT_GREEN);
@@ -497,20 +519,20 @@ void handleRF_Raw() {
     tft.print(buf);
 
     tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(4, 82);
-    // Agora mostramos também o valor real do RSSI
+    tft.setCursor(4, 87);
+    // Agora mostramos tambem o valor real do RSSI
     char sbuf[16];
     snprintf(sbuf, sizeof(sbuf), "dBm:%d", dbm);
     tft.print(sbuf);
 
-    // Mapeia o RSSI real para 1 a 10 barras usando a exata mesma métrica do
-    // Analyser (-45 a -20)
-    int bars = constrain(map(dbm, -45, -20, 1, 10), 1, 10);
+    // Mapeia o RSSI real para 1 a 10 barras usando a exata mesma metrica do
+    // Analyser (-85 a -18)
+    int bars = constrain(map(dbm, -85, -18, 1, 10), 1, 10);
     for (int b = 0; b < 10; b++) {
       if (b < bars) {
-        tft.fillRect(60 + b * 6, 82, 5, 8, TFT_CYAN); // Quadrado preenchido
+        tft.fillRect(60 + b * 6, 87, 5, 8, TFT_CYAN); // Quadrado preenchido
       } else {
-        tft.drawRect(60 + b * 6, 82, 5, 8, TFT_DARKGREY); // Quadrado vazio
+        tft.drawRect(60 + b * 6, 87, 5, 8, TFT_DARKGREY); // Quadrado vazio
       }
     }
   }
@@ -529,12 +551,15 @@ void handleRF_Raw() {
 //  Varre o espectro do CC1101 e encontra o pico
 // ════════════════════════════════════════════════
 
-// Frequências comuns a varrer (MHz) — faixas do CC1101
+// Frequencias acessiveis com antena de 433 MHz de fabrica:
+// - 315 MHz: detectavel a curta distancia (~1m com antena 433 MHz)
+// - Banda 433 MHz: faixa nominal com sensibilidade plena
+// 868/915 MHz OMITIDOS: antena de 433 MHz perde >10 dB nesses valores.
 static const float SCAN_FREQS[] = {
-    300.00, 303.87, 310.00, 315.00, 318.00, 330.00, 390.00,
-    418.00, 430.00, 431.00, 432.00, 433.00, 433.42, 433.92,
-    434.42, 435.00, 436.00, 438.00, 440.00, 450.00, 868.00,
-    868.35, 868.95, 869.50, 915.00, 916.00, 920.00, 925.00};
+    315.00,
+    433.00, 433.42, 433.92, 434.42, 435.00
+};
+
 #define SCAN_FREQ_COUNT (sizeof(SCAN_FREQS) / sizeof(SCAN_FREQS[0]))
 
 static int scanIdx = 0;          // índice atual na varredura
@@ -641,8 +666,8 @@ static void drawDetectedFreq(int y) {
 
 #define WF_Y 20
 #define WF_H 120
-#define WF_DBM_MIN -45
-#define WF_DBM_MAX -20
+#define WF_DBM_MIN -85   // sinal muito fraco, proximo do limite
+#define WF_DBM_MAX -18   // sinal muito forte, controle colado na antena
 
 #define WF_HALF_MIN 1
 #define WF_HALF_MAX (SCR_W / 2 - 2)
@@ -795,29 +820,21 @@ void handleRF_Analyser() {
       int axisY = WF_Y + WF_H + 1;
       drawDetectedFreq(axisY + 2);
 
-      // Re-habilita o rcSwitch na frequência detectada
-      rcSwitch.enableReceive(RF_GDO2);
+      // Re-habilita o rcSwitch na frequencia detectada (GDO0 = DATA pin)
+      pinMode(RF_GDO0, INPUT);
+      rcSwitch.enableReceive(RF_GDO0);
     }
   }
 
-  // Detecta sinal novo do rcSwitch
+  // Detecta sinal novo do rcSwitch (Apenas para contador/log, o grafico usa RSSI bruto)
   if (rfReady && rcSwitch.available()) {
     rcSwitch.resetAvailable();
     wfSigCount++;
-    wfSigActive = true;
 
     float rssi = ELECHOUSE_cc1101.getRssi();
     float lqi = ELECHOUSE_cc1101.getLqi();
-    Serial.printf("[RF][ANALYSER] Sinal #%lu  RSSI: %.1f dBm  LQI: %.0f\n",
+    Serial.printf("[RF][ANALYSER] Sinal RC #%lu  RSSI: %.1f dBm  LQI: %.0f\n",
                   wfSigCount, rssi, lqi);
-
-    // Se estava em idle ou decay, reinicia attack
-    if (wfEnv == ENV_IDLE || wfEnv == ENV_DECAY) {
-      wfEnv = ENV_ATTACK;
-      wfEnvStep = 0;
-    }
-    // Se já estava em attack ou sustain, apenas mantém
-    // (wfEnvStep continua de onde estava)
 
     tft.fillRect(0, 4, 66, 10, TFT_BLACK);
     tft.setTextSize(1);
@@ -840,6 +857,17 @@ void handleRF_Analyser() {
       Serial.printf(
           "[RF][ANALYSER] RSSI: %d dBm  norm: %d  env: %d  freq: %.2f\n", dbm,
           rssiBase, wfEnvLevel, rfDetectedMHz);
+    }
+
+    // O grafico agora reage diretamente a energia RF presente no ar
+    if (rssiBase > 35) { // 35 na escala equivale a aprox -76 dBm no mapa -85/-18
+      wfSigActive = true;
+      if (wfEnv == ENV_IDLE || wfEnv == ENV_DECAY) {
+        wfEnv = ENV_ATTACK;
+        wfEnvStep = 0;
+      }
+    } else {
+      wfSigActive = false;
     }
 
     // ── Máquina de estados do envelope ───────────
@@ -868,12 +896,11 @@ void handleRF_Analyser() {
 
     case ENV_SUSTAIN:
       wfEnvLevel = 255;
-      // Passa para decay assim que não há mais sinal ativo
+      // Passa para decay assim que a energia RF (RSSI) baixar novamente
       if (!wfSigActive) {
         wfEnv = ENV_DECAY;
         wfEnvStep = 0;
       }
-      wfSigActive = false; // reseta; rcSwitch seta de novo se ainda receber
       break;
 
     case ENV_DECAY: {
@@ -909,7 +936,8 @@ void handleRF_Analyser() {
       float tuneFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
       ELECHOUSE_cc1101.setMHZ(tuneFreq);
       ELECHOUSE_cc1101.SetRx();
-      rcSwitch.enableReceive(RF_GDO2);
+      pinMode(RF_GDO0, INPUT);
+      rcSwitch.enableReceive(RF_GDO0);
       estadoAtual = MENU_RF;
       displayRF();
     }
@@ -995,11 +1023,13 @@ void displayRF_Random() {
 
 void handleRF_Random() {
   if (jammerAtivo) {
-    // ─── MODO ATIVO: envia ruído continuamente (não-bloqueante) ───
-    // Envia código aleatório de 32 bits sem repetições adicionais
+    // GDO0 esta em OUTPUT (enableTransmit ativado na inicializacao do jammer).
+    // CC1101 permanece em SetTx() durante toda a sessao.
+    // Nao mudar enable/disable por pacote: overhead alto e GDO0 ficaria INPUT
+    // entre pacotes, suprimindo a portadora.
     rcSwitch.setRepeatTransmit(1);
     rcSwitch.send(esp_random(), 32);
-    rcSwitch.setRepeatTransmit(10); // restaura
+    rcSwitch.setRepeatTransmit(10); // restaura para uso futuro
     jammerPackets++;
 
     // Atualiza contador na tela a cada 150ms (sem redesenhar tudo)
@@ -1013,19 +1043,19 @@ void handleRF_Random() {
         Serial.printf("[RF][JAMMER] Pacotes: %lu  RSSI TX: %.1f dBm\n",
                       jammerPackets, rssiTx);
       }
-      tft.fillRect(4, 66, SCR_W - 8, 12, TFT_BLACK);
-      tft.setTextSize(1);
-      tft.setTextColor(TFT_WHITE);
-      tft.setCursor(4, 66);
-      char buf[24];
-      snprintf(buf, sizeof(buf), "Pacotes: %lu", jammerPackets);
-      tft.print(buf);
+        tft.fillRect(4, 66, SCR_W - 8, 12, TFT_BLACK);
+        char buf[24];
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_WHITE);
+        tft.setCursor(4, 66);
+        snprintf(buf, sizeof(buf), "Pacotes: %lu", jammerPackets);
+        tft.print(buf);
 
       // Pulso visual animado (barra que cresce e volta)
       static int pulse = 0;
       pulse = (pulse + 4) % (SCR_W - 12);
-      tft.fillRect(4, 80, SCR_W - 8, 8, TFT_BLACK);
-      tft.fillRect(4, 80, pulse, 8, TFT_RED);
+      tft.fillRect(4, 82, SCR_W - 8, 8, TFT_BLACK);
+      tft.fillRect(4, 82, pulse, 8, TFT_RED);
     }
 
     // SELECT → parar jammer
@@ -1034,6 +1064,9 @@ void handleRF_Random() {
       lastDebounceTime = millis();
       jammerAtivo = false;
       ELECHOUSE_cc1101.SetRx();
+      rcSwitch.disableTransmit();    // libera GDO0 de OUTPUT
+      pinMode(RF_GDO0, INPUT);       // CC1101 volta a pilotar GDO0 em RX
+      rcSwitch.enableReceive(RF_GDO0);
       Serial.printf(
           "[RF][JAMMER] Jammer PARADO. Total de pacotes enviados: %lu\n",
           jammerPackets);
@@ -1052,6 +1085,8 @@ void handleRF_Random() {
         float jamFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
         ELECHOUSE_cc1101.setMHZ(jamFreq);
         ELECHOUSE_cc1101.SetTx();
+        rcSwitch.disableReceive();         // desativa interrupt do RX
+        rcSwitch.enableTransmit(RF_GDO0);  // GDO0 → OUTPUT para TX continuo
         jammerAtivo = true;
         jammerPackets = 0;
         jammerLastDraw = 0;
@@ -1225,8 +1260,13 @@ static void openSavedActionMenu(int signalIdx) {
                              : 433.92f;
           ELECHOUSE_cc1101.setMHZ(txFreq);
           ELECHOUSE_cc1101.SetTx();
+          rcSwitch.disableReceive();
+          rcSwitch.enableTransmit(RF_GDO0);
           rcSwitch.send(savedSignals[signalIdx].value,
                         savedSignals[signalIdx].bits);
+          rcSwitch.disableTransmit();
+          pinMode(RF_GDO0, INPUT);
+          rcSwitch.enableReceive(RF_GDO0);
           ELECHOUSE_cc1101.SetRx();
 
           tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
@@ -1267,8 +1307,13 @@ static void openSavedActionMenu(int signalIdx) {
             // Transmite
             ELECHOUSE_cc1101.setMHZ(txFreq);
             ELECHOUSE_cc1101.SetTx();
+            rcSwitch.disableReceive();
+            rcSwitch.enableTransmit(RF_GDO0);
             rcSwitch.send(savedSignals[signalIdx].value,
                           savedSignals[signalIdx].bits);
+            rcSwitch.disableTransmit();
+            pinMode(RF_GDO0, INPUT);
+            rcSwitch.enableReceive(RF_GDO0);
             ELECHOUSE_cc1101.SetRx();
             pulseCount++;
 
@@ -1405,8 +1450,13 @@ void handleRF_Saved() {
                            : 433.92f;
         ELECHOUSE_cc1101.setMHZ(txFreq);
         ELECHOUSE_cc1101.SetTx();
+        rcSwitch.disableReceive();
+        rcSwitch.enableTransmit(RF_GDO0);
         rcSwitch.send(savedSignals[sIdx].value,
                       savedSignals[sIdx].bits);
+        rcSwitch.disableTransmit();
+        pinMode(RF_GDO0, INPUT);
+        rcSwitch.enableReceive(RF_GDO0);
         ELECHOUSE_cc1101.SetRx();
 
         // Feedback visual

@@ -4,8 +4,9 @@
 // ⚠️ Não mexe no CC1101 (CS=25, GDO0=2, GDO2=32)
 
 #include "Menu_NRF24.h"
-#include "Battery.h"
 #include "Globals.h"
+#include <ELECHOUSE_CC1101_SRC_DRV.h>  // extern SPIClass spiCC — libera HSPI antes de spiJam
+#include "Battery.h"
 #include "HWProbe.h"
 #include "Language.h"
 #include "Menu_Main.h"
@@ -136,6 +137,10 @@ bool nrfProbe() {
   digitalWrite(NRF_CE, LOW);
   delay(10);
 
+  // Libera o HSPI do CC1101 antes de usar o HSPI para NRF24
+  spiCC.end();
+  delay(5);
+
   // Inicializa o HSPI dedicado para o NRF24.
   spiJam.begin(33, 19, 13, -1);  // SCK=33, MISO=19, MOSI=13
   spiJam.setFrequency(16000000); // 16MHz igual ao nRF24_jammer original
@@ -155,6 +160,8 @@ bool nrfProbe() {
     hwNRF24_ok = false;
     Serial.println("[NRF] Probe falhou: modulo 1 ausente.");
   }
+  // Libera o barramento HSPI para que rfInit() (CC1101) possa usa-lo em seguida
+  spiJam.end();
   return hwNRF24_ok;
 }
 
@@ -169,6 +176,10 @@ bool nrfProbe2() {
   pinMode(NRF2_CE, OUTPUT);
   digitalWrite(NRF2_CE, LOW);
   delay(10);
+
+  // Libera o HSPI do CC1101 antes de usar o HSPI para NRF24
+  spiCC.end();
+  delay(5);
 
   spiJam.begin(33, 19, 13, -1);
   spiJam.setFrequency(16000000);
@@ -188,6 +199,8 @@ bool nrfProbe2() {
     hwNRF24_2_ok = false;
     Serial.println("[NRF] Probe falhou: modulo 2 ausente.");
   }
+  // Libera o barramento HSPI para que rfInit() (CC1101) possa usa-lo em seguida
+  spiJam.end();
   return hwNRF24_2_ok;
 }
 
@@ -208,6 +221,10 @@ static bool nrfInit() {
   pinMode(NRF_CE, OUTPUT);
   digitalWrite(NRF_CE, LOW);
   delay(20);
+
+  // Libera o HSPI do CC1101 antes de usar o HSPI para NRF24
+  spiCC.end();
+  delay(5);
 
   // Inicializa o HSPI dedicado para o NRF24.
   // NUNCA usar SPI (VSPI) aqui — o VSPI pertence ao TFT_eSPI (pinos 23/18/5)!

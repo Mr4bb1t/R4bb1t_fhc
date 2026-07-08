@@ -220,10 +220,11 @@ void setup() {
 
   systemInitialized = true;
 
-  // Inicializa o CC1101 no boot para aparecer conectado no Menu Config
-  // Isso é feito APÓS a tela ter sido configurada para não roubar o barramento
-  // SPI
-  hwCC1101_ok = rfInit();
+  // CC1101 é inicializado de forma lazy na primeira entrada no Menu RF
+  // (displayRF() -> rfInit()), evitando conflito com o barramento SPI
+  // compartilhado antes do NRF24 ser configurado.
+  // hwCC1101_ok será setado pelo rfInit() quando o usuário entrar no menu.
+  hwCC1101_ok = false;
 
   // Inicializa a detecção do NRF24 no boot para aparecer conectado no Menu
   // Config / Sobre
