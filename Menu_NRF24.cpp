@@ -138,7 +138,7 @@ bool nrfProbe() {
   delay(10);
 
   // Libera o HSPI do CC1101 antes de usar o HSPI para NRF24
-  spiCC.end();
+  spiJam.end();
   delay(5);
 
   // Inicializa o HSPI dedicado para o NRF24.
@@ -178,7 +178,7 @@ bool nrfProbe2() {
   delay(10);
 
   // Libera o HSPI do CC1101 antes de usar o HSPI para NRF24
-  spiCC.end();
+  spiJam.end();
   delay(5);
 
   spiJam.begin(33, 19, 13, -1);
@@ -223,7 +223,7 @@ static bool nrfInit() {
   delay(20);
 
   // Libera o HSPI do CC1101 antes de usar o HSPI para NRF24
-  spiCC.end();
+  spiJam.end();
   delay(5);
 
   // Inicializa o HSPI dedicado para o NRF24.

@@ -28,11 +28,20 @@ static bool rfReady = false;
 #define RF_SIGNALS_FILE "/rf_signals.txt"
 #define MAX_RF_SIGNALS 20
 
+// ── Raw pulse capture ────────────────────────────
+#define RAW_BUF_SIZE     512   // max pulsos por pacote
+#define RAW_MIN_PULSES    16   // minimo para ser sinal valido
+#define RAW_GAP_MS        12   // silencio de 12ms = fim do pacote
+#define RAW_PULSE_MIN_US 100   // menor pulso valido (filtra ruido)
+#define RAW_PULSE_MAX_US 100000 // maior pulso valido (filtra silencio)
+#define RAW_SIGNALS_FILE "/rf_raw.txt"
+
 struct RFSignal {
   unsigned long value;
   int bits;
   int protocol;
   float freq;
+  unsigned int delay;  // pulseLength real capturado (us)
 };
 
 // ── Sub-menu RF ──────────────────────────────────
@@ -85,11 +94,11 @@ static void rfFooter(const char *hint = nullptr) {
 static void drawDetectedFreq(int y);
 
 // ── SPIFFS: salvar sinal ─────────────────────────
-static bool saveRFSignal(unsigned long val, int bits, int proto, float freq) {
+static bool saveRFSignal(unsigned long val, int bits, int proto, float freq, unsigned int delay = 0) {
   File f = SPIFFS.open(RF_SIGNALS_FILE, FILE_APPEND);
   if (!f)
     return false;
-  f.printf("%lX,%d,%d,%.2f\n", val, bits, proto, freq);
+  f.printf("%lX,%d,%d,%.2f,%u\n", val, bits, proto, freq, delay);
   f.close();
   return true;
 }
@@ -114,11 +123,20 @@ static int loadRFSignals(RFSignal *out, int maxCount) {
 
     int c3 = line.indexOf(',', c2 + 1);
     if (c3 > 0) {
-      out[count].protocol = line.substring(c2 + 1, c3).toInt();
-      out[count].freq = line.substring(c3 + 1).toFloat();
+      int c4 = line.indexOf(',', c3 + 1);
+      if (c4 > 0) {
+        out[count].protocol = line.substring(c2 + 1, c3).toInt();
+        out[count].freq     = line.substring(c3 + 1, c4).toFloat();
+        out[count].delay    = (unsigned int)line.substring(c4 + 1).toInt();
+      } else {
+        out[count].protocol = line.substring(c2 + 1, c3).toInt();
+        out[count].freq     = line.substring(c3 + 1).toFloat();
+        out[count].delay    = 0; // arquivo antigo sem delay
+      }
     } else {
       out[count].protocol = line.substring(c2 + 1).toInt();
       out[count].freq = 433.92f;
+      out[count].delay = 0;
     }
     count++;
   }
@@ -140,8 +158,8 @@ static bool deleteRFSignal(int index) {
   for (int i = 0; i < count; i++) {
     if (i == index)
       continue;
-    f.printf("%lX,%d,%d,%.2f\n", buf[i].value, buf[i].bits, buf[i].protocol,
-             buf[i].freq);
+    f.printf("%lX,%d,%d,%.2f,%u\n", buf[i].value, buf[i].bits, buf[i].protocol,
+             buf[i].freq, buf[i].delay);
   }
   f.close();
   return true;
@@ -289,6 +307,7 @@ void handleRF() {
 static unsigned long replayVal = 0;
 static int replayBits = 0;
 static int replayProtocol = 0;
+static unsigned int replayDelay = 0;  // pulseLength real capturado (us)
 static bool replayHasSig = false;
 
 void displayRF_Replay() {
@@ -335,6 +354,11 @@ void displayRF_Replay() {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(4, SCR_H - 28);
     tft.print(lang->rf_hint_voltar);
+  } else {
+    // Indicação do botão salvar no canto direito
+    tft.setTextColor(TFT_YELLOW);
+    tft.setCursor(SCR_W - 40, SCR_H - 28);
+    tft.print("Salvar");
   }
   rfFooter();
   batteryDraw();
@@ -355,9 +379,10 @@ void displayRF_Replay() {
 void handleRF_Replay() {
   // Recepção contínua
   if (rfReady && rcSwitch.available()) {
-    replayVal = rcSwitch.getReceivedValue();
-    replayBits = rcSwitch.getReceivedBitlength();
+    replayVal      = rcSwitch.getReceivedValue();
+    replayBits     = rcSwitch.getReceivedBitlength();
     replayProtocol = rcSwitch.getReceivedProtocol();
+    replayDelay    = rcSwitch.getReceivedDelay();  // pulseLength real
     rcSwitch.resetAvailable();
     replayHasSig = true;
 
@@ -388,7 +413,7 @@ void handleRF_Replay() {
       delay(5);
       rcSwitch.disableReceive();
       rcSwitch.enableTransmit(RF_GDO0);
-      rcSwitch.setProtocol(replayProtocol);
+      rcSwitch.setProtocol(replayProtocol, replayDelay > 0 ? replayDelay : 350);
       rcSwitch.send(replayVal, replayBits);
       rcSwitch.disableTransmit();
       pinMode(RF_GDO0, INPUT);
@@ -408,7 +433,7 @@ void handleRF_Replay() {
     if (digitalRead(BUTTON_RIGHT) == LOW && replayHasSig) {
       lastDebounceTime = millis();
       float saveFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
-      bool ok = saveRFSignal(replayVal, replayBits, replayProtocol, saveFreq);
+      bool ok = saveRFSignal(replayVal, replayBits, replayProtocol, saveFreq, replayDelay);
       Serial.printf("[RF][REPLAY] Salvar no SPIFFS: %s\n", ok ? "OK" : "ERRO");
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
@@ -430,8 +455,23 @@ void handleRF_Replay() {
 
 // ════════════════════════════════════════════════
 //  MODO: RAW — exibe pulsos recebidos em tempo real
+//  Dupla captura simultânea:
+//    1) RCSwitch (ISR) → protocolos conhecidos
+//    2) Polling GDO0   → qualquer sinal (alarme, FSK...)
 // ════════════════════════════════════════════════
 static bool rawListening = true;
+
+// ── Estado da captura raw ────────────────────────
+static unsigned int  rawBuf[RAW_BUF_SIZE];  // durações em µs
+static int           rawCount    = 0;        // pulsos no buffer atual
+static bool          rawHasSig   = false;    // pacote bruto completo?
+static int           rawSavedMin = 0;        // duracao minima do pacote salvo
+static int           rawSavedMax = 0;        // duracao maxima do pacote salvo
+static int           rawSavedCnt = 0;        // contagem do pacote salvo
+static int           rawLastPin  = HIGH;     // estado anterior do GDO0
+static unsigned long rawLastEdge = 0;        // micros() da ultima borda
+static unsigned long rawLastAct  = 0;        // millis() da ultima atividade
+
 
 void displayRF_Raw() {
   rfHeader(lang->rf_hdr_raw);
@@ -440,11 +480,26 @@ void displayRF_Raw() {
   tft.setTextSize(1);
   tft.setCursor(4, 30);
   tft.print(lang->rf_raw_escutando);
+
+  // Separador e label da secao raw
+  tft.drawFastHLine(0, 88, SCR_W, 0x2945); // cinza escuro
+  tft.setTextColor(0x4A69); // cinza medio
+  tft.setCursor(4, 91);
+  tft.print("RAW pulsos:");
+
   tft.setTextColor(TFT_DARKGREY);
   tft.setCursor(4, SCR_H - 28);
-  tft.print("^ = Voltar");
+  tft.print("< Voltar");
   rfFooter();
   rawListening = true;
+
+  // Reseta estado raw ao entrar na tela
+  rawCount   = 0;
+  rawHasSig  = false;
+  rawLastPin = digitalRead(RF_GDO0);
+  rawLastEdge = micros();
+  rawLastAct  = millis();
+
   batteryDraw();
 
   // Sempre re-habilita RX ao entrar no modo Raw.
@@ -464,80 +519,173 @@ void handleRF_Raw() {
   static int peakRSSI = -100;
   static unsigned long lastRssiPoll = 0;
 
-  // Realiza polling do RSSI a cada 5ms para não travar o barramento SPI
-  // mas rápido o suficiente para não cair nos "gaps" de silêncio do RF
+  // ── Polling RSSI a cada 5ms ───────────────────────
   if (rfReady && (millis() - lastRssiPoll > 5)) {
     lastRssiPoll = millis();
     int currentRssi = (int)ELECHOUSE_cc1101.getRssi();
-    if (currentRssi > peakRSSI) {
-      peakRSSI = currentRssi;
+    if (currentRssi > peakRSSI) peakRSSI = currentRssi;
+  }
+
+  // ── Captura raw de pulsos (polling GDO0) ─────────
+  // Roda simultaneamente ao RCSwitch (que usa ISR).
+  // O polling le o mesmo pino sem conflitar com a ISR.
+  {
+    int pinNow = digitalRead(RF_GDO0);
+    unsigned long nowUs = micros();
+
+    if (pinNow != rawLastPin) {
+      unsigned int dur = (unsigned int)(nowUs - rawLastEdge);
+      rawLastEdge = nowUs;
+      rawLastPin  = pinNow;
+      rawLastAct  = millis();
+
+      if (dur >= RAW_PULSE_MIN_US && dur <= RAW_PULSE_MAX_US) {
+        if (rawCount < RAW_BUF_SIZE)
+          rawBuf[rawCount++] = dur;
+      }
+    }
+
+    // Fim do pacote detectado pelo gap de silencio
+    if (rawCount >= RAW_MIN_PULSES &&
+        (millis() - rawLastAct) > RAW_GAP_MS) {
+
+      // Calcula min/max do pacote
+      int mn = rawBuf[0], mx = rawBuf[0];
+      for (int i = 1; i < rawCount; i++) {
+        if ((int)rawBuf[i] < mn) mn = rawBuf[i];
+        if ((int)rawBuf[i] > mx) mx = rawBuf[i];
+      }
+      rawSavedMin = mn;
+      rawSavedMax = mx;
+      rawSavedCnt = rawCount;
+      rawHasSig   = true;
+
+      float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+      Serial.printf("[RF][RAW-PULSE] %d pulsos | min:%dus max:%dus @ %.2fMHz\n",
+                    rawSavedCnt, rawSavedMin, rawSavedMax, rxFreq);
+
+      // Atualiza secao RAW na tela (area Y=91 a 137)
+      tft.fillRect(0, 91, SCR_W, 46, TFT_BLACK);
+      tft.setTextSize(1);
+      tft.setTextColor(TFT_MAGENTA);
+      tft.setCursor(4, 91);
+      char rbuf[32];
+      snprintf(rbuf, sizeof(rbuf), "RAW pulsos:");
+      tft.print(rbuf);
+
+      tft.setTextColor(TFT_WHITE);
+      tft.setCursor(4, 102);
+      snprintf(rbuf, sizeof(rbuf), "%d pulsos capturados", rawSavedCnt);
+      tft.print(rbuf);
+
+      tft.setTextColor(TFT_CYAN);
+      tft.setCursor(4, 113);
+      snprintf(rbuf, sizeof(rbuf), "Min:%dus", rawSavedMin);
+      tft.print(rbuf);
+      tft.setCursor(4, 124);
+      snprintf(rbuf, sizeof(rbuf), "Max:%dus", rawSavedMax);
+      tft.print(rbuf);
+
+      // Reseta buffer para proximo pacote (mas mantem rawHasSig=true)
+      rawCount  = 0;
+      rawLastAct = millis(); // evita re-trigger imediato
     }
   }
 
+  // ── RCSwitch: protocolos conhecidos ──────────────
   if (rfReady && rcSwitch.available()) {
     unsigned long val = rcSwitch.getReceivedValue();
     int bits = rcSwitch.getReceivedBitlength();
     int proto = rcSwitch.getReceivedProtocol();
     rcSwitch.resetAvailable();
 
-    // Pega o maior sinal detectado
     int dbm = peakRSSI;
-    if (dbm == -100)
-      dbm = (int)ELECHOUSE_cc1101.getRssi(); // Fallback
+    if (dbm == -100) dbm = (int)ELECHOUSE_cc1101.getRssi();
     float lqi = ELECHOUSE_cc1101.getLqi();
-    peakRSSI = -100; // Reseta para a próxima captura
+    peakRSSI = -100;
 
-    Serial.println("[RF][RAW] Sinal recebido:");
+    Serial.println("[RF][RAW] Sinal decodificado (RCSwitch):");
     Serial.printf("[RF][RAW]   Dec     : %lu\n", val);
     Serial.printf("[RF][RAW]   Hex     : 0x%lX\n", val);
     Serial.printf("[RF][RAW]   Bits    : %d  |  Protocolo: %d\n", bits, proto);
     Serial.printf("[RF][RAW]   RSSI    : %d dBm  |  LQI: %.0f\n", dbm, lqi);
-    Serial.printf("[RF][RAW]   Barras  : %d/10\n",
-                  constrain(map(dbm, -85, -18, 1, 10), 1, 10));
 
-    // Partial redraw: limpa as 3 linhas de texto (Y=40 ate 82) e a linha do
-    // Sinal/Barras (Y=87 ate 95)
-    tft.fillRect(0, 40, SCR_W, 44, TFT_BLACK); // 40 a 84
-    tft.fillRect(0, 87, SCR_W, 8, TFT_BLACK);
-
+    // Atualiza area RCSwitch (Y=30 a 87)
+    tft.fillRect(0, 30, SCR_W, 58, TFT_BLACK);
     tft.setTextSize(1);
     tft.setTextColor(TFT_GREEN);
     char buf[32];
     snprintf(buf, sizeof(buf), "Dec: %lu", val);
-    tft.setCursor(4, 40);
+    tft.setCursor(4, 30);
     tft.print(buf);
     snprintf(buf, sizeof(buf), "Hex: 0x%lX", val);
+    tft.setCursor(4, 41);
+    tft.print(buf);
+    snprintf(buf, sizeof(buf), "Bits:%d  Proto:%d", bits, proto);
     tft.setCursor(4, 52);
     tft.print(buf);
-    snprintf(buf, sizeof(buf), "Bits: %d   Proto: %d", bits, proto);
-    tft.setCursor(4, 64);
-    tft.print(buf);
-
     float txFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
-    snprintf(buf, sizeof(buf), "Freq: %.2f", txFreq);
-    tft.setCursor(4, 74);
+    snprintf(buf, sizeof(buf), "Freq:%.2f", txFreq);
+    tft.setCursor(4, 63);
     tft.print(buf);
 
+    // Linha RSSI + barras
     tft.setTextColor(TFT_DARKGREY);
-    tft.setCursor(4, 87);
-    // Agora mostramos tambem o valor real do RSSI
-    char sbuf[16];
+    tft.setCursor(4, 75);
+    char sbuf[12];
     snprintf(sbuf, sizeof(sbuf), "dBm:%d", dbm);
     tft.print(sbuf);
-
-    // Mapeia o RSSI real para 1 a 10 barras usando a exata mesma metrica do
-    // Analyser (-85 a -18)
     int bars = constrain(map(dbm, -85, -18, 1, 10), 1, 10);
     for (int b = 0; b < 10; b++) {
-      if (b < bars) {
-        tft.fillRect(60 + b * 6, 87, 5, 8, TFT_CYAN); // Quadrado preenchido
-      } else {
-        tft.drawRect(60 + b * 6, 87, 5, 8, TFT_DARKGREY); // Quadrado vazio
-      }
+      if (b < bars) tft.fillRect(55 + b * 7, 75, 6, 7, TFT_CYAN);
+      else          tft.drawRect(55 + b * 7, 75, 6, 7, TFT_DARKGREY);
     }
   }
 
+  // ── Botoes ───────────────────────────────────────
   if ((millis() - lastDebounceTime) > debounceDelay) {
+
+    // RIGHT → salva pulsos brutos no SPIFFS (se tiver capturado)
+    if (digitalRead(BUTTON_RIGHT) == LOW && rawHasSig) {
+      lastDebounceTime = millis();
+      float saveFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+      // Re-salva o ultimo pacote completo (rawBuf foi resetado, usamos rawSavedCnt)
+      // Para salvar precisamos reconstruir — salvamos apenas o resumo em texto
+      File f = SPIFFS.open(RAW_SIGNALS_FILE, FILE_APPEND);
+      bool ok = false;
+      if (f) {
+        f.printf("%.2f,%d,%d,%d\n", saveFreq, rawSavedCnt, rawSavedMin, rawSavedMax);
+        f.close();
+        ok = true;
+      }
+      Serial.printf("[RF][RAW-PULSE] Salvar: %s\n", ok ? "OK" : "ERRO");
+      tft.fillRect(0, 135, SCR_W, 10, TFT_BLACK);
+      tft.setTextSize(1);
+      tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
+      tft.setCursor(4, 135);
+      tft.print(ok ? "Salvo!" : "Erro!");
+      delay(800);
+      rawHasSig = false;
+      tft.fillRect(0, 91, SCR_W, 50, TFT_BLACK); // limpa secao raw
+      tft.drawFastHLine(0, 88, SCR_W, 0x2945);
+      tft.setTextColor(0x4A69);
+      tft.setCursor(4, 91);
+      tft.print("RAW pulsos:");
+    }
+
+    // SELECT → limpa captura raw
+    if (digitalRead(BUTTON_SELECT) == LOW && rawHasSig) {
+      lastDebounceTime = millis();
+      rawHasSig = false;
+      rawCount  = 0;
+      tft.fillRect(0, 91, SCR_W, 50, TFT_BLACK);
+      tft.drawFastHLine(0, 88, SCR_W, 0x2945);
+      tft.setTextColor(0x4A69);
+      tft.setCursor(4, 91);
+      tft.print("RAW pulsos:");
+    }
+
+    // LEFT → volta ao sub-menu RF
     if (digitalRead(BUTTON_LEFT) == LOW) {
       lastDebounceTime = millis();
       estadoAtual = MENU_RF;
@@ -597,7 +745,8 @@ static bool rfScanStep() {
     scanIdx = 0;
 
     // Atualiza frequência detectada se o pico é acima do ruído
-    if (scanBestRSSI > -75) {
+    // -65 dBm: filtra ruido de fundo (~-74 dBm) sem perder sinais reais
+    if (scanBestRSSI > -65) {
       rfDetectedMHz = scanBestMHz;
       rfDetectedRSSI = scanBestRSSI;
       Serial.printf("[RF][SCAN] Freq detectada: %.2f MHz  RSSI: %d dBm\n",
@@ -1262,6 +1411,8 @@ static void openSavedActionMenu(int signalIdx) {
           ELECHOUSE_cc1101.SetTx();
           rcSwitch.disableReceive();
           rcSwitch.enableTransmit(RF_GDO0);
+          unsigned int txDelay = savedSignals[signalIdx].delay;
+          rcSwitch.setProtocol(savedSignals[signalIdx].protocol, txDelay > 0 ? txDelay : 350);
           rcSwitch.send(savedSignals[signalIdx].value,
                         savedSignals[signalIdx].bits);
           rcSwitch.disableTransmit();
@@ -1309,6 +1460,8 @@ static void openSavedActionMenu(int signalIdx) {
             ELECHOUSE_cc1101.SetTx();
             rcSwitch.disableReceive();
             rcSwitch.enableTransmit(RF_GDO0);
+            unsigned int txDelay2 = savedSignals[signalIdx].delay;
+            rcSwitch.setProtocol(savedSignals[signalIdx].protocol, txDelay2 > 0 ? txDelay2 : 350);
             rcSwitch.send(savedSignals[signalIdx].value,
                           savedSignals[signalIdx].bits);
             rcSwitch.disableTransmit();
@@ -1452,6 +1605,8 @@ void handleRF_Saved() {
         ELECHOUSE_cc1101.SetTx();
         rcSwitch.disableReceive();
         rcSwitch.enableTransmit(RF_GDO0);
+        unsigned int txDelay3 = savedSignals[sIdx].delay;
+        rcSwitch.setProtocol(savedSignals[sIdx].protocol, txDelay3 > 0 ? txDelay3 : 350);
         rcSwitch.send(savedSignals[sIdx].value,
                       savedSignals[sIdx].bits);
         rcSwitch.disableTransmit();
