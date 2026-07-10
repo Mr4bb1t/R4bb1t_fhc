@@ -76,6 +76,7 @@ static const NrfAttack ATTACKS[] = {
     {"< Voltar", "", TFT_WHITE},
     {"BT Jammer", "Bluetooth Classic", TFT_RED},
     {"Drone Jammer", "Drones 2.4GHz", TFT_RED},
+    {"Periph Jammer", "Kbd/Mouse 2.4GHz", TFT_ORANGE},
     {"BLE Adv Jammer", "BLE Adv Channels", TFT_YELLOW},
     {"BLE Data Jammer", "BLE Data Channels", TFT_YELLOW},
     {"Zigbee Jammer", "IEEE 802.15.4", 0x07C0},
@@ -88,10 +89,11 @@ static const char* nrfGetLabel(int idx) {
         case 0: return lang->nrf_itm_back;
         case 1: return lang->nrf_itm_btjammer;
         case 2: return lang->nrf_itm_dronejammer;
-        case 3: return lang->nrf_itm_bleadvjammer;
-        case 4: return lang->nrf_itm_bledatajammer;
-        case 5: return lang->nrf_itm_zigbeejammer;
-        case 6: return lang->nrf_itm_miscjammer;
+        case 3: return lang->nrf_itm_periphjammer;
+        case 4: return lang->nrf_itm_bleadvjammer;
+        case 5: return lang->nrf_itm_bledatajammer;
+        case 6: return lang->nrf_itm_zigbeejammer;
+        case 7: return lang->nrf_itm_miscjammer;
         default: return ATTACKS[idx].label;
     }
 }
@@ -100,10 +102,11 @@ static const char* nrfGetDesc(int idx) {
     switch(idx) {
         case 1: return lang->nrf_desc_bt;
         case 2: return lang->nrf_desc_drone;
-        case 3: return lang->nrf_desc_bleadv;
-        case 4: return lang->nrf_desc_bledata;
-        case 5: return lang->nrf_desc_zigbee;
-        case 6: return lang->nrf_desc_misc;
+        case 3: return lang->nrf_desc_periph;
+        case 4: return lang->nrf_desc_bleadv;
+        case 5: return lang->nrf_desc_bledata;
+        case 6: return lang->nrf_desc_zigbee;
+        case 7: return lang->nrf_desc_misc;
         default: return ATTACKS[idx].desc;
     }
 }
@@ -450,9 +453,46 @@ static void jamTask(void *param) {
     break;
   }
 
-  // ── 3: BLE Adv Jammer — 3 canais de advertising BLE
-  // Com 2 módulos: módulo 0 → ch 2 e 80, módulo 1 → ch 26
+  // ── 3: Peripherals Jammer — canais 0-80 (2.402-2.480 GHz)
+  // Cobre teclados/mouses wireless: Logitech Unifying, Microsoft, Dell, HP, etc.
+  // Com 2 módulos: divide 81 canais entre os módulos
   case 3: {
+    Serial.println("[NRF] Iniciando Peripherals Jammer (Kbd/Mouse)");
+    nrfReconfigRadios();
+    const int PERIPH_TOTAL = 81; // canais 0-80 (2402-2480 MHz)
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->startConstCarrier(RF24_PA_MAX, 0);
+    while (!jamStop) {
+      if (radioCount > 1) {
+        int base = PERIPH_TOTAL / radioCount;
+        int rem = PERIPH_TOTAL % radioCount;
+        int ch = 0;
+        for (int j = 0; j < radioCount; j++) {
+          int count = base + (j < rem ? 1 : 0);
+          for (int i = 0; i < count && !jamStop; i++, ch++) {
+            radio[j]->setChannel((uint8_t)ch);
+            if (j == 0) jamCurChan = (uint8_t)ch;
+            else        jamCurChan2 = (uint8_t)ch;
+            jamPktCount++;
+          }
+        }
+      } else {
+        for (uint8_t ch = 0; ch < PERIPH_TOTAL && !jamStop; ch++) {
+          radio[0]->setChannel(ch);
+          jamCurChan = ch;
+          jamPktCount++;
+        }
+      }
+    }
+    for (int i = 0; i < radioCount; i++)
+      radio[i]->stopConstCarrier();
+    Serial.println("[NRF] Peripherals Jammer Parado.");
+    break;
+  }
+
+  // ── 4: BLE Adv Jammer — 3 canais de advertising BLE
+  // Com 2 módulos: módulo 0 → ch 2 e 80, módulo 1 → ch 26
+  case 4: {
     Serial.println("[NRF] Iniciando BLE Adv Jammer");
     nrfReconfigRadios();
     const int BLE_TOTAL = 3;
@@ -488,9 +528,9 @@ static void jamTask(void *param) {
     break;
   }
 
-  // ── 4: BLE Data Jammer — 40 canais BLE data (ch 2,4,6,...,80)
+  // ── 5: BLE Data Jammer — 40 canais BLE data (ch 2,4,6,...,80)
   // Com 2 módulos: cada um cobre 20 canais distintos
-  case 4: {
+  case 5: {
     nrfReconfigRadios();
     const int BLE_DATA_TOTAL = 40;
     for (int i = 0; i < radioCount; i++)
@@ -522,9 +562,9 @@ static void jamTask(void *param) {
     break;
   }
 
-  // ── 5: Zigbee Jammer — 16 canais Zigbee, 3 sub-freqs cada
+  // ── 6: Zigbee Jammer — 16 canais Zigbee, 3 sub-freqs cada
   // Com 2 módulos: divide as 3 sub-freqs de cada canal entre os módulos
-  case 5: {
+  case 6: {
     Serial.println("[NRF] Iniciando Zigbee Jammer");
     nrfReconfigRadios();
     for (int i = 0; i < radioCount; i++)
@@ -563,9 +603,9 @@ static void jamTask(void *param) {
     break;
   }
 
-  // ── 6: Misc Jammer — varrendo todos os 125 canais
+  // ── 7: Misc Jammer — varrendo todos os 125 canais
   // Com 2 módulos: cada um cobre ~62 canais distintos
-  case 6: {
+  case 7: {
     nrfReconfigRadios();
     const int MISC_TOTAL = 125;
     for (int i = 0; i < radioCount; i++)

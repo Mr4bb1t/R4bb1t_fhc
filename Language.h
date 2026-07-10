@@ -276,6 +276,8 @@ struct LangPack {
     const char* nrf_desc_zigbee;
     const char* nrf_itm_miscjammer;
     const char* nrf_desc_misc;
+    const char* nrf_itm_periphjammer;
+    const char* nrf_desc_periph;
     const char* nrf_hdr_jammer;
     const char* nrf_hdr_attack;
     const char* nrf_lbl_modulos;
