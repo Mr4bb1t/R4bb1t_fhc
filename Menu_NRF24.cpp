@@ -64,6 +64,7 @@ static void nrfInitTask(void *param) {
 // ── Contadores (atualizados pela task, lidos pela UI) ─
 static volatile unsigned long jamPktCount = 0;
 static volatile uint8_t jamCurChan = 0;
+static volatile uint8_t jamCurChan2 = 0;
 
 // ── Sub-ataques disponíveis ───────────────────────────
 struct NrfAttack {
@@ -309,15 +310,29 @@ static void nrfDeinit() {
 
   spiJam.end();
 
+  // ── Módulo 1: CSN=HIGH (inativo no SPI), CE=LOW (standby) ──
   pinMode(NRF_CSN, OUTPUT);
   digitalWrite(NRF_CSN, HIGH);
   pinMode(NRF_CE, OUTPUT);
   digitalWrite(NRF_CE, LOW);
 
-  nrfReady = false;
-  hwNRF24_ok = false;
+  // ── Módulo 2: mesmo tratamento — evita CE alto gerando RF espúrio ──
+  pinMode(NRF2_CSN, OUTPUT);
+  digitalWrite(NRF2_CSN, HIGH);
+  pinMode(NRF2_CE, OUTPUT);
+  digitalWrite(NRF2_CE, LOW);
+
+  nrfReady    = false;
+  hwNRF24_ok  = false;
   nrfInitDone = false;
+
+  // Sinaliza ao módulo RF que o CC1101 precisa de reload completo de
+  // registradores na próxima entrada no menu, pois o barramento HSPI
+  // foi compartilhado e o AGCCTRL/FSCAL podem estar corrompidos.
+  rfNeedsReinit = true;
+  Serial.println("[NRF][DEINIT] rfNeedsReinit=true → CC1101 será reconfigurado ao entrar no menu RF.");
 }
+
 
 // toggleCeLow e High removidos pois o jammer precisa do CE travado no alto
 
@@ -350,6 +365,7 @@ static void jamTask(void *param) {
   int atkId = (int)(intptr_t)param;
   jamPktCount = 0;
   jamCurChan = 0;
+  jamCurChan2 = 0;
   // Prioridade alta mas NÃO máxima — prioridade máxima impede o IDLE de rodar
   // e dispara o Task Watchdog (TWDT) em ~5 segundos.
   // Usamos esp_task_wdt_reset() no loop para alimentar o WDT sem ceder CPU.
@@ -377,7 +393,8 @@ static void jamTask(void *param) {
           int count = base + (j < rem ? 1 : 0);
           for (int i = 0; i < count && !jamStop; i++, ch++) {
             radio[j]->setChannel(BT_CH[ch]);
-            jamCurChan = BT_CH[ch];
+            if (j == 0) jamCurChan = BT_CH[ch];
+            else        jamCurChan2 = BT_CH[ch];
             jamPktCount++;
           }
         }
@@ -406,7 +423,8 @@ static void jamTask(void *param) {
         for (int j = 0; j < radioCount && !jamStop; j++) {
           uint8_t ch = (uint8_t)(random(125));
           radio[j]->setChannel(ch);
-          jamCurChan = ch;
+          if (j == 0) jamCurChan = ch;
+          else        jamCurChan2 = ch;
           jamPktCount++;
         }
       } else {
@@ -439,7 +457,8 @@ static void jamTask(void *param) {
           for (int i = 0; i < count && !jamStop; i++, ch++) {
             radio[j]->setChannel(BLE_CH[ch]);
             radio[j]->writeFast(JAM_TEXT, sizeof(JAM_TEXT));
-            jamCurChan = BLE_CH[ch];
+            if (j == 0) jamCurChan = BLE_CH[ch];
+            else        jamCurChan2 = BLE_CH[ch];
             jamPktCount++;
           }
         }
@@ -474,7 +493,8 @@ static void jamTask(void *param) {
           int count = base + (j < rem ? 1 : 0);
           for (int i = 0; i < count && !jamStop; i++, ch += 2) {
             radio[j]->setChannel((uint8_t)ch);
-            jamCurChan = (uint8_t)ch;
+            if (j == 0) jamCurChan = (uint8_t)ch;
+            else        jamCurChan2 = (uint8_t)ch;
             jamPktCount++;
           }
         }
@@ -511,7 +531,8 @@ static void jamTask(void *param) {
             for (int i = 0; i < count && !jamStop; i++, sub++) {
               radio[j]->setChannel(nrfCh + sub);
               radio[j]->writeFast(JAM_TEXT, sizeof(JAM_TEXT));
-              jamCurChan = nrfCh + sub;
+              if (j == 0) jamCurChan = nrfCh + sub;
+              else        jamCurChan2 = nrfCh + sub;
               jamPktCount++;
             }
           }
@@ -547,7 +568,8 @@ static void jamTask(void *param) {
           int count = base + (j < rem ? 1 : 0);
           for (int i = 0; i < count && !jamStop; i++, ch++) {
             radio[j]->setChannel((uint8_t)ch);
-            jamCurChan = (uint8_t)ch;
+            if (j == 0) jamCurChan = (uint8_t)ch;
+            else        jamCurChan2 = (uint8_t)ch;
             jamPktCount++;
           }
         }
@@ -753,21 +775,39 @@ static void nrfDrawAttackFull() {
   tft.setCursor((SCR_W - 78) / 2, 55);
   tft.print(jamRunning ? lang->nrf_st_ativo : lang->nrf_st_inativo);
 
-  // Etiquetas fixas
+  // Canais — Layout diferente para 1 ou 2 módulos
+  if (radioCount > 1) {
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(2, 72);
+    tft.print(lang->nrf_lbl_mod1);
+    tft.setTextColor(C_CYAN);
+    tft.setCursor(38, 72);
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+    tft.print(buf);
+
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(68, 72);
+    tft.print(lang->nrf_lbl_mod2);
+    tft.setTextColor(0x07FF);
+    tft.setCursor(104, 72);
+    snprintf(buf, sizeof(buf), "%d", (int)jamCurChan2);
+    tft.print(buf);
+  } else {
+    tft.setTextColor(C_GOLD_DIM);
+    tft.setCursor(2, 72);
+    tft.print(lang->nrf_lbl_canal);
+    tft.setTextColor(C_CYAN);
+    tft.setCursor(42, 72);
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+    tft.print(buf);
+  }
+
+  // Pacotes
   tft.setTextColor(C_GOLD_DIM);
-  tft.setCursor(2, 72);
-  tft.print(lang->nrf_lbl_canal);
   tft.setCursor(2, 86);
   tft.print(lang->nrf_lbl_pacotes);
-
-  // Valores dinâmicos
-  tft.fillRect(50, 70, 78, 10, C_BG);
-  tft.setTextColor(C_CYAN);
-  tft.setCursor(50, 72);
-  char buf[12];
-  snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
-  tft.print(buf);
-
   tft.fillRect(50, 84, 78, 10, C_BG);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor(50, 86);
@@ -792,13 +832,28 @@ static void nrfUpdateAttackDyn() {
   tft.setCursor((SCR_W - 78) / 2, 55);
   tft.print(jamRunning ? lang->nrf_st_ativo : lang->nrf_st_inativo);
 
-  // Canal
-  tft.fillRect(50, 70, 78, 10, C_BG);
-  tft.setTextColor(C_CYAN);
-  tft.setCursor(50, 72);
-  char buf[12];
-  snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
-  tft.print(buf);
+  // Canais
+  if (radioCount > 1) {
+    tft.fillRect(38, 70, 28, 10, C_BG);
+    tft.setTextColor(C_CYAN);
+    tft.setCursor(38, 72);
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+    tft.print(buf);
+
+    tft.fillRect(104, 70, 24, 10, C_BG);
+    tft.setTextColor(0x07FF);
+    tft.setCursor(104, 72);
+    snprintf(buf, sizeof(buf), "%d", (int)jamCurChan2);
+    tft.print(buf);
+  } else {
+    tft.fillRect(42, 70, 86, 10, C_BG);
+    tft.setTextColor(C_CYAN);
+    tft.setCursor(42, 72);
+    char buf[12];
+    snprintf(buf, sizeof(buf), "%d", (int)jamCurChan);
+    tft.print(buf);
+  }
 
   // Pacotes
   tft.fillRect(50, 84, 78, 10, C_BG);

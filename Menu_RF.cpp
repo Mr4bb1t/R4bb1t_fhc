@@ -18,7 +18,12 @@
 
 // ── Objetos ──────────────────────────────────────
 static RCSwitch rcSwitch;
-static bool rfReady = false;
+bool rfReady = false;
+
+// ── Flags de ciclo de vida do CC1101 ──────────────────────────
+// Escopo de arquivo (não static local) para que nrfDeinit() possa resetá-las.
+static bool rfInitDone    = false; // rfInit() já foi executado com sucesso
+bool        rfNeedsReinit = false; // nrfDeinit() seta; displayRF() consome
 
 // ── Layout ───────────────────────────────────────
 #define SCR_W 128
@@ -29,10 +34,10 @@ static bool rfReady = false;
 #define MAX_RF_SIGNALS 20
 
 // ── Raw pulse capture ────────────────────────────
-#define RAW_BUF_SIZE     512   // max pulsos por pacote
-#define RAW_MIN_PULSES    16   // minimo para ser sinal valido
-#define RAW_GAP_MS        12   // silencio de 12ms = fim do pacote
-#define RAW_PULSE_MIN_US 100   // menor pulso valido (filtra ruido)
+#define RAW_BUF_SIZE 512        // max pulsos por pacote
+#define RAW_MIN_PULSES 16       // minimo para ser sinal valido
+#define RAW_GAP_MS 12           // silencio de 12ms = fim do pacote
+#define RAW_PULSE_MIN_US 100    // menor pulso valido (filtra ruido)
 #define RAW_PULSE_MAX_US 100000 // maior pulso valido (filtra silencio)
 #define RAW_SIGNALS_FILE "/rf_raw.txt"
 
@@ -41,7 +46,17 @@ struct RFSignal {
   int bits;
   int protocol;
   float freq;
-  unsigned int delay;  // pulseLength real capturado (us)
+  unsigned int delay; // pulseLength real capturado (us)
+};
+
+// ── Struct para Raw Signals ────────────────────────
+#define MAX_RF_RAW_SIGNALS 10
+#define RAW_MAX_PULSES 256
+
+struct RFRawSignal {
+  unsigned int pulses[RAW_MAX_PULSES];
+  int count;
+  float freq;
 };
 
 // ── Sub-menu RF ──────────────────────────────────
@@ -51,18 +66,25 @@ static int rfOpcao = 0;
 
 // Cor e label de cada item
 static const char *rfLabels_raw[] = {"< Voltar", "Capturar", "Sniffer",
-                                 "Grafico",  "Jammer",   "Salvos"};
+                                     "Grafico",  "Jammer",   "Salvos"};
 
-static const char* getRFLabel(int i) {
-    switch(i) {
-        case 0: return lang->rf_itm_voltar;
-        case 1: return lang->rf_itm_capturar;
-        case 2: return lang->rf_itm_sniffer;
-        case 3: return lang->rf_itm_grafico;
-        case 4: return lang->rf_itm_jammer;
-        case 5: return lang->rf_itm_salvos;
-        default: return rfLabels_raw[i];
-    }
+static const char *getRFLabel(int i) {
+  switch (i) {
+  case 0:
+    return lang->rf_itm_voltar;
+  case 1:
+    return lang->rf_itm_capturar;
+  case 2:
+    return lang->rf_itm_sniffer;
+  case 3:
+    return lang->rf_itm_grafico;
+  case 4:
+    return lang->rf_itm_jammer;
+  case 5:
+    return lang->rf_itm_salvos;
+  default:
+    return rfLabels_raw[i];
+  }
 }
 static const uint16_t rfColors[] = {TFT_WHITE,  TFT_GREEN, TFT_CYAN,
                                     TFT_YELLOW, TFT_RED,   TFT_MAGENTA};
@@ -94,7 +116,8 @@ static void rfFooter(const char *hint = nullptr) {
 static void drawDetectedFreq(int y);
 
 // ── SPIFFS: salvar sinal ─────────────────────────
-static bool saveRFSignal(unsigned long val, int bits, int proto, float freq, unsigned int delay = 0) {
+static bool saveRFSignal(unsigned long val, int bits, int proto, float freq,
+                         unsigned int delay = 0) {
   File f = SPIFFS.open(RF_SIGNALS_FILE, FILE_APPEND);
   if (!f)
     return false;
@@ -126,12 +149,12 @@ static int loadRFSignals(RFSignal *out, int maxCount) {
       int c4 = line.indexOf(',', c3 + 1);
       if (c4 > 0) {
         out[count].protocol = line.substring(c2 + 1, c3).toInt();
-        out[count].freq     = line.substring(c3 + 1, c4).toFloat();
-        out[count].delay    = (unsigned int)line.substring(c4 + 1).toInt();
+        out[count].freq = line.substring(c3 + 1, c4).toFloat();
+        out[count].delay = (unsigned int)line.substring(c4 + 1).toInt();
       } else {
         out[count].protocol = line.substring(c2 + 1, c3).toInt();
-        out[count].freq     = line.substring(c3 + 1).toFloat();
-        out[count].delay    = 0; // arquivo antigo sem delay
+        out[count].freq = line.substring(c3 + 1).toFloat();
+        out[count].delay = 0; // arquivo antigo sem delay
       }
     } else {
       out[count].protocol = line.substring(c2 + 1).toInt();
@@ -162,6 +185,88 @@ static bool deleteRFSignal(int index) {
              buf[i].freq, buf[i].delay);
   }
   f.close();
+  return true;
+}
+
+// ── SPIFFS: RAW Signals ──────────────────────────
+static bool saveRFRawSignal(const unsigned int *pulses, int count, float freq) {
+  File f = SPIFFS.open(RAW_SIGNALS_FILE, FILE_APPEND);
+  if (!f)
+    return false;
+  f.printf("%.2f,%d", freq, count);
+  for (int i = 0; i < count; i++) {
+    f.printf(",%u", pulses[i]);
+  }
+  f.print("\n");
+  f.close();
+  return true;
+}
+
+static int loadRFRawSignals(RFRawSignal *out, int maxCount) {
+  File f = SPIFFS.open(RAW_SIGNALS_FILE, FILE_READ);
+  if (!f)
+    return 0;
+  int count = 0;
+  while (f.available() && count < maxCount) {
+    String line = f.readStringUntil('\n');
+    line.trim();
+    if (line.length() == 0)
+      continue;
+    int c1 = line.indexOf(',');
+    if (c1 < 0)
+      continue;
+    out[count].freq = line.substring(0, c1).toFloat();
+    int c2 = line.indexOf(',', c1 + 1);
+    if (c2 < 0)
+      continue;
+    out[count].count = line.substring(c1 + 1, c2).toInt();
+    if (out[count].count > RAW_MAX_PULSES)
+      out[count].count = RAW_MAX_PULSES;
+
+    int lastC = c2;
+    for (int i = 0; i < out[count].count; i++) {
+      int nextC = line.indexOf(',', lastC + 1);
+      if (nextC < 0) {
+        out[count].pulses[i] = (unsigned int)line.substring(lastC + 1).toInt();
+        break;
+      } else {
+        out[count].pulses[i] =
+            (unsigned int)line.substring(lastC + 1, nextC).toInt();
+        lastC = nextC;
+      }
+    }
+    count++;
+  }
+  f.close();
+  return count;
+}
+
+static bool deleteRFRawSignal(int index) {
+  RFRawSignal *buf = new RFRawSignal[MAX_RF_RAW_SIGNALS];
+  if (!buf) return false;
+
+  int count = loadRFRawSignals(buf, MAX_RF_RAW_SIGNALS);
+  if (index < 0 || index >= count) {
+    delete[] buf;
+    return false;
+  }
+
+  File f = SPIFFS.open(RAW_SIGNALS_FILE, FILE_WRITE);
+  if (!f) {
+    delete[] buf;
+    return false;
+  }
+  for (int i = 0; i < count; i++) {
+    if (i == index)
+      continue;
+    f.printf("%.2f,%d", buf[i].freq, buf[i].count);
+    for (int j = 0; j < buf[i].count; j++) {
+      f.printf(",%u", buf[i].pulses[j]);
+    }
+    f.print("\n");
+  }
+  f.close();
+  delete[] buf;
   return true;
 }
 
@@ -200,10 +305,74 @@ bool rfInit() {
 
   // Le RSSI inicial para confirmar comunicacao SPI
   float rssiInit = ELECHOUSE_cc1101.getRssi();
-  float lqiInit  = ELECHOUSE_cc1101.getLqi();
+  float lqiInit = ELECHOUSE_cc1101.getLqi();
   Serial.println("[RF] CC1101 OK @ 433.92 MHz");
-  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit, lqiInit);
+  Serial.printf("[RF] RSSI inicial: %.1f dBm  |  LQI: %.0f\n", rssiInit,
+                lqiInit);
   return true;
+}
+
+// ════════════════════════════════════════════════
+//  Re-inicialização robusta do CC1101
+//  Recarrega TODOS os registradores internos e coloca em RX.
+//  Deve ser chamada sempre que o barramento HSPI foi compartilhado com o
+//  nRF24, ou quando o gráfico indicar RSSI espúrio (todo vermelho).
+// ════════════════════════════════════════════════
+void rfReinit() {
+  if (!hwCC1101_ok) {
+    Serial.println("[RF][REINIT] CC1101 não foi inicializado, abortando.");
+    return;
+  }
+
+  Serial.println("[RF][REINIT] Recarregando registradores do CC1101...");
+
+  // Garante que nenhum outro dispositivo segura o barramento
+  // antes de reclamar o CS para o CC1101.
+  pinMode(RF_CS, OUTPUT);
+  digitalWrite(RF_CS, HIGH);
+  delay(5);
+
+  // ── FIX VITAL ──
+  // O nRF24 usa spiJam (HSPI) nos mesmos pinos físicos. Quando nrfDeinit() chama
+  // spiJam.end(), a matriz de pinos do ESP32 desconecta as GPIOs 33, 19 e 13.
+  // A biblioteca SmartRC-CC1101 usa o objeto global SPI (VSPI) e possui uma flag
+  // 'spi_initialized' que impede chamar SPI.begin() de novo. 
+  // Portanto, os pinos ficariam "órfãos" e o getCC1101() falharia.
+  // A solução é forçar o reinício do VSPI nestes pinos:
+  SPI.end();
+  SPI.begin(RF_SCK, RF_MISO, RF_MOSI, -1);
+
+  // Init() executa: reset HW + gravação
+  // completa de TODOS os registradores de fábrica. Estado completamente limpo.
+  ELECHOUSE_cc1101.setSpiPin(RF_SCK, RF_MISO, RF_MOSI, RF_CS);
+  ELECHOUSE_cc1101.setGDO(RF_GDO0, RF_GDO2);
+  ELECHOUSE_cc1101.Init();
+  delay(10); // settling do PLL após reset de hardware
+
+  // Verifica se o chip ainda responde com VERSION válido após o reload
+  if (!ELECHOUSE_cc1101.getCC1101()) {
+    Serial.println("[RF][REINIT] ERRO: CC1101 não respondeu após reinit!");
+    rfReady     = false;
+    hwCC1101_ok = false;
+    rfNeedsReinit = false;
+    return;
+  }
+
+  // Restaura a frequência previamente detectada (ou padrão 433.92) e RX
+  float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+  ELECHOUSE_cc1101.setMHZ(rxFreq);
+  ELECHOUSE_cc1101.SetRx();
+
+  // GDO0 é pilotado pelo CC1101 em modo RX → ESP32 deve ficar como INPUT
+  pinMode(RF_GDO0, INPUT);
+  rcSwitch.enableReceive(RF_GDO0);
+
+  rfReady       = true;
+  hwCC1101_ok   = true;
+  rfNeedsReinit = false;
+
+  float rssi = ELECHOUSE_cc1101.getRssi();
+  Serial.printf("[RF][REINIT] OK @ %.2f MHz | RSSI: %.1f dBm\n", rxFreq, rssi);
 }
 
 // ════════════════════════════════════════════════
@@ -214,12 +383,16 @@ bool rfInit() {
 //   • primeiro item = Voltar
 // ════════════════════════════════════════════════
 void displayRF() {
-  static bool rfInitDone = false;
+  // ── Garante que o CC1101 está inicializado e com registradores válidos ──
   if (!rfInitDone) {
-    rfInitDone = true;
-    if (!hwCC1101_ok) {
-      hwCC1101_ok = rfInit();
-    }
+    // Primeira entrada: detecta o chip e configura o barramento
+    rfInitDone  = true;
+    rfReady     = false;
+    hwCC1101_ok = rfInit();
+  } else if (rfNeedsReinit) {
+    // Retorno do modo nRF24: HSPI foi compartilhado, registradores podem
+    // estar corrompidos. Faz reload completo antes de qualquer leitura.
+    rfReinit();
   }
 
   tft.fillScreen(C_BG);
@@ -307,7 +480,7 @@ void handleRF() {
 static unsigned long replayVal = 0;
 static int replayBits = 0;
 static int replayProtocol = 0;
-static unsigned int replayDelay = 0;  // pulseLength real capturado (us)
+static unsigned int replayDelay = 0; // pulseLength real capturado (us)
 static bool replayHasSig = false;
 
 void displayRF_Replay() {
@@ -369,20 +542,21 @@ void displayRF_Replay() {
     float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
     ELECHOUSE_cc1101.setMHZ(rxFreq);
     ELECHOUSE_cc1101.SetRx();
-    pinMode(RF_GDO0, INPUT);        // CC1101 pilota GDO0 em RX
+    pinMode(RF_GDO0, INPUT); // CC1101 pilota GDO0 em RX
     rcSwitch.enableReceive(RF_GDO0);
-    Serial.printf("[RF][REPLAY] Escutando em %.2f MHz | GDO0=GPIO%d INPUT+INT\n",
-                  rxFreq, RF_GDO0);
+    Serial.printf(
+        "[RF][REPLAY] Escutando em %.2f MHz | GDO0=GPIO%d INPUT+INT\n", rxFreq,
+        RF_GDO0);
   }
 }
 
 void handleRF_Replay() {
   // Recepção contínua
   if (rfReady && rcSwitch.available()) {
-    replayVal      = rcSwitch.getReceivedValue();
-    replayBits     = rcSwitch.getReceivedBitlength();
+    replayVal = rcSwitch.getReceivedValue();
+    replayBits = rcSwitch.getReceivedBitlength();
     replayProtocol = rcSwitch.getReceivedProtocol();
-    replayDelay    = rcSwitch.getReceivedDelay();  // pulseLength real
+    replayDelay = rcSwitch.getReceivedDelay(); // pulseLength real
     rcSwitch.resetAvailable();
     replayHasSig = true;
 
@@ -433,7 +607,8 @@ void handleRF_Replay() {
     if (digitalRead(BUTTON_RIGHT) == LOW && replayHasSig) {
       lastDebounceTime = millis();
       float saveFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
-      bool ok = saveRFSignal(replayVal, replayBits, replayProtocol, saveFreq, replayDelay);
+      bool ok = saveRFSignal(replayVal, replayBits, replayProtocol, saveFreq,
+                             replayDelay);
       Serial.printf("[RF][REPLAY] Salvar no SPIFFS: %s\n", ok ? "OK" : "ERRO");
       tft.fillRect(4, 92, SCR_W - 8, 12, TFT_BLACK);
       tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
@@ -462,16 +637,15 @@ void handleRF_Replay() {
 static bool rawListening = true;
 
 // ── Estado da captura raw ────────────────────────
-static unsigned int  rawBuf[RAW_BUF_SIZE];  // durações em µs
-static int           rawCount    = 0;        // pulsos no buffer atual
-static bool          rawHasSig   = false;    // pacote bruto completo?
-static int           rawSavedMin = 0;        // duracao minima do pacote salvo
-static int           rawSavedMax = 0;        // duracao maxima do pacote salvo
-static int           rawSavedCnt = 0;        // contagem do pacote salvo
-static int           rawLastPin  = HIGH;     // estado anterior do GDO0
-static unsigned long rawLastEdge = 0;        // micros() da ultima borda
-static unsigned long rawLastAct  = 0;        // millis() da ultima atividade
-
+static unsigned int rawBuf[RAW_BUF_SIZE]; // durações em µs
+static int rawCount = 0;                  // pulsos no buffer atual
+static bool rawHasSig = false;            // pacote bruto completo?
+static int rawSavedMin = 0;               // duracao minima do pacote salvo
+static int rawSavedMax = 0;               // duracao maxima do pacote salvo
+static int rawSavedCnt = 0;               // contagem do pacote salvo
+static int rawLastPin = HIGH;             // estado anterior do GDO0
+static unsigned long rawLastEdge = 0;     // micros() da ultima borda
+static unsigned long rawLastAct = 0;      // millis() da ultima atividade
 
 void displayRF_Raw() {
   rfHeader(lang->rf_hdr_raw);
@@ -483,7 +657,7 @@ void displayRF_Raw() {
 
   // Separador e label da secao raw
   tft.drawFastHLine(0, 88, SCR_W, 0x2945); // cinza escuro
-  tft.setTextColor(0x4A69); // cinza medio
+  tft.setTextColor(0x4A69);                // cinza medio
   tft.setCursor(4, 91);
   tft.print("RAW pulsos:");
 
@@ -494,11 +668,11 @@ void displayRF_Raw() {
   rawListening = true;
 
   // Reseta estado raw ao entrar na tela
-  rawCount   = 0;
-  rawHasSig  = false;
+  rawCount = 0;
+  rawHasSig = false;
   rawLastPin = digitalRead(RF_GDO0);
   rawLastEdge = micros();
-  rawLastAct  = millis();
+  rawLastAct = millis();
 
   batteryDraw();
 
@@ -518,12 +692,15 @@ void displayRF_Raw() {
 void handleRF_Raw() {
   static int peakRSSI = -100;
   static unsigned long lastRssiPoll = 0;
+  static unsigned int rawBufSaved[RAW_BUF_SIZE];
+  int sw = 8 * 6; // "> SALVAR" = 8 chars * 6 pixels
 
   // ── Polling RSSI a cada 5ms ───────────────────────
   if (rfReady && (millis() - lastRssiPoll > 5)) {
     lastRssiPoll = millis();
     int currentRssi = (int)ELECHOUSE_cc1101.getRssi();
-    if (currentRssi > peakRSSI) peakRSSI = currentRssi;
+    if (currentRssi > peakRSSI)
+      peakRSSI = currentRssi;
   }
 
   // ── Captura raw de pulsos (polling GDO0) ─────────
@@ -536,8 +713,8 @@ void handleRF_Raw() {
     if (pinNow != rawLastPin) {
       unsigned int dur = (unsigned int)(nowUs - rawLastEdge);
       rawLastEdge = nowUs;
-      rawLastPin  = pinNow;
-      rawLastAct  = millis();
+      rawLastPin = pinNow;
+      rawLastAct = millis();
 
       if (dur >= RAW_PULSE_MIN_US && dur <= RAW_PULSE_MAX_US) {
         if (rawCount < RAW_BUF_SIZE)
@@ -546,19 +723,20 @@ void handleRF_Raw() {
     }
 
     // Fim do pacote detectado pelo gap de silencio
-    if (rawCount >= RAW_MIN_PULSES &&
-        (millis() - rawLastAct) > RAW_GAP_MS) {
+    if (rawCount >= RAW_MIN_PULSES && (millis() - rawLastAct) > RAW_GAP_MS) {
 
       // Calcula min/max do pacote
       int mn = rawBuf[0], mx = rawBuf[0];
       for (int i = 1; i < rawCount; i++) {
-        if ((int)rawBuf[i] < mn) mn = rawBuf[i];
-        if ((int)rawBuf[i] > mx) mx = rawBuf[i];
+        if ((int)rawBuf[i] < mn)
+          mn = rawBuf[i];
+        if ((int)rawBuf[i] > mx)
+          mx = rawBuf[i];
       }
       rawSavedMin = mn;
       rawSavedMax = mx;
       rawSavedCnt = rawCount;
-      rawHasSig   = true;
+      rawHasSig = true;
 
       float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
       Serial.printf("[RF][RAW-PULSE] %d pulsos | min:%dus max:%dus @ %.2fMHz\n",
@@ -582,13 +760,43 @@ void handleRF_Raw() {
       tft.setCursor(4, 113);
       snprintf(rbuf, sizeof(rbuf), "Min:%dus", rawSavedMin);
       tft.print(rbuf);
-      tft.setCursor(4, 124);
+      tft.setCursor(68, 113);
       snprintf(rbuf, sizeof(rbuf), "Max:%dus", rawSavedMax);
       tft.print(rbuf);
 
-      // Reseta buffer para proximo pacote (mas mantem rawHasSig=true)
-      rawCount  = 0;
+      // Hint de salvar no canto direito
+      tft.setTextColor(TFT_YELLOW);
+      tft.setCursor(SCR_W - sw - 4, 135);
+      tft.print("> SALVAR");
+
+      // Salvar os tempos exatos do pacote no buffer secundário
+      for (int i = 0; i < rawSavedCnt; i++) {
+        rawBufSaved[i] = rawBuf[i];
+      }
+
+      // Reseta buffer primário para proximo pacote (mas mantem rawHasSig=true)
+      rawCount = 0;
       rawLastAct = millis(); // evita re-trigger imediato
+    }
+  }
+
+  // ── Salvar RAW manualmente ───────────────────────
+  if (rawHasSig && digitalRead(BUTTON_RIGHT) == LOW) {
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      lastDebounceTime = millis();
+      float rxFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
+      bool ok = saveRFRawSignal(rawBufSaved, rawSavedCnt, rxFreq);
+
+      tft.fillRect(0, 135, SCR_W, 10, TFT_BLACK);
+      tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
+      tft.setCursor(SCR_W - sw - 4, 135);
+      tft.print(ok ? "SALVO!  " : "ERRO!   ");
+      delay(500);
+
+      tft.fillRect(0, 135, SCR_W, 10, TFT_BLACK);
+      tft.setTextColor(TFT_YELLOW);
+      tft.setCursor(SCR_W - sw - 4, 135);
+      tft.print("> SALVAR");
     }
   }
 
@@ -600,7 +808,8 @@ void handleRF_Raw() {
     rcSwitch.resetAvailable();
 
     int dbm = peakRSSI;
-    if (dbm == -100) dbm = (int)ELECHOUSE_cc1101.getRssi();
+    if (dbm == -100)
+      dbm = (int)ELECHOUSE_cc1101.getRssi();
     float lqi = ELECHOUSE_cc1101.getLqi();
     peakRSSI = -100;
 
@@ -637,53 +846,15 @@ void handleRF_Raw() {
     tft.print(sbuf);
     int bars = constrain(map(dbm, -85, -18, 1, 10), 1, 10);
     for (int b = 0; b < 10; b++) {
-      if (b < bars) tft.fillRect(55 + b * 7, 75, 6, 7, TFT_CYAN);
-      else          tft.drawRect(55 + b * 7, 75, 6, 7, TFT_DARKGREY);
+      if (b < bars)
+        tft.fillRect(55 + b * 7, 75, 6, 7, TFT_CYAN);
+      else
+        tft.drawRect(55 + b * 7, 75, 6, 7, TFT_DARKGREY);
     }
   }
 
   // ── Botoes ───────────────────────────────────────
   if ((millis() - lastDebounceTime) > debounceDelay) {
-
-    // RIGHT → salva pulsos brutos no SPIFFS (se tiver capturado)
-    if (digitalRead(BUTTON_RIGHT) == LOW && rawHasSig) {
-      lastDebounceTime = millis();
-      float saveFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
-      // Re-salva o ultimo pacote completo (rawBuf foi resetado, usamos rawSavedCnt)
-      // Para salvar precisamos reconstruir — salvamos apenas o resumo em texto
-      File f = SPIFFS.open(RAW_SIGNALS_FILE, FILE_APPEND);
-      bool ok = false;
-      if (f) {
-        f.printf("%.2f,%d,%d,%d\n", saveFreq, rawSavedCnt, rawSavedMin, rawSavedMax);
-        f.close();
-        ok = true;
-      }
-      Serial.printf("[RF][RAW-PULSE] Salvar: %s\n", ok ? "OK" : "ERRO");
-      tft.fillRect(0, 135, SCR_W, 10, TFT_BLACK);
-      tft.setTextSize(1);
-      tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
-      tft.setCursor(4, 135);
-      tft.print(ok ? "Salvo!" : "Erro!");
-      delay(800);
-      rawHasSig = false;
-      tft.fillRect(0, 91, SCR_W, 50, TFT_BLACK); // limpa secao raw
-      tft.drawFastHLine(0, 88, SCR_W, 0x2945);
-      tft.setTextColor(0x4A69);
-      tft.setCursor(4, 91);
-      tft.print("RAW pulsos:");
-    }
-
-    // SELECT → limpa captura raw
-    if (digitalRead(BUTTON_SELECT) == LOW && rawHasSig) {
-      lastDebounceTime = millis();
-      rawHasSig = false;
-      rawCount  = 0;
-      tft.fillRect(0, 91, SCR_W, 50, TFT_BLACK);
-      tft.drawFastHLine(0, 88, SCR_W, 0x2945);
-      tft.setTextColor(0x4A69);
-      tft.setCursor(4, 91);
-      tft.print("RAW pulsos:");
-    }
 
     // LEFT → volta ao sub-menu RF
     if (digitalRead(BUTTON_LEFT) == LOW) {
@@ -703,10 +874,8 @@ void handleRF_Raw() {
 // - 315 MHz: detectavel a curta distancia (~1m com antena 433 MHz)
 // - Banda 433 MHz: faixa nominal com sensibilidade plena
 // 868/915 MHz OMITIDOS: antena de 433 MHz perde >10 dB nesses valores.
-static const float SCAN_FREQS[] = {
-    315.00,
-    433.00, 433.42, 433.92, 434.42, 435.00
-};
+static const float SCAN_FREQS[] = {315.00, 433.00, 433.42,
+                                   433.92, 434.42, 435.00};
 
 #define SCAN_FREQ_COUNT (sizeof(SCAN_FREQS) / sizeof(SCAN_FREQS[0]))
 
@@ -815,8 +984,8 @@ static void drawDetectedFreq(int y) {
 
 #define WF_Y 20
 #define WF_H 120
-#define WF_DBM_MIN -85   // sinal muito fraco, proximo do limite
-#define WF_DBM_MAX -18   // sinal muito forte, controle colado na antena
+#define WF_DBM_MIN -85 // sinal muito fraco, proximo do limite
+#define WF_DBM_MAX -18 // sinal muito forte, controle colado na antena
 
 #define WF_HALF_MIN 1
 #define WF_HALF_MAX (SCR_W / 2 - 2)
@@ -895,6 +1064,12 @@ static void wfRedraw() {
 
 // ── Inicializa ────────────────────────────────────
 void displayRF_Analyser() {
+  // Re-inicializa o CC1101 SEMPRE que o Analisador é aberto.
+  // Garante que os registradores AGCCTRL/FSCAL estão íntegros e que o
+  // barramento HSPI está corretamente configurado, independente de qual
+  // modo RF foi usado antes (nRF24 Jammer, Replay, Raw, etc.).
+  rfReinit();
+
   tft.fillScreen(TFT_BLACK);
 
   tft.setTextSize(1);
@@ -975,7 +1150,8 @@ void handleRF_Analyser() {
     }
   }
 
-  // Detecta sinal novo do rcSwitch (Apenas para contador/log, o grafico usa RSSI bruto)
+  // Detecta sinal novo do rcSwitch (Apenas para contador/log, o grafico usa
+  // RSSI bruto)
   if (rfReady && rcSwitch.available()) {
     rcSwitch.resetAvailable();
     wfSigCount++;
@@ -1009,7 +1185,8 @@ void handleRF_Analyser() {
     }
 
     // O grafico agora reage diretamente a energia RF presente no ar
-    if (rssiBase > 35) { // 35 na escala equivale a aprox -76 dBm no mapa -85/-18
+    if (rssiBase >
+        35) { // 35 na escala equivale a aprox -76 dBm no mapa -85/-18
       wfSigActive = true;
       if (wfEnv == ENV_IDLE || wfEnv == ENV_DECAY) {
         wfEnv = ENV_ATTACK;
@@ -1192,13 +1369,13 @@ void handleRF_Random() {
         Serial.printf("[RF][JAMMER] Pacotes: %lu  RSSI TX: %.1f dBm\n",
                       jammerPackets, rssiTx);
       }
-        tft.fillRect(4, 66, SCR_W - 8, 12, TFT_BLACK);
-        char buf[24];
-        tft.setTextSize(1);
-        tft.setTextColor(TFT_WHITE);
-        tft.setCursor(4, 66);
-        snprintf(buf, sizeof(buf), "Pacotes: %lu", jammerPackets);
-        tft.print(buf);
+      tft.fillRect(4, 66, SCR_W - 8, 12, TFT_BLACK);
+      char buf[24];
+      tft.setTextSize(1);
+      tft.setTextColor(TFT_WHITE);
+      tft.setCursor(4, 66);
+      snprintf(buf, sizeof(buf), "Pacotes: %lu", jammerPackets);
+      tft.print(buf);
 
       // Pulso visual animado (barra que cresce e volta)
       static int pulse = 0;
@@ -1213,8 +1390,8 @@ void handleRF_Random() {
       lastDebounceTime = millis();
       jammerAtivo = false;
       ELECHOUSE_cc1101.SetRx();
-      rcSwitch.disableTransmit();    // libera GDO0 de OUTPUT
-      pinMode(RF_GDO0, INPUT);       // CC1101 volta a pilotar GDO0 em RX
+      rcSwitch.disableTransmit(); // libera GDO0 de OUTPUT
+      pinMode(RF_GDO0, INPUT);    // CC1101 volta a pilotar GDO0 em RX
       rcSwitch.enableReceive(RF_GDO0);
       Serial.printf(
           "[RF][JAMMER] Jammer PARADO. Total de pacotes enviados: %lu\n",
@@ -1234,8 +1411,8 @@ void handleRF_Random() {
         float jamFreq = (rfDetectedMHz > 0) ? rfDetectedMHz : 433.92f;
         ELECHOUSE_cc1101.setMHZ(jamFreq);
         ELECHOUSE_cc1101.SetTx();
-        rcSwitch.disableReceive();         // desativa interrupt do RX
-        rcSwitch.enableTransmit(RF_GDO0);  // GDO0 → OUTPUT para TX continuo
+        rcSwitch.disableReceive();        // desativa interrupt do RX
+        rcSwitch.enableTransmit(RF_GDO0); // GDO0 → OUTPUT para TX continuo
         jammerAtivo = true;
         jammerPackets = 0;
         jammerLastDraw = 0;
@@ -1259,45 +1436,92 @@ void handleRF_Random() {
 //  RIGHT (2s) = Deletar sinal atual
 // ════════════════════════════════════════════════
 static RFSignal savedSignals[MAX_RF_SIGNALS];
-static int savedCount = 0;
-static int savedIndex = 0; // sinal selecionado atualmente
+static RFRawSignal savedRawSignals[MAX_RF_RAW_SIGNALS];
 
-// Linhas visíveis na tela (de y=16 a y=160, 18px por linha → 8 linhas)
-#define SAVED_VISIBLE 8
+static int savedDecCount = 0;
+static int savedRawCount = 0;
+
+struct SavedEntry {
+  bool isRaw;
+  int index; // indice dentro do array respectivo
+};
+
+#define MAX_TOTAL_SAVED (MAX_RF_SIGNALS + MAX_RF_RAW_SIGNALS)
+static SavedEntry savedEntries[MAX_TOTAL_SAVED];
+static int savedTotalCount = 0;
+
+static int savedIndex = 0;  // entry selecionado atualmente
 static int savedScroll = 0; // primeiro índice visível
+#define SAVED_VISIBLE 8
+
+static void buildSavedEntries() {
+  savedTotalCount = 0;
+  for (int i = 0; i < savedDecCount; i++) {
+    savedEntries[savedTotalCount++] = {false, i};
+  }
+  for (int i = 0; i < savedRawCount; i++) {
+    savedEntries[savedTotalCount++] = {true, i};
+  }
+}
+
+static void sendRawPulses(int pin, const unsigned int *pulses, int count,
+                          int repeatTimes = 3) {
+  for (int r = 0; r < repeatTimes; r++) {
+    int level = HIGH;
+    for (int i = 0; i < count; i++) {
+      digitalWrite(pin, level);
+      delayMicroseconds(pulses[i]);
+      level = !level;
+    }
+    digitalWrite(pin, LOW);
+    delay(10);
+  }
+}
 
 static void drawSavedItem(int idx, bool sel) {
   if (idx < savedScroll || idx >= savedScroll + SAVED_VISIBLE ||
-      idx > savedCount)
+      idx > savedTotalCount)
     return;
-
   int i = idx - savedScroll;
   int h = 18;
   int y = 16 + i * h;
 
   if (idx == 0) {
-    // Virtual item for "Voltar" no topo usando o padrão do sistema
     drawMenuItem(0, y, SCR_W, h, lang->rf_svd_back, sel, false);
   } else {
+    int eIdx = idx - 1;
+    SavedEntry e = savedEntries[eIdx];
+
     tft.fillRect(0, y, SCR_W, h, TFT_BLACK);
-    tft.setTextColor(sel ? TFT_GREEN : TFT_WHITE);
+    tft.setTextColor(sel ? TFT_WHITE : TFT_DARKGREY);
     tft.setCursor(4, y + 4);
-    int sIdx = idx - 1;
-    char buf[28];
-    float f = (savedSignals[sIdx].freq > 0) ? savedSignals[sIdx].freq : 433.92f;
-    snprintf(buf, sizeof(buf), "#%02d %lu %.2f", sIdx + 1,
-             savedSignals[sIdx].value, f);
     tft.print(sel ? ">" : " ");
-    tft.print(buf);
+
+    if (!e.isRaw) {
+      tft.setTextColor(sel ? TFT_GREEN : 0x05E0); // verde escuro se não sel
+      char buf[28];
+      float f = (savedSignals[e.index].freq > 0) ? savedSignals[e.index].freq
+                                                 : 433.92f;
+      snprintf(buf, sizeof(buf), "D:%lu %.1f", savedSignals[e.index].value, f);
+      tft.print(buf);
+    } else {
+      tft.setTextColor(sel ? TFT_MAGENTA : 0xA014); // magenta escuro se não sel
+      char buf[28];
+      float f = (savedRawSignals[e.index].freq > 0)
+                    ? savedRawSignals[e.index].freq
+                    : 433.92f;
+      snprintf(buf, sizeof(buf), "R:%dp %.1f", savedRawSignals[e.index].count, f);
+      tft.print(buf);
+    }
   }
 
-  // Redesenha os indicadores de scroll
   if (i == 0 && savedScroll > 0) {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(SCR_W - 10, y + 4);
     tft.print("^");
   }
-  if (i == SAVED_VISIBLE - 1 && savedScroll + SAVED_VISIBLE < savedCount + 1) {
+  if (i == SAVED_VISIBLE - 1 &&
+      savedScroll + SAVED_VISIBLE < savedTotalCount + 1) {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(SCR_W - 10, y + 4);
     tft.print("v");
@@ -1305,72 +1529,69 @@ static void drawSavedItem(int idx, bool sel) {
 }
 
 static void drawSavedList() {
-  // Limpa área da lista
   tft.fillRect(0, 16, SCR_W, SCR_H - 16, TFT_BLACK);
   tft.setTextSize(1);
-
-  if (savedCount == 0) {
+  if (savedTotalCount == 0) {
     tft.setTextColor(TFT_DARKGREY);
     tft.setCursor(8, 50);
     tft.print(lang->rf_svd_nenhum);
-    tft.setCursor(8, 66);
-    tft.print(lang->rf_svd_hint1);
-    tft.setCursor(8, 78);
-    tft.print(lang->rf_svd_hint2);
     return;
   }
-
   for (int i = 0; i < SAVED_VISIBLE; i++) {
     int idx = savedScroll + i;
-    if (idx > savedCount)
+    if (idx > savedTotalCount)
       break;
-
     drawSavedItem(idx, idx == savedIndex);
   }
-
-  // (Os indicadores de scroll já são desenhados dentro do drawSavedItem)
 }
 
 void displayRF_Saved() {
   rfHeader(lang->rf_hdr_saved);
-
-  savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
+  savedDecCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
+  savedRawCount = loadRFRawSignals(savedRawSignals, MAX_RF_RAW_SIGNALS);
+  buildSavedEntries();
   savedIndex = 0;
   savedScroll = 0;
-
   drawSavedList();
-  // Sem footer para aproveitar o espaço da tela
   batteryDraw();
 
-  // Previne o disparo automático se o botão SELECT ainda estiver pressionado do menu anterior
   while (digitalRead(BUTTON_SELECT) == LOW)
     vTaskDelay(10 / portTICK_PERIOD_MS);
 
-  // Sintoniza na frequência detectada para TX
   if (rfReady && rfDetectedMHz > 0) {
     ELECHOUSE_cc1101.setMHZ(rfDetectedMHz);
     ELECHOUSE_cc1101.SetRx();
   }
 }
 
-static void openSavedActionMenu(int signalIdx) {
-  // Modal de opções flutuante
-  int px = 14, py = 35, pw = 100, ph = 78;
-  tft.fillRect(px, py, pw, ph, 0x2104);
-  tft.drawRect(px, py, pw, ph, TFT_CYAN);
+static void openSavedActionMenu(int listIdx) {
+  SavedEntry e = savedEntries[listIdx];
+  bool isRaw = e.isRaw;
+
+  int numOpts = isRaw ? 3 : 4;
+  int ph = isRaw ? 64 : 78;
+  int px = 14, py = 35, pw = 100;
+
+  tft.fillRect(px, py, pw, ph, 0x2104); // fundo igual
+  tft.drawRect(px, py, pw, ph, isRaw ? TFT_MAGENTA : TFT_CYAN);
   tft.setTextSize(1);
   tft.setTextColor(TFT_WHITE);
   tft.setCursor(px + 4, py + 6);
   tft.print(lang->rf_svd_acoes);
 
-  const char *opts[] = {lang->rf_svd_transmitir, lang->rf_svd_excluir, lang->rf_svd_repetir, lang->rf_svd_voltar};
-  int numOpts = 4;
+  const char *opts_dec[] = {lang->rf_svd_transmitir, lang->rf_svd_excluir,
+                            lang->rf_svd_repetir, lang->rf_svd_voltar};
+  const char *opts_raw[] = {lang->rf_svd_transmitir, lang->rf_svd_excluir,
+                            lang->rf_svd_voltar};
+
+  const char **opts = isRaw ? opts_raw : opts_dec;
   int selOpt = 0;
 
   auto drawPopupOpts = [&]() {
     for (int i = 0; i < numOpts; i++) {
       tft.fillRect(px + 2, py + 18 + i * 14, pw - 4, 14, 0x2104);
-      tft.setTextColor(i == selOpt ? TFT_GREEN : TFT_WHITE);
+      tft.setTextColor(i == selOpt ? (isRaw ? TFT_MAGENTA : TFT_GREEN)
+                                   : TFT_WHITE);
       tft.setCursor(px + 6, py + 21 + i * 14);
       tft.print(i == selOpt ? "> " : "  ");
       tft.print(opts[i]);
@@ -1378,15 +1599,12 @@ static void openSavedActionMenu(int signalIdx) {
   };
 
   drawPopupOpts();
-
-  // Espera soltar o botão da pressão longa
   while (digitalRead(BUTTON_SELECT) == LOW)
     vTaskDelay(10 / portTICK_PERIOD_MS);
 
   unsigned long modalDebounce = millis();
   while (true) {
     vTaskDelay(10 / portTICK_PERIOD_MS);
-
     if (millis() - modalDebounce > debounceDelay) {
       if (digitalRead(BUTTON_LEFT) == LOW) {
         modalDebounce = millis();
@@ -1404,22 +1622,40 @@ static void openSavedActionMenu(int signalIdx) {
           vTaskDelay(10);
 
         if (selOpt == 0) { // Transmitir
-          float txFreq = (savedSignals[signalIdx].freq > 0)
-                             ? savedSignals[signalIdx].freq
-                             : 433.92f;
-          ELECHOUSE_cc1101.setMHZ(txFreq);
-          ELECHOUSE_cc1101.SetTx();
-          rcSwitch.disableReceive();
-          rcSwitch.enableTransmit(RF_GDO0);
-          unsigned int txDelay = savedSignals[signalIdx].delay;
-          rcSwitch.setProtocol(savedSignals[signalIdx].protocol, txDelay > 0 ? txDelay : 350);
-          rcSwitch.send(savedSignals[signalIdx].value,
-                        savedSignals[signalIdx].bits);
-          rcSwitch.disableTransmit();
-          pinMode(RF_GDO0, INPUT);
-          rcSwitch.enableReceive(RF_GDO0);
-          ELECHOUSE_cc1101.SetRx();
+          float txFreq = isRaw ? (savedRawSignals[e.index].freq > 0
+                                      ? savedRawSignals[e.index].freq
+                                      : 433.92f)
+                               : (savedSignals[e.index].freq > 0
+                                      ? savedSignals[e.index].freq
+                                      : 433.92f);
 
+          if (!isRaw) {
+            ELECHOUSE_cc1101.setMHZ(txFreq);
+            ELECHOUSE_cc1101.SetTx();
+            rcSwitch.disableReceive();
+            rcSwitch.enableTransmit(RF_GDO0);
+            unsigned int txDelay = savedSignals[e.index].delay;
+            rcSwitch.setProtocol(savedSignals[e.index].protocol,
+                                 txDelay > 0 ? txDelay : 350);
+            rcSwitch.send(savedSignals[e.index].value,
+                          savedSignals[e.index].bits);
+            rcSwitch.disableTransmit();
+            pinMode(RF_GDO0, INPUT);
+            rcSwitch.enableReceive(RF_GDO0);
+            ELECHOUSE_cc1101.SetRx();
+          } else {
+            ELECHOUSE_cc1101.setMHZ(txFreq);
+            ELECHOUSE_cc1101.SetTx();
+            rcSwitch.disableReceive();
+            rcSwitch.enableTransmit(RF_GDO0);
+            pinMode(RF_GDO0, OUTPUT);
+            sendRawPulses(RF_GDO0, savedRawSignals[e.index].pulses,
+                          savedRawSignals[e.index].count);
+            rcSwitch.disableTransmit();
+            pinMode(RF_GDO0, INPUT);
+            rcSwitch.enableReceive(RF_GDO0);
+            ELECHOUSE_cc1101.SetRx();
+          }
           tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
           tft.setTextColor(TFT_ORANGE);
           tft.setCursor(px + 4, py + ph + 2);
@@ -1428,66 +1664,59 @@ static void openSavedActionMenu(int signalIdx) {
           break;
 
         } else if (selOpt == 1) { // Excluir
-          deleteRFSignal(signalIdx);
-
+          if (!isRaw)
+            deleteRFSignal(e.index);
+          else
+            deleteRFRawSignal(e.index);
           tft.fillRect(px, py + ph, pw, 12, TFT_BLACK);
           tft.setTextColor(TFT_RED);
           tft.setCursor(px + 4, py + ph + 2);
           tft.print(lang->rf_svd_deletado);
           delay(600);
-          savedCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
+          savedDecCount = loadRFSignals(savedSignals, MAX_RF_SIGNALS);
+          savedRawCount = loadRFRawSignals(savedRawSignals, MAX_RF_RAW_SIGNALS);
+          buildSavedEntries();
           savedIndex = 0;
           savedScroll = 0;
           break;
 
-        } else if (selOpt == 2) { // Repetir
-          float txFreq = (savedSignals[signalIdx].freq > 0)
-                             ? savedSignals[signalIdx].freq
+        } else if (!isRaw && selOpt == 2) { // Repetir (só dec)
+          float txFreq = (savedSignals[e.index].freq > 0)
+                             ? savedSignals[e.index].freq
                              : 433.92f;
-
-          // Sub-janela de repetição (sobreposição abaixo de "Repetir")
           int sx = px + 7, sy = py + 18 + 2 * 14 + 7, sw = pw - 4, sh = 36;
           tft.fillRect(sx, sy, sw, sh, 0x2104);
           tft.drawRect(sx, sy, sw, sh, TFT_CYAN);
           tft.setTextSize(1);
-
           unsigned long pulseCount = 0;
           bool repeatRunning = true;
-
           while (repeatRunning) {
-            // Transmite
             ELECHOUSE_cc1101.setMHZ(txFreq);
             ELECHOUSE_cc1101.SetTx();
             rcSwitch.disableReceive();
             rcSwitch.enableTransmit(RF_GDO0);
-            unsigned int txDelay2 = savedSignals[signalIdx].delay;
-            rcSwitch.setProtocol(savedSignals[signalIdx].protocol, txDelay2 > 0 ? txDelay2 : 350);
-            rcSwitch.send(savedSignals[signalIdx].value,
-                          savedSignals[signalIdx].bits);
+            unsigned int txDelay2 = savedSignals[e.index].delay;
+            rcSwitch.setProtocol(savedSignals[e.index].protocol,
+                                 txDelay2 > 0 ? txDelay2 : 350);
+            rcSwitch.send(savedSignals[e.index].value,
+                          savedSignals[e.index].bits);
             rcSwitch.disableTransmit();
             pinMode(RF_GDO0, INPUT);
             rcSwitch.enableReceive(RF_GDO0);
             ELECHOUSE_cc1101.SetRx();
             pulseCount++;
-
-            // Atualiza contagem (só a região do número)
             tft.fillRect(sx + 2, sy + 4, sw - 4, 12, 0x2104);
             tft.setTextColor(TFT_YELLOW);
             tft.setCursor(sx + 6, sy + 6);
             tft.print(lang->rf_svd_pulsos);
             tft.print(" ");
             tft.print(pulseCount);
-
-            // Botão parar (estilo lista: verde selecionado)
             tft.fillRect(sx + 2, sy + 20, sw - 4, 12, 0x2104);
             tft.setTextColor(TFT_GREEN);
             tft.setCursor(sx + 6, sy + 22);
             tft.print("> ");
             tft.print(lang->rf_svd_parar);
-
             vTaskDelay(10 / portTICK_PERIOD_MS);
-
-            // Verifica botão SELECT
             if ((millis() - modalDebounce) > debounceDelay) {
               if (digitalRead(BUTTON_SELECT) == LOW) {
                 modalDebounce = millis();
@@ -1496,14 +1725,9 @@ static void openSavedActionMenu(int signalIdx) {
                 repeatRunning = false;
               }
             }
-
             vTaskDelay(50 / portTICK_PERIOD_MS);
           }
-
-          // Fecha sub-janela
           tft.fillRect(sx, sy, sw, sh, TFT_BLACK);
-
-          // Redesenha o que estava por trás (salva lista + modal)
           drawSavedList();
           tft.fillRect(px, py, pw, ph, 0x2104);
           tft.drawRect(px, py, pw, ph, TFT_CYAN);
@@ -1512,109 +1736,110 @@ static void openSavedActionMenu(int signalIdx) {
           tft.setCursor(px + 4, py + 6);
           tft.print(lang->rf_svd_acoes);
           drawPopupOpts();
-
-        } else if (selOpt == 3) { // Voltar
+        } else if ((isRaw && selOpt == 2) || (!isRaw && selOpt == 3)) {
           break;
         }
       }
     }
   }
-
   drawSavedList();
 }
 
 void handleRF_Saved() {
   static unsigned long selectPressStart = 0;
   static bool selectHeld = false;
-
   if ((millis() - lastDebounceTime) > debounceDelay) {
-    // RIGHT → pra baixo
     if (digitalRead(BUTTON_RIGHT) == LOW) {
       lastDebounceTime = millis();
-      int totalItems = savedCount + 1; // +1 é o Voltar
+      int totalItems = savedTotalCount + 1;
       int oldIndex = savedIndex;
       int oldScroll = savedScroll;
       savedIndex = (savedIndex + 1) % totalItems;
-
       if (savedIndex < savedScroll)
         savedScroll = savedIndex;
       if (savedIndex >= savedScroll + SAVED_VISIBLE)
         savedScroll = savedIndex - SAVED_VISIBLE + 1;
-
-      if (savedScroll != oldScroll) {
+      if (savedScroll != oldScroll)
         drawSavedList();
-      } else {
+      else {
         drawSavedItem(oldIndex, false);
         drawSavedItem(savedIndex, true);
       }
     }
-
-    // LEFT → pra cima
     if (digitalRead(BUTTON_LEFT) == LOW) {
       lastDebounceTime = millis();
-      int totalItems = savedCount + 1;
+      int totalItems = savedTotalCount + 1;
       int oldIndex = savedIndex;
       int oldScroll = savedScroll;
       savedIndex = (savedIndex - 1 + totalItems) % totalItems;
-
       if (savedIndex < savedScroll)
         savedScroll = savedIndex;
       if (savedIndex >= savedScroll + SAVED_VISIBLE)
         savedScroll = savedIndex - SAVED_VISIBLE + 1;
-
-      if (savedScroll != oldScroll) {
+      if (savedScroll != oldScroll)
         drawSavedList();
-      } else {
+      else {
         drawSavedItem(oldIndex, false);
         drawSavedItem(savedIndex, true);
       }
     }
   }
 
-  // Botão SELECT: pressão curta = executa, pressão longa (>600ms) = Abre Modal
   if (digitalRead(BUTTON_SELECT) == LOW) {
     if (!selectHeld) {
       selectHeld = true;
       selectPressStart = millis();
     } else if (millis() - selectPressStart > 600) {
-      // Pressão longa → Modal
       selectHeld = false;
       lastDebounceTime = millis();
-
-      if (savedIndex > 0 && savedIndex <= savedCount) {
+      if (savedIndex > 0 && savedIndex <= savedTotalCount) {
         openSavedActionMenu(savedIndex - 1);
       }
     }
   } else {
     if (selectHeld && (millis() - selectPressStart) < 600) {
-      // Pressão curta solta → Transmite ou Volta
       selectHeld = false;
       lastDebounceTime = millis();
-
       if (savedIndex == 0) {
-        // Item Voltar
         estadoAtual = MENU_RF;
         displayRF();
       } else {
-        int sIdx = savedIndex - 1;
-        // Transmitir rápido
-        float txFreq = (savedSignals[sIdx].freq > 0)
-                           ? savedSignals[sIdx].freq
-                           : 433.92f;
-        ELECHOUSE_cc1101.setMHZ(txFreq);
-        ELECHOUSE_cc1101.SetTx();
-        rcSwitch.disableReceive();
-        rcSwitch.enableTransmit(RF_GDO0);
-        unsigned int txDelay3 = savedSignals[sIdx].delay;
-        rcSwitch.setProtocol(savedSignals[sIdx].protocol, txDelay3 > 0 ? txDelay3 : 350);
-        rcSwitch.send(savedSignals[sIdx].value,
-                      savedSignals[sIdx].bits);
-        rcSwitch.disableTransmit();
-        pinMode(RF_GDO0, INPUT);
-        rcSwitch.enableReceive(RF_GDO0);
-        ELECHOUSE_cc1101.SetRx();
+        int eIdx = savedIndex - 1;
+        SavedEntry e = savedEntries[eIdx];
+        float txFreq = e.isRaw ? (savedRawSignals[e.index].freq > 0
+                                      ? savedRawSignals[e.index].freq
+                                      : 433.92f)
+                               : (savedSignals[e.index].freq > 0
+                                      ? savedSignals[e.index].freq
+                                      : 433.92f);
 
-        // Feedback visual
+        if (!e.isRaw) {
+          ELECHOUSE_cc1101.setMHZ(txFreq);
+          ELECHOUSE_cc1101.SetTx();
+          rcSwitch.disableReceive();
+          rcSwitch.enableTransmit(RF_GDO0);
+          unsigned int txDelay3 = savedSignals[e.index].delay;
+          rcSwitch.setProtocol(savedSignals[e.index].protocol,
+                               txDelay3 > 0 ? txDelay3 : 350);
+          rcSwitch.send(savedSignals[e.index].value,
+                        savedSignals[e.index].bits);
+          rcSwitch.disableTransmit();
+          pinMode(RF_GDO0, INPUT);
+          rcSwitch.enableReceive(RF_GDO0);
+          ELECHOUSE_cc1101.SetRx();
+        } else {
+          ELECHOUSE_cc1101.setMHZ(txFreq);
+          ELECHOUSE_cc1101.SetTx();
+          rcSwitch.disableReceive();
+          rcSwitch.enableTransmit(RF_GDO0);
+          pinMode(RF_GDO0, OUTPUT);
+          sendRawPulses(RF_GDO0, savedRawSignals[e.index].pulses,
+                        savedRawSignals[e.index].count);
+          rcSwitch.disableTransmit();
+          pinMode(RF_GDO0, INPUT);
+          rcSwitch.enableReceive(RF_GDO0);
+          ELECHOUSE_cc1101.SetRx();
+        }
         tft.fillRect(4, SCR_H - 22, SCR_W - 8, 12, TFT_BLACK);
         tft.setTextColor(TFT_ORANGE);
         tft.setCursor(4, SCR_H - 22);

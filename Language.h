@@ -286,6 +286,8 @@ struct LangPack {
     const char* nrf_lbl_pacotes;
     const char* nrf_hint_startstop;
     const char* nrf_hint_back;
+    const char* nrf_lbl_mod1;
+    const char* nrf_lbl_mod2;
 
     // ── Menu Networks ──
     const char* net_hdr_wifi;

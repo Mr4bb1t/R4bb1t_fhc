@@ -592,8 +592,9 @@ static void displaySobre_p2() {
 }
 
 // Página 3: CC1101
+extern bool rfReady;
 static void displaySobre_p3() {
-  hwCC1101_ok = rfInit();
+  hwCC1101_ok = rfReady;
   sobreHeader("CC1101");
 
   int y = 18;
@@ -1463,6 +1464,102 @@ static void switchViewerFile(int dir) {
   openFileForView(current);
 }
 
+// ── Modal de ações de arquivo (pressão longa SELECT) ──
+static void openArquivoActionMenu(int fi) {
+  // fi = índice em fileNames[]
+  int px = 14, py = 35, pw = 100, ph = 64;
+  tft.fillRect(px, py, pw, ph, 0x2104);
+  tft.drawRect(px, py, pw, ph, C_GOLD);
+  tft.setTextSize(1);
+  tft.setTextColor(C_GOLD);
+  tft.setCursor(px + 4, py + 5);
+
+  // Mostra nome curto do arquivo
+  char shortName[14];
+  const char *fname = fileNames[fi];
+  if (fname[0] == '/') fname++;
+  strncpy(shortName, fname, 13);
+  shortName[13] = '\0';
+  tft.print(shortName);
+
+  const char *opts[] = {"Abrir", "Excluir", "Voltar"};
+  const int numOpts = 3;
+  int selOpt = 0;
+
+  // Função inline (macro-like) desenhando opções
+  for (int i = 0; i < numOpts; i++) {
+    tft.fillRect(px + 2, py + 16 + i * 14, pw - 4, 14, 0x2104);
+    tft.setTextColor(i == selOpt ? C_GOLD : C_WHITE);
+    tft.setCursor(px + 6, py + 19 + i * 14);
+    tft.print(i == selOpt ? "> " : "  ");
+    tft.print(opts[i]);
+  }
+
+  // Espera soltar SELECT da pressão longa
+  while (digitalRead(BUTTON_SELECT) == LOW)
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+
+  unsigned long modalDb = millis();
+  while (true) {
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+    if (millis() - modalDb > debounceDelay) {
+      if (digitalRead(BUTTON_LEFT) == LOW) {
+        modalDb = millis();
+        selOpt = (selOpt - 1 + numOpts) % numOpts;
+        for (int i = 0; i < numOpts; i++) {
+          tft.fillRect(px + 2, py + 16 + i * 14, pw - 4, 14, 0x2104);
+          tft.setTextColor(i == selOpt ? C_GOLD : C_WHITE);
+          tft.setCursor(px + 6, py + 19 + i * 14);
+          tft.print(i == selOpt ? "> " : "  ");
+          tft.print(opts[i]);
+        }
+      }
+      if (digitalRead(BUTTON_RIGHT) == LOW) {
+        modalDb = millis();
+        selOpt = (selOpt + 1) % numOpts;
+        for (int i = 0; i < numOpts; i++) {
+          tft.fillRect(px + 2, py + 16 + i * 14, pw - 4, 14, 0x2104);
+          tft.setTextColor(i == selOpt ? C_GOLD : C_WHITE);
+          tft.setCursor(px + 6, py + 19 + i * 14);
+          tft.print(i == selOpt ? "> " : "  ");
+          tft.print(opts[i]);
+        }
+      }
+      if (digitalRead(BUTTON_SELECT) == LOW) {
+        modalDb = millis();
+        while (digitalRead(BUTTON_SELECT) == LOW) vTaskDelay(10);
+
+        if (selOpt == 0) { // Abrir
+          openFileForView(fi);
+          return; // openFileForView já muda o storageState
+        } else if (selOpt == 1) { // Excluir
+          String path = fileNames[fi];
+          if (!path.startsWith("/")) path = "/" + path;
+          bool ok = SPIFFS.remove(path.c_str());
+          Serial.printf("[SPIFFS] Excluir %s: %s\n", path.c_str(), ok ? "OK" : "ERRO");
+          // Feedback abaixo do modal
+          tft.fillRect(px, py + ph, pw, 12, C_BG);
+          tft.setTextSize(1);
+          tft.setTextColor(ok ? TFT_GREEN : TFT_RED);
+          tft.setCursor(px + 4, py + ph + 2);
+          tft.print(ok ? "Excluido!" : "Erro!");
+          delay(700);
+          // Recarrega lista
+          spiffsCollect();
+          if (fileCursor > fileCount) fileCursor = fileCount;
+          storageState = 1;
+          displayArquivosSPIFFS();
+          return;
+        } else { // Voltar
+          break;
+        }
+      }
+    }
+  }
+  // Fecha modal e redesenha lista
+  displayArquivosSPIFFS();
+}
+
 // ── Handlers ──
 void handleArmazenamento() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
@@ -1489,11 +1586,15 @@ void handleArmazenamento() {
         }
       }
     } else if (storageState == 1) {
+      static unsigned long selPressStart = 0;
+      static bool selHeld = false;
+
       int totalItems = 1 + fileCount;
       if (digitalRead(BUTTON_RIGHT) == LOW) {
         int oldCursor = fileCursor;
         fileCursor = (fileCursor + 1) % totalItems;
         lastDebounceTime = millis();
+        selHeld = false;
         if ((oldCursor / FILES_PER_PAGE) != (fileCursor / FILES_PER_PAGE)) {
           displayArquivosSPIFFS();
         } else {
@@ -1505,6 +1606,7 @@ void handleArmazenamento() {
         int oldCursor = fileCursor;
         fileCursor = (fileCursor - 1 + totalItems) % totalItems;
         lastDebounceTime = millis();
+        selHeld = false;
         if ((oldCursor / FILES_PER_PAGE) != (fileCursor / FILES_PER_PAGE)) {
           displayArquivosSPIFFS();
         } else {
@@ -1512,14 +1614,32 @@ void handleArmazenamento() {
           drawArquivosRow(fileCursor, true);
         }
       }
+
+      // SELECT: curto = Abrir, longo (>600ms) = Modal de ações
       if (digitalRead(BUTTON_SELECT) == LOW) {
-        lastDebounceTime = millis();
-        if (fileCursor == 0) {
-          storageState = 0;
-          displayArmazenamento();
-        } else {
-          openFileForView(fileCursor - 1);
+        if (!selHeld) {
+          selHeld = true;
+          selPressStart = millis();
+        } else if (millis() - selPressStart > 600 && fileCursor > 0) {
+          // Pressão longa → Modal
+          selHeld = false;
+          lastDebounceTime = millis();
+          openArquivoActionMenu(fileCursor - 1);
+          return;
         }
+      } else {
+        if (selHeld && (millis() - selPressStart) < 600) {
+          // Pressão curta solta → Abrir ou Voltar
+          selHeld = false;
+          lastDebounceTime = millis();
+          if (fileCursor == 0) {
+            storageState = 0;
+            displayArmazenamento();
+          } else {
+            openFileForView(fileCursor - 1);
+          }
+        }
+        selHeld = false;
       }
     } else if (storageState == 2) {
       if (digitalRead(BUTTON_RIGHT) == LOW) {
@@ -2544,6 +2664,9 @@ void handleHardReset() {
 
           // Limpa arquivos
           File f = SPIFFS.open("/rf_signals.txt", FILE_WRITE);
+          if (f)
+            f.close();
+          f = SPIFFS.open("/rf_raw.txt", FILE_WRITE);
           if (f)
             f.close();
           f = SPIFFS.open("/credenciais.txt", FILE_WRITE);

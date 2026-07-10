@@ -285,6 +285,8 @@ const LangPack langPT PROGMEM = {
     "Pacotes:",
     "",
     "",
+    "Mod 1:",
+    "Mod 2:",
 
     // ── Menu Networks ──
     "REDES WIFI",
@@ -631,6 +633,8 @@ const LangPack langEN PROGMEM = {
     "Packets:",
     "",
     "",
+    "Mod 1:",
+    "Mod 2:",
 
     // ── Menu Networks ──
     "WIFI NETWORKS",

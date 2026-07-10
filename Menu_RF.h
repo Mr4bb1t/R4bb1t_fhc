@@ -30,4 +30,13 @@ void handleRF_Saved();
 // Inicializa CC1101 (chamado uma vez no setup)
 bool rfInit();
 
+// Re-inicializa CC1101 forçando reload de todos os registradores.
+// Deve ser chamado sempre que o barramento HSPI foi usado pelo nRF24
+// ou quando o CC1101 pode ter perdido sua configuração interna.
+void rfReinit();
+
+// Flag que indica ao módulo RF que é necessário um rfReinit() na
+// próxima entrada no menu RF. Setada pelo nrfDeinit() após liberar o SPI.
+extern bool rfNeedsReinit;
+
 #endif
