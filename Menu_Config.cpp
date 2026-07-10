@@ -13,7 +13,6 @@
 #include "boot_anim_player.h"
 #include "toggle_32_32_28f.h"
 
-
 #include <SPI.h>
 #include <SPIFFS.h>
 #include <WiFi.h>
@@ -685,7 +684,7 @@ static void displaySobre_p4() {
       tft.setTextColor(C_GREEN); // Verde
     }
     tft.print((int)tempC);
-    tft.print("°C");
+    tft.print("C");
   }
 
   y += LH;
@@ -1477,7 +1476,8 @@ static void openArquivoActionMenu(int fi) {
   // Mostra nome curto do arquivo
   char shortName[14];
   const char *fname = fileNames[fi];
-  if (fname[0] == '/') fname++;
+  if (fname[0] == '/')
+    fname++;
   strncpy(shortName, fname, 13);
   shortName[13] = '\0';
   tft.print(shortName);
@@ -1527,16 +1527,19 @@ static void openArquivoActionMenu(int fi) {
       }
       if (digitalRead(BUTTON_SELECT) == LOW) {
         modalDb = millis();
-        while (digitalRead(BUTTON_SELECT) == LOW) vTaskDelay(10);
+        while (digitalRead(BUTTON_SELECT) == LOW)
+          vTaskDelay(10);
 
         if (selOpt == 0) { // Abrir
           openFileForView(fi);
-          return; // openFileForView já muda o storageState
+          return;                 // openFileForView já muda o storageState
         } else if (selOpt == 1) { // Excluir
           String path = fileNames[fi];
-          if (!path.startsWith("/")) path = "/" + path;
+          if (!path.startsWith("/"))
+            path = "/" + path;
           bool ok = SPIFFS.remove(path.c_str());
-          Serial.printf("[SPIFFS] Excluir %s: %s\n", path.c_str(), ok ? "OK" : "ERRO");
+          Serial.printf("[SPIFFS] Excluir %s: %s\n", path.c_str(),
+                        ok ? "OK" : "ERRO");
           // Feedback abaixo do modal
           tft.fillRect(px, py + ph, pw, 12, C_BG);
           tft.setTextSize(1);
@@ -1546,7 +1549,8 @@ static void openArquivoActionMenu(int fi) {
           delay(700);
           // Recarrega lista
           spiffsCollect();
-          if (fileCursor > fileCount) fileCursor = fileCount;
+          if (fileCursor > fileCount)
+            fileCursor = fileCount;
           storageState = 1;
           displayArquivosSPIFFS();
           return;
@@ -2021,6 +2025,7 @@ static void animFrame(uint32_t now) {
       }
       if (matCols[i].y > ANIM_H + 60)
         matInitCol(i);
+      yield(); // Previne TG1WDT_SYS_RESET
     }
     break;
   }
@@ -2229,6 +2234,8 @@ static void initCurrentAnim() {
     if (!animSpr) {
       animSpr = new TFT_eSprite(&tft);
       animSpr->createSprite(ANIM_W, ANIM_H);
+      animSpr->setTextSize(1);
+      animSpr->setTextFont(1);
     }
     if (animIndex == 3) {
       for (int i = 0; i < 13; i++)
@@ -2458,6 +2465,8 @@ void handleScreensaverTest() {
           estadoAtual = estadoAnteriorScreensaver;
           restoreScreenState(estadoAtual);
         } else {
+          // Salva a última animação visualizada como a selecionada
+          prefs.putInt("screensaver", animIndex);
           displayScreensaverTest();
         }
       } else if (!animStartedFromIdle) {

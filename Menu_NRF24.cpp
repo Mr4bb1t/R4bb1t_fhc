@@ -240,11 +240,12 @@ static bool nrfInit() {
   radio[0] = new RF24(NRF_CE, NRF_CSN);
   bool ok0 = false;
   for (int t = 0; t < 3 && !ok0; t++) {
-    Serial.printf("[NRF] Tentativa %d...\n", t + 1);
-    ok0 = radio[0]->begin(&spiJam);
-    Serial.printf("[NRF] begin()=%d\n", ok0);
-    if (!ok0)
+    Serial.printf("[NRF] Modulo 1: Tentativa %d...\n", t + 1);
+    if (radio[0]->begin(&spiJam) && radio[0]->isChipConnected()) {
+      ok0 = true;
+    } else {
       delay(80);
+    }
   }
   if (!ok0) {
     Serial.println("[NRF] Modulo 1 nao respondeu.");
@@ -260,9 +261,19 @@ static bool nrfInit() {
   pinMode(NRF2_CE, OUTPUT);
   digitalWrite(NRF2_CE, LOW);
   delay(10);
+  
   radio[1] = new RF24(NRF2_CE, NRF2_CSN);
-  bool ok1 = radio[1]->begin(&spiJam);
-  if (ok1 && radio[1]->isChipConnected()) {
+  bool ok1 = false;
+  for (int t = 0; t < 3 && !ok1; t++) {
+    Serial.printf("[NRF] Modulo 2: Tentativa %d...\n", t + 1);
+    if (radio[1]->begin(&spiJam) && radio[1]->isChipConnected()) {
+      ok1 = true;
+    } else {
+      delay(80);
+    }
+  }
+  
+  if (ok1) {
     radioCount = 2;
     Serial.println("[NRF] Modulo 2 detectado!");
   } else {

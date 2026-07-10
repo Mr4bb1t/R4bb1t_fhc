@@ -22,7 +22,7 @@ void displayRF_Raw();
 void handleRF_Raw();
 void displayRF_Analyser();
 void handleRF_Analyser();
-void displayRF_Random();
+void displayRF_Random(bool fullRedraw = true);
 void handleRF_Random();
 void displayRF_Saved();
 void handleRF_Saved();
